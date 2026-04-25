@@ -1,6 +1,6 @@
-# Translate the Sereenshot
+# Translate the Screenshot
 
-Translate the Sereenshot is a lightweight macOS menu bar translation and OCR tool built with Swift, SwiftUI, AppKit, Vision, and Keychain.
+Translate the Screenshot is a lightweight macOS menu bar translation and OCR tool built with Swift, SwiftUI, AppKit, Vision, and Keychain.
 
 The app is packaged as `TTS.app` and runs as a menu bar utility.
 
