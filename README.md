@@ -2,7 +2,7 @@
 
 ## 中文
 
-Translate the Screenshot 是一个轻量的 macOS 菜单栏翻译与 OCR 工具，使用 Swift、SwiftUI、AppKit、Apple Vision 和 Keychain 构建。应用打包为 `TTS.app`，启动后常驻菜单栏，不默认显示主窗口。
+Translate the Screenshot 是一个轻量的 macOS 菜单栏翻译与 OCR 工具，灵感来自Bob和easydict。使用 Swift、SwiftUI、AppKit、Apple Vision 和 Keychain 构建。应用打包为 `TTS.app`，启动后常驻菜单栏，不默认显示主窗口。
 
 ### 主要功能
 
