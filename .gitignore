@@ -1,0 +1,18 @@
+.DS_Store
+.build/
+build/
+DerivedData/
+*.xcuserstate
+xcuserdata/
+*.moved-aside
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+# Local signing and packaging artifacts
+*.dmg
+*.pkg
+*.xcarchive
+
+# Secrets should stay in Keychain or local environment files.
+.env
+.env.*

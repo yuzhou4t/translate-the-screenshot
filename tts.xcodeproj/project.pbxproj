@@ -1,0 +1,629 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		200000000000000000000001 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000001 /* AppDelegate.swift */; };
+		200000000000000000000002 /* AppServices.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000002 /* AppServices.swift */; };
+		200000000000000000000003 /* HotkeyManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000003 /* HotkeyManager.swift */; };
+		200000000000000000000004 /* SelectionTranslationController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000004 /* SelectionTranslationController.swift */; };
+		200000000000000000000005 /* TTSApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000005 /* TTSApp.swift */; };
+		200000000000000000000006 /* TranslationService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000006 /* TranslationService.swift */; };
+		200000000000000000000007 /* TranslationModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000007 /* TranslationModels.swift */; };
+		200000000000000000000008 /* OCRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000008 /* OCRService.swift */; };
+		200000000000000000000009 /* BaiduTranslateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000009 /* BaiduTranslateProvider.swift */; };
+		20000000000000000000000A /* BingTranslateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000A /* BingTranslateProvider.swift */; };
+		20000000000000000000000B /* DeepLProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000B /* DeepLProvider.swift */; };
+		20000000000000000000000C /* GoogleTranslateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000C /* GoogleTranslateProvider.swift */; };
+		20000000000000000000000D /* MyMemoryProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000D /* MyMemoryProvider.swift */; };
+		20000000000000000000000E /* OpenAICompatibleProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000E /* OpenAICompatibleProvider.swift */; };
+		20000000000000000000000F /* ProviderRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000000F /* ProviderRegistry.swift */; };
+		200000000000000000000010 /* SigningUtilities.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000010 /* SigningUtilities.swift */; };
+		200000000000000000000011 /* TencentTranslateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000011 /* TencentTranslateProvider.swift */; };
+		200000000000000000000012 /* TranslationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000012 /* TranslationProvider.swift */; };
+		200000000000000000000013 /* VolcengineTranslateProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000013 /* VolcengineTranslateProvider.swift */; };
+		200000000000000000000014 /* ScreenshotCaptureController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000014 /* ScreenshotCaptureController.swift */; };
+		200000000000000000000015 /* ScreenshotOverlayWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000015 /* ScreenshotOverlayWindow.swift */; };
+		200000000000000000000016 /* ClipboardManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000016 /* ClipboardManager.swift */; };
+		200000000000000000000017 /* KeychainService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000017 /* KeychainService.swift */; };
+		200000000000000000000018 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000018 /* PermissionManager.swift */; };
+		200000000000000000000019 /* SelectionReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000019 /* SelectionReader.swift */; };
+		20000000000000000000001A /* AppConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001A /* AppConfigurationStore.swift */; };
+		20000000000000000000001B /* FavoriteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001B /* FavoriteStore.swift */; };
+		20000000000000000000001C /* HistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001C /* HistoryStore.swift */; };
+		20000000000000000000001D /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001D /* FavoritesView.swift */; };
+		20000000000000000000001E /* FavoritesWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001E /* FavoritesWindowController.swift */; };
+		20000000000000000000001F /* FloatingTranslatePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001F /* FloatingTranslatePanel.swift */; };
+		200000000000000000000020 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000020 /* HistoryView.swift */; };
+		200000000000000000000021 /* HistoryWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000021 /* HistoryWindowController.swift */; };
+		200000000000000000000022 /* InputTranslateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000022 /* InputTranslateView.swift */; };
+		200000000000000000000023 /* InputTranslateWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000023 /* InputTranslateWindowController.swift */; };
+		200000000000000000000024 /* OCRResultPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000024 /* OCRResultPanel.swift */; };
+		200000000000000000000025 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000025 /* SettingsView.swift */; };
+		200000000000000000000026 /* SettingsWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000026 /* SettingsWindowController.swift */; };
+		200000000000000000000027 /* ToastPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000027 /* ToastPanel.swift */; };
+		200000000000000000000028 /* KeyboardShortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000028 /* KeyboardShortcuts.swift */; };
+		200000000000000000000029 /* KeyboardShortcuts.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000029 /* KeyboardShortcuts.framework */; };
+		20000000000000000000002A /* KeyboardShortcuts.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000029 /* KeyboardShortcuts.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		20000000000000000000002B /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002B /* Carbon.framework */; };
+		20000000000000000000002C /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002D /* AppIcon.icns */; };
+		20000000000000000000002D /* MenuBarIconTemplate.png in Resources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002E /* MenuBarIconTemplate.png */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		300000000000000000000001 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 400000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 700000000000000000000002;
+			remoteInfo = KeyboardShortcuts;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		500000000000000000000001 /* Embed Frameworks */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 10;
+			files = (
+				20000000000000000000002A /* KeyboardShortcuts.framework in Embed Frameworks */,
+			);
+			name = "Embed Frameworks";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		100000000000000000000001 /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/AppDelegate.swift; sourceTree = "<group>"; };
+		100000000000000000000002 /* AppServices.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/AppServices.swift; sourceTree = "<group>"; };
+		100000000000000000000003 /* HotkeyManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/HotkeyManager.swift; sourceTree = "<group>"; };
+		100000000000000000000004 /* SelectionTranslationController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/SelectionTranslationController.swift; sourceTree = "<group>"; };
+		100000000000000000000005 /* TTSApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/TTSApp.swift; sourceTree = "<group>"; };
+		100000000000000000000006 /* TranslationService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/TranslationService.swift; sourceTree = "<group>"; };
+		100000000000000000000007 /* TranslationModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/TranslationModels.swift; sourceTree = "<group>"; };
+		100000000000000000000008 /* OCRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCR/OCRService.swift; sourceTree = "<group>"; };
+		100000000000000000000009 /* BaiduTranslateProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/BaiduTranslateProvider.swift; sourceTree = "<group>"; };
+		10000000000000000000000A /* BingTranslateProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/BingTranslateProvider.swift; sourceTree = "<group>"; };
+		10000000000000000000000B /* DeepLProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/DeepLProvider.swift; sourceTree = "<group>"; };
+		10000000000000000000000C /* GoogleTranslateProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/GoogleTranslateProvider.swift; sourceTree = "<group>"; };
+		10000000000000000000000D /* MyMemoryProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/MyMemoryProvider.swift; sourceTree = "<group>"; };
+		10000000000000000000000E /* OpenAICompatibleProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/OpenAICompatibleProvider.swift; sourceTree = "<group>"; };
+		10000000000000000000000F /* ProviderRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/ProviderRegistry.swift; sourceTree = "<group>"; };
+		100000000000000000000010 /* SigningUtilities.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/SigningUtilities.swift; sourceTree = "<group>"; };
+		100000000000000000000011 /* TencentTranslateProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/TencentTranslateProvider.swift; sourceTree = "<group>"; };
+		100000000000000000000012 /* TranslationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/TranslationProvider.swift; sourceTree = "<group>"; };
+		100000000000000000000013 /* VolcengineTranslateProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/VolcengineTranslateProvider.swift; sourceTree = "<group>"; };
+		100000000000000000000014 /* ScreenshotCaptureController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/ScreenshotCaptureController.swift; sourceTree = "<group>"; };
+		100000000000000000000015 /* ScreenshotOverlayWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/ScreenshotOverlayWindow.swift; sourceTree = "<group>"; };
+		100000000000000000000016 /* ClipboardManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/ClipboardManager.swift; sourceTree = "<group>"; };
+		100000000000000000000017 /* KeychainService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/KeychainService.swift; sourceTree = "<group>"; };
+		100000000000000000000018 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/PermissionManager.swift; sourceTree = "<group>"; };
+		100000000000000000000019 /* SelectionReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SelectionReader.swift; sourceTree = "<group>"; };
+		10000000000000000000001A /* AppConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stores/AppConfigurationStore.swift; sourceTree = "<group>"; };
+		10000000000000000000001B /* FavoriteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stores/FavoriteStore.swift; sourceTree = "<group>"; };
+		10000000000000000000001C /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stores/HistoryStore.swift; sourceTree = "<group>"; };
+		10000000000000000000001D /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/Favorites/FavoritesView.swift; sourceTree = "<group>"; };
+		10000000000000000000001E /* FavoritesWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/Favorites/FavoritesWindowController.swift; sourceTree = "<group>"; };
+		10000000000000000000001F /* FloatingTranslatePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/Floating/FloatingTranslatePanel.swift; sourceTree = "<group>"; };
+		100000000000000000000020 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/History/HistoryView.swift; sourceTree = "<group>"; };
+		100000000000000000000021 /* HistoryWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/History/HistoryWindowController.swift; sourceTree = "<group>"; };
+		100000000000000000000022 /* InputTranslateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/InputTranslate/InputTranslateView.swift; sourceTree = "<group>"; };
+		100000000000000000000023 /* InputTranslateWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/InputTranslate/InputTranslateWindowController.swift; sourceTree = "<group>"; };
+		100000000000000000000024 /* OCRResultPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/OCR/OCRResultPanel.swift; sourceTree = "<group>"; };
+		100000000000000000000025 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/Settings/SettingsView.swift; sourceTree = "<group>"; };
+		100000000000000000000026 /* SettingsWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/Settings/SettingsWindowController.swift; sourceTree = "<group>"; };
+		100000000000000000000027 /* ToastPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/Toast/ToastPanel.swift; sourceTree = "<group>"; };
+		100000000000000000000028 /* KeyboardShortcuts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardShortcuts.swift; sourceTree = "<group>"; };
+		100000000000000000000029 /* KeyboardShortcuts.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = KeyboardShortcuts.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		10000000000000000000002A /* TTS.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TTS.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		10000000000000000000002B /* Carbon.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = Carbon.framework; path = System/Library/Frameworks/Carbon.framework; sourceTree = SDKROOT; };
+		10000000000000000000002C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = App/Info.plist; sourceTree = SOURCE_ROOT; };
+		10000000000000000000002D /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = App/AppIcon.icns; sourceTree = SOURCE_ROOT; };
+		10000000000000000000002E /* MenuBarIconTemplate.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = App/Resources/MenuBarIconTemplate.png; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		600000000000000000000001 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				200000000000000000000029 /* KeyboardShortcuts.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		600000000000000000000002 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				20000000000000000000002B /* Carbon.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		800000000000000000000001 = {
+			isa = PBXGroup;
+			children = (
+				800000000000000000000002 /* App */,
+				800000000000000000000003 /* Sources */,
+				800000000000000000000004 /* Frameworks */,
+				800000000000000000000005 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		800000000000000000000002 /* App */ = {
+			isa = PBXGroup;
+			children = (
+				10000000000000000000002C /* Info.plist */,
+				10000000000000000000002D /* AppIcon.icns */,
+				10000000000000000000002E /* MenuBarIconTemplate.png */,
+			);
+			name = App;
+			sourceTree = "<group>";
+		};
+		800000000000000000000003 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				800000000000000000000006 /* TTS */,
+				800000000000000000000007 /* KeyboardShortcuts */,
+			);
+			name = Sources;
+			sourceTree = "<group>";
+		};
+		800000000000000000000004 /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				10000000000000000000002B /* Carbon.framework */,
+			);
+			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		800000000000000000000005 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				10000000000000000000002A /* TTS.app */,
+				100000000000000000000029 /* KeyboardShortcuts.framework */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		800000000000000000000006 /* TTS */ = {
+			isa = PBXGroup;
+			children = (
+				100000000000000000000001 /* AppDelegate.swift */,
+				100000000000000000000002 /* AppServices.swift */,
+				100000000000000000000003 /* HotkeyManager.swift */,
+				100000000000000000000004 /* SelectionTranslationController.swift */,
+				100000000000000000000005 /* TTSApp.swift */,
+				100000000000000000000006 /* TranslationService.swift */,
+				100000000000000000000007 /* TranslationModels.swift */,
+				100000000000000000000008 /* OCRService.swift */,
+				100000000000000000000009 /* BaiduTranslateProvider.swift */,
+				10000000000000000000000A /* BingTranslateProvider.swift */,
+				10000000000000000000000B /* DeepLProvider.swift */,
+				10000000000000000000000C /* GoogleTranslateProvider.swift */,
+				10000000000000000000000D /* MyMemoryProvider.swift */,
+				10000000000000000000000E /* OpenAICompatibleProvider.swift */,
+				10000000000000000000000F /* ProviderRegistry.swift */,
+				100000000000000000000010 /* SigningUtilities.swift */,
+				100000000000000000000011 /* TencentTranslateProvider.swift */,
+				100000000000000000000012 /* TranslationProvider.swift */,
+				100000000000000000000013 /* VolcengineTranslateProvider.swift */,
+				100000000000000000000014 /* ScreenshotCaptureController.swift */,
+				100000000000000000000015 /* ScreenshotOverlayWindow.swift */,
+				100000000000000000000016 /* ClipboardManager.swift */,
+				100000000000000000000017 /* KeychainService.swift */,
+				100000000000000000000018 /* PermissionManager.swift */,
+				100000000000000000000019 /* SelectionReader.swift */,
+				10000000000000000000001A /* AppConfigurationStore.swift */,
+				10000000000000000000001B /* FavoriteStore.swift */,
+				10000000000000000000001C /* HistoryStore.swift */,
+				10000000000000000000001D /* FavoritesView.swift */,
+				10000000000000000000001E /* FavoritesWindowController.swift */,
+				10000000000000000000001F /* FloatingTranslatePanel.swift */,
+				100000000000000000000020 /* HistoryView.swift */,
+				100000000000000000000021 /* HistoryWindowController.swift */,
+				100000000000000000000022 /* InputTranslateView.swift */,
+				100000000000000000000023 /* InputTranslateWindowController.swift */,
+				100000000000000000000024 /* OCRResultPanel.swift */,
+				100000000000000000000025 /* SettingsView.swift */,
+				100000000000000000000026 /* SettingsWindowController.swift */,
+				100000000000000000000027 /* ToastPanel.swift */,
+			);
+			path = Sources/TTS;
+			sourceTree = SOURCE_ROOT;
+		};
+		800000000000000000000007 /* KeyboardShortcuts */ = {
+			isa = PBXGroup;
+			children = (
+				100000000000000000000028 /* KeyboardShortcuts.swift */,
+			);
+			path = Sources/KeyboardShortcuts;
+			sourceTree = SOURCE_ROOT;
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		700000000000000000000001 /* tts */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 900000000000000000000003 /* Build configuration list for PBXNativeTarget "tts" */;
+			buildPhases = (
+				A00000000000000000000001 /* Sources */,
+				A00000000000000000000003 /* Resources */,
+				600000000000000000000001 /* Frameworks */,
+				500000000000000000000001 /* Embed Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				300000000000000000000002 /* PBXTargetDependency */,
+			);
+			name = tts;
+			productName = TTS;
+			productReference = 10000000000000000000002A /* TTS.app */;
+			productType = "com.apple.product-type.application";
+		};
+		700000000000000000000002 /* KeyboardShortcuts */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 900000000000000000000004 /* Build configuration list for PBXNativeTarget "KeyboardShortcuts" */;
+			buildPhases = (
+				A00000000000000000000002 /* Sources */,
+				600000000000000000000002 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KeyboardShortcuts;
+			productName = KeyboardShortcuts;
+			productReference = 100000000000000000000029 /* KeyboardShortcuts.framework */;
+			productType = "com.apple.product-type.framework";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		400000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					700000000000000000000001 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+					700000000000000000000002 = {
+						CreatedOnToolsVersion = 16.0;
+					};
+				};
+			};
+			buildConfigurationList = 900000000000000000000001 /* Build configuration list for PBXProject "tts" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 800000000000000000000001;
+			productRefGroup = 800000000000000000000005 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				700000000000000000000001 /* tts */,
+				700000000000000000000002 /* KeyboardShortcuts */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A00000000000000000000003 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				20000000000000000000002C /* AppIcon.icns in Resources */,
+				20000000000000000000002D /* MenuBarIconTemplate.png in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00000000000000000000001 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				200000000000000000000001 /* AppDelegate.swift in Sources */,
+				200000000000000000000002 /* AppServices.swift in Sources */,
+				200000000000000000000003 /* HotkeyManager.swift in Sources */,
+				200000000000000000000004 /* SelectionTranslationController.swift in Sources */,
+				200000000000000000000005 /* TTSApp.swift in Sources */,
+				200000000000000000000006 /* TranslationService.swift in Sources */,
+				200000000000000000000007 /* TranslationModels.swift in Sources */,
+				200000000000000000000008 /* OCRService.swift in Sources */,
+				200000000000000000000009 /* BaiduTranslateProvider.swift in Sources */,
+				20000000000000000000000A /* BingTranslateProvider.swift in Sources */,
+				20000000000000000000000B /* DeepLProvider.swift in Sources */,
+				20000000000000000000000C /* GoogleTranslateProvider.swift in Sources */,
+				20000000000000000000000D /* MyMemoryProvider.swift in Sources */,
+				20000000000000000000000E /* OpenAICompatibleProvider.swift in Sources */,
+				20000000000000000000000F /* ProviderRegistry.swift in Sources */,
+				200000000000000000000010 /* SigningUtilities.swift in Sources */,
+				200000000000000000000011 /* TencentTranslateProvider.swift in Sources */,
+				200000000000000000000012 /* TranslationProvider.swift in Sources */,
+				200000000000000000000013 /* VolcengineTranslateProvider.swift in Sources */,
+				200000000000000000000014 /* ScreenshotCaptureController.swift in Sources */,
+				200000000000000000000015 /* ScreenshotOverlayWindow.swift in Sources */,
+				200000000000000000000016 /* ClipboardManager.swift in Sources */,
+				200000000000000000000017 /* KeychainService.swift in Sources */,
+				200000000000000000000018 /* PermissionManager.swift in Sources */,
+				200000000000000000000019 /* SelectionReader.swift in Sources */,
+				20000000000000000000001A /* AppConfigurationStore.swift in Sources */,
+				20000000000000000000001B /* FavoriteStore.swift in Sources */,
+				20000000000000000000001C /* HistoryStore.swift in Sources */,
+				20000000000000000000001D /* FavoritesView.swift in Sources */,
+				20000000000000000000001E /* FavoritesWindowController.swift in Sources */,
+				20000000000000000000001F /* FloatingTranslatePanel.swift in Sources */,
+				200000000000000000000020 /* HistoryView.swift in Sources */,
+				200000000000000000000021 /* HistoryWindowController.swift in Sources */,
+				200000000000000000000022 /* InputTranslateView.swift in Sources */,
+				200000000000000000000023 /* InputTranslateWindowController.swift in Sources */,
+				200000000000000000000024 /* OCRResultPanel.swift in Sources */,
+				200000000000000000000025 /* SettingsView.swift in Sources */,
+				200000000000000000000026 /* SettingsWindowController.swift in Sources */,
+				200000000000000000000027 /* ToastPanel.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000002 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				200000000000000000000028 /* KeyboardShortcuts.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		300000000000000000000002 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 700000000000000000000002 /* KeyboardShortcuts */;
+			targetProxy = 300000000000000000000001 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		B000000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		B000000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		B000000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yuzhou4tc.tts;
+				PRODUCT_MODULE_NAME = TTS;
+				PRODUCT_NAME = TTS;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		B000000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_EMBED_SWIFT_STANDARD_LIBRARIES = YES;
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_HARDENED_RUNTIME = NO;
+				INFOPLIST_FILE = App/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yuzhou4tc.tts;
+				PRODUCT_MODULE_NAME = TTS;
+				PRODUCT_NAME = TTS;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		B000000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = "";
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INFOPLIST_KEY_CFBundleDisplayName = KeyboardShortcuts;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yuzhou4tc.tts.KeyboardShortcuts;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		B000000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
+				CODE_SIGN_STYLE = Manual;
+				DEFINES_MODULE = YES;
+				DEVELOPMENT_TEAM = "";
+				DYLIB_INSTALL_NAME_BASE = "@rpath";
+				INFOPLIST_KEY_CFBundleDisplayName = KeyboardShortcuts;
+				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.yuzhou4tc.tts.KeyboardShortcuts;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		900000000000000000000001 /* Build configuration list for PBXProject "tts" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B000000000000000000000001 /* Debug */,
+				B000000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		900000000000000000000003 /* Build configuration list for PBXNativeTarget "tts" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B000000000000000000000003 /* Debug */,
+				B000000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		900000000000000000000004 /* Build configuration list for PBXNativeTarget "KeyboardShortcuts" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				B000000000000000000000005 /* Debug */,
+				B000000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 400000000000000000000001 /* Project object */;
+}
