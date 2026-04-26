@@ -73,6 +73,7 @@ struct InputTranslateView: View {
                 }
             }
             .pickerStyle(.menu)
+            .buttonStyle(.bordered)
             .labelsHidden()
             .frame(width: 220)
 

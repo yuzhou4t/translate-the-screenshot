@@ -64,6 +64,7 @@ struct SettingsView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .buttonStyle(.bordered)
                     .frame(width: 280)
 
                     Button("保存") {
