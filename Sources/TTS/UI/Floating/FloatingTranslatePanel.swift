@@ -9,24 +9,53 @@ final class FloatingTranslatePanel {
     private var globalMouseDownMonitor: Any?
     private let favoriteStore: FavoriteStore
     private let panelSize = NSSize(width: 440, height: 300)
+    private var currentPresentationID: UUID?
+    private var dismissedPresentationID: UUID?
 
     init(favoriteStore: FavoriteStore) {
         self.favoriteStore = favoriteStore
     }
 
-    func showLoading(sourceText: String?, near point: NSPoint) {
-        show(state: .loading(sourceText: sourceText), near: point)
+    @discardableResult
+    func showLoading(sourceText: String?, near point: NSPoint) -> UUID {
+        let presentationID = UUID()
+        currentPresentationID = presentationID
+        dismissedPresentationID = nil
+        show(state: .loading(sourceText: sourceText), near: point, shouldReposition: true)
+        return presentationID
     }
 
-    func showResult(item: TranslationHistoryItem, near point: NSPoint) {
-        show(state: .result(item), near: point)
+    func updateLoading(sourceText: String?, near point: NSPoint, presentationID: UUID) {
+        guard canUpdatePresentation(presentationID) else {
+            return
+        }
+
+        show(state: .loading(sourceText: sourceText), near: point, shouldReposition: false)
     }
 
-    func showError(_ message: String, near point: NSPoint) {
-        show(state: .error(message), near: point)
+    func showResult(item: TranslationHistoryItem, near point: NSPoint, presentationID: UUID) {
+        guard canUpdatePresentation(presentationID) else {
+            return
+        }
+
+        show(state: .result(item), near: point, shouldReposition: false)
     }
 
-    private func show(state: FloatingTranslateState, near point: NSPoint) {
+    func showError(_ message: String, near point: NSPoint, presentationID: UUID) {
+        guard canUpdatePresentation(presentationID) else {
+            return
+        }
+
+        show(state: .error(message), near: point, shouldReposition: false)
+    }
+
+    private func canUpdatePresentation(_ presentationID: UUID) -> Bool {
+        currentPresentationID == presentationID &&
+            dismissedPresentationID != presentationID &&
+            panel?.isVisible == true
+    }
+
+    private func show(state: FloatingTranslateState, near point: NSPoint, shouldReposition: Bool) {
         let contentView = FloatingTranslateView(
             state: state,
             favoriteStore: favoriteStore,
@@ -60,12 +89,15 @@ final class FloatingTranslatePanel {
             panel?.contentViewController = controller
         }
 
-        panel?.setFrame(NSRect(origin: origin(for: point), size: panelSize), display: true)
+        if shouldReposition {
+            panel?.setFrame(NSRect(origin: origin(for: point), size: panelSize), display: true)
+        }
         panel?.orderFrontRegardless()
         installDismissMonitorsIfNeeded()
     }
 
     func hide() {
+        dismissedPresentationID = currentPresentationID
         panel?.orderOut(nil)
         removeDismissMonitors()
     }

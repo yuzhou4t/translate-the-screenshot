@@ -21,7 +21,7 @@ final class SelectionTranslationController {
     func translateSelection() {
         activeTask?.cancel()
         let mouseLocation = NSEvent.mouseLocation
-        floatingPanel.showLoading(sourceText: nil, near: mouseLocation)
+        let presentationID = floatingPanel.showLoading(sourceText: nil, near: mouseLocation)
 
         activeTask = Task { [selectionReader, translationService, floatingPanel] in
             do {
@@ -29,7 +29,11 @@ final class SelectionTranslationController {
                 try Task.checkCancellation()
 
                 await MainActor.run {
-                    floatingPanel.showLoading(sourceText: selectedText, near: mouseLocation)
+                    floatingPanel.updateLoading(
+                        sourceText: selectedText,
+                        near: mouseLocation,
+                        presentationID: presentationID
+                    )
                 }
 
                 let item = try await translationService.translate(
@@ -39,13 +43,21 @@ final class SelectionTranslationController {
                 try Task.checkCancellation()
 
                 await MainActor.run {
-                    floatingPanel.showResult(item: item, near: mouseLocation)
+                    floatingPanel.showResult(
+                        item: item,
+                        near: mouseLocation,
+                        presentationID: presentationID
+                    )
                 }
             } catch is CancellationError {
                 return
             } catch {
                 await MainActor.run {
-                    floatingPanel.showError(error.localizedDescription, near: mouseLocation)
+                    floatingPanel.showError(
+                        error.localizedDescription,
+                        near: mouseLocation,
+                        presentationID: presentationID
+                    )
                 }
             }
         }

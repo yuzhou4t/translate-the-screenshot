@@ -129,12 +129,15 @@ final class ScreenshotCaptureController {
     }
 
     private func handleScreenshot(imageURL: URL, near point: NSPoint, mode: ScreenshotCaptureMode) {
+        let presentationID: UUID?
         switch mode {
         case .translate:
-            floatingPanel.showLoading(sourceText: "正在识别截图文字...", near: point)
+            presentationID = floatingPanel.showLoading(sourceText: "正在识别截图文字...", near: point)
         case .ocr:
+            presentationID = nil
             ocrResultPanel.showLoading(near: point)
         case .silentOCR:
+            presentationID = nil
             break
         }
 
@@ -149,7 +152,13 @@ final class ScreenshotCaptureController {
                 await MainActor.run {
                     switch mode {
                     case .translate:
-                        floatingPanel.showLoading(sourceText: plainText, near: point)
+                        if let presentationID {
+                            floatingPanel.updateLoading(
+                                sourceText: plainText,
+                                near: point,
+                                presentationID: presentationID
+                            )
+                        }
                     case .ocr:
                         ocrResultPanel.showResult(result, imageURL: imageURL, near: point)
                     case .silentOCR:
@@ -165,7 +174,13 @@ final class ScreenshotCaptureController {
                         mode: .ocrTranslate
                     )
                     await MainActor.run {
-                        floatingPanel.showResult(item: item, near: point)
+                        if let presentationID {
+                            floatingPanel.showResult(
+                                item: item,
+                                near: point,
+                                presentationID: presentationID
+                            )
+                        }
                     }
                 case .ocr:
                     let item = TranslationHistoryItem(
@@ -186,7 +201,9 @@ final class ScreenshotCaptureController {
                     let message = error.localizedDescription
                     switch mode {
                     case .translate:
-                        floatingPanel.showError(message, near: point)
+                        if let presentationID {
+                            floatingPanel.showError(message, near: point, presentationID: presentationID)
+                        }
                     case .ocr:
                         ocrResultPanel.showError(message, near: point)
                     case .silentOCR:
