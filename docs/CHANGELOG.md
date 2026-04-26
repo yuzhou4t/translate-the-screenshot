@@ -55,6 +55,16 @@
 - 翻译历史记录本次使用的 AI 翻译模式，旧历史记录兼容默认准确翻译。
 - 优化学术翻译 prompt，使其更偏论文/报告风格，强调术语一致、逻辑清晰、客观语气和不添加原文外信息。
 
+### 精细化模型配置
+
+- 新增 `ModelPurpose`，包含快速、高质量、学术、技术、OCR 修复和备用用途。
+- 新增 `ModelCapabilityScore`，记录速度、质量、学术、技术、OCR 修复、格式遵循和成本效率评分。
+- 新增 `ModelProfile`，保存模型名称、Provider、实际 model name、用途、优先级、启用状态和能力评分。
+- `AppConfigurationStore` 开始保存 `modelProfiles`，旧配置缺失时自动补齐默认 profiles。
+- 默认提供 Fast Model、Quality Model、Academic Model、Technical Model、OCR Cleanup Model 和 Fallback Model。
+- 设置页“模型配置”分区改为 profile 列表和详情编辑，允许修改名称、Provider、Model Name、用途、优先级和启用状态。
+- 当前模型 Profile 仅用于配置准备，暂不接入真实翻译路由和 fallback 逻辑。
+
 ### 工作流约定
 
 - 后续开发默认直接在 `main` 上修改。

@@ -313,6 +313,7 @@ struct AppConfiguration: Codable, Equatable {
     var providerConfigs: [ProviderConfig]
     var defaultProviderID: TranslationProviderID
     var defaultTranslationMode: TranslationMode
+    var modelProfiles: [ModelProfile]
 
     static let `default` = AppConfiguration(
         providerID: .myMemory,
@@ -322,7 +323,8 @@ struct AppConfiguration: Codable, Equatable {
         translationDirection: .autoToChinese,
         providerConfigs: [.openAICompatibleDefault, .myMemoryDefault],
         defaultProviderID: .myMemory,
-        defaultTranslationMode: .accurate
+        defaultTranslationMode: .accurate,
+        modelProfiles: ModelProfile.defaultProfiles
     )
 
     private enum CodingKeys: String, CodingKey {
@@ -334,6 +336,7 @@ struct AppConfiguration: Codable, Equatable {
         case providerConfigs
         case defaultProviderID
         case defaultTranslationMode
+        case modelProfiles
     }
 
     init(
@@ -344,7 +347,8 @@ struct AppConfiguration: Codable, Equatable {
         translationDirection: TranslationDirection,
         providerConfigs: [ProviderConfig],
         defaultProviderID: TranslationProviderID,
-        defaultTranslationMode: TranslationMode
+        defaultTranslationMode: TranslationMode,
+        modelProfiles: [ModelProfile]
     ) {
         self.providerID = providerID
         self.openAICompatibleEndpoint = openAICompatibleEndpoint
@@ -354,6 +358,7 @@ struct AppConfiguration: Codable, Equatable {
         self.providerConfigs = providerConfigs
         self.defaultProviderID = defaultProviderID
         self.defaultTranslationMode = defaultTranslationMode
+        self.modelProfiles = modelProfiles
     }
 
     init(from decoder: Decoder) throws {
@@ -366,6 +371,7 @@ struct AppConfiguration: Codable, Equatable {
             TranslationDirection.inferred(from: targetLanguage)
         defaultProviderID = try container.decodeIfPresent(TranslationProviderID.self, forKey: .defaultProviderID) ?? providerID
         defaultTranslationMode = try container.decodeIfPresent(TranslationMode.self, forKey: .defaultTranslationMode) ?? .accurate
+        modelProfiles = try container.decodeIfPresent([ModelProfile].self, forKey: .modelProfiles) ?? ModelProfile.defaultProfiles
 
         let decodedConfigs = try container.decodeIfPresent([ProviderConfig].self, forKey: .providerConfigs) ?? []
         providerConfigs = AppConfiguration.normalizedConfigs(
