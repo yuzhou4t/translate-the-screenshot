@@ -22,6 +22,7 @@ final class TranslationService {
         text: String,
         sourceLanguage: String? = nil,
         targetLanguage: String? = nil,
+        translationMode: TranslationMode? = nil,
         mode: TranslationHistoryMode
     ) async throws -> TranslationHistoryItem {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -34,14 +35,14 @@ final class TranslationService {
         let finalTargetLanguage = requestedTargetLanguage?.isEmpty == false
             ? requestedTargetLanguage!
             : providerFactory.targetLanguage
-        let translationMode = providerFactory.defaultTranslationMode
+        let finalTranslationMode = translationMode ?? providerFactory.defaultTranslationMode
         let finalSourceLanguage = sourceLanguage ?? providerFactory.sourceLanguage
 
         let request = TranslationRequest(
             text: trimmedText,
             sourceLanguage: finalSourceLanguage,
             targetLanguage: finalTargetLanguage,
-            translationMode: translationMode
+            translationMode: finalTranslationMode
         )
         let response = try await translateWithFallback(request)
         let item = TranslationHistoryItem(
@@ -52,7 +53,7 @@ final class TranslationService {
             targetLanguage: request.targetLanguage,
             createdAt: Date(),
             mode: mode,
-            translationMode: translationMode
+            translationMode: finalTranslationMode
         )
 
         try await historyStore.add(item)

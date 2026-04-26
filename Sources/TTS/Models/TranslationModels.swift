@@ -50,6 +50,15 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
             false
         }
     }
+
+    var supportsTranslationModePrompts: Bool {
+        switch self {
+        case .openAICompatible, .glm4Flash, .siliconFlow:
+            true
+        case .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .localOCR:
+            false
+        }
+    }
 }
 
 enum TranslationProviderType: String, Codable, CaseIterable, Identifiable {

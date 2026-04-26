@@ -14,7 +14,10 @@ final class AppServices {
     let ocrResultPanel = OCRResultPanel()
     let toastPanel = ToastPanel()
 
-    lazy var floatingPanel = FloatingTranslatePanel(favoriteStore: favoriteStore)
+    lazy var floatingPanel = FloatingTranslatePanel(
+        favoriteStore: favoriteStore,
+        translationService: translationService
+    )
 
     lazy var settingsWindowController = SettingsWindowController(
         configurationStore: configurationStore,

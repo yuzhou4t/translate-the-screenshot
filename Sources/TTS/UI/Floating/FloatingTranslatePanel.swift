@@ -8,13 +8,15 @@ final class FloatingTranslatePanel {
     private var localMouseDownMonitor: Any?
     private var globalMouseDownMonitor: Any?
     private let favoriteStore: FavoriteStore
-    private let panelSize = NSSize(width: 500, height: 420)
+    private let translationService: TranslationService
+    private let panelSize = NSSize(width: 520, height: 520)
     private var currentPresentationID: UUID?
     private var dismissedPresentationID: UUID?
     private var currentSourceText: String?
 
-    init(favoriteStore: FavoriteStore) {
+    init(favoriteStore: FavoriteStore, translationService: TranslationService) {
         self.favoriteStore = favoriteStore
+        self.translationService = translationService
     }
 
     @discardableResult
@@ -63,6 +65,7 @@ final class FloatingTranslatePanel {
         let contentView = FloatingTranslateView(
             state: state,
             favoriteStore: favoriteStore,
+            onRetranslate: retranslate(_:using:),
             onCopyText: copyToPasteboard(_:),
             onClose: hide
         )
@@ -164,6 +167,19 @@ final class FloatingTranslatePanel {
         let y = min(max(preferred.y, visibleFrame.minY + 8), visibleFrame.maxY - panelSize.height - 8)
         return NSPoint(x: x, y: y)
     }
+
+    private func retranslate(
+        _ item: TranslationHistoryItem,
+        using translationMode: TranslationMode
+    ) async throws -> TranslationHistoryItem {
+        try await translationService.translate(
+            text: item.sourceText,
+            sourceLanguage: item.sourceLanguage,
+            targetLanguage: item.targetLanguage,
+            translationMode: translationMode,
+            mode: item.mode
+        )
+    }
 }
 
 enum FloatingTranslateState: Equatable {
@@ -175,11 +191,17 @@ enum FloatingTranslateState: Equatable {
 struct FloatingTranslateView: View {
     var state: FloatingTranslateState
     var favoriteStore: FavoriteStore
+    var onRetranslate: (TranslationHistoryItem, TranslationMode) async throws -> TranslationHistoryItem
     var onCopyText: (String) -> Void
     var onClose: () -> Void
 
     @State private var isFavorite = false
     @State private var favoriteErrorMessage: String?
+    @State private var currentItem: TranslationHistoryItem?
+    @State private var previousItem: TranslationHistoryItem?
+    @State private var selectedTranslationMode: TranslationMode = .accurate
+    @State private var isRetranslating = false
+    @State private var retranslateErrorMessage: String?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -197,6 +219,9 @@ struct FloatingTranslateView: View {
         )
         .shadow(color: Color.black.opacity(0.14), radius: 18, x: 0, y: 10)
         .background(WindowDragView())
+        .task(id: resultTaskID) {
+            syncResultState()
+        }
         .task(id: favoriteTaskID) {
             await refreshFavoriteState()
         }
@@ -214,9 +239,9 @@ struct FloatingTranslateView: View {
             case .loading(let sourceText):
                 sourceSection(text: sourceText, placeholder: "正在读取原文...")
                 translationSection(text: nil, placeholder: "译文会在完成后显示")
-            case .result(let item):
-                sourceSection(text: item.sourceText, placeholder: "无原文")
-                translationSection(text: item.translatedText, placeholder: "无译文")
+            case .result:
+                sourceSection(text: resultItem?.sourceText, placeholder: "无原文")
+                translationSection(text: comparisonText, placeholder: "无译文")
             case .error(let message, let sourceText):
                 sourceSection(text: sourceText, placeholder: "暂无原文")
                 errorSection(message)
@@ -292,19 +317,23 @@ struct FloatingTranslateView: View {
         switch state {
         case .loading:
             "正在识别或翻译，请稍候"
-        case .result(let item):
-            item.providerID.displayName
+        case .result:
+            resultItem?.providerID.displayName ?? "翻译服务"
         case .error:
             "请检查权限、网络或服务商配置"
         }
     }
 
-    private var favoriteTaskID: UUID? {
+    private var resultTaskID: UUID? {
         if case .result(let item) = state {
             item.id
         } else {
             nil
         }
+    }
+
+    private var favoriteTaskID: UUID? {
+        resultItem?.id
     }
 
     private var statusRow: some View {
@@ -340,8 +369,10 @@ struct FloatingTranslateView: View {
         switch state {
         case .loading:
             "处理中"
-        case .result(let item):
-            "已完成 · \(item.providerID.displayName)"
+        case .result:
+            isRetranslating
+                ? "正在按 \(selectedTranslationMode.displayName) 重新翻译"
+                : "已完成 · \(resultItem?.translationMode.displayName ?? "AI 模式")"
         case .error:
             "需要处理"
         }
@@ -451,8 +482,47 @@ struct FloatingTranslateView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
+            if let item = resultItem, item.providerID.supportsTranslationModePrompts {
+                HStack(spacing: 8) {
+                    Picker("AI 模式", selection: $selectedTranslationMode) {
+                        ForEach(TranslationMode.allCases) { mode in
+                            Text(mode.displayName)
+                                .tag(mode)
+                        }
+                    }
+                    .frame(width: 250)
+                    .disabled(isRetranslating)
+                    .onChange(of: selectedTranslationMode) { nextMode in
+                        guard nextMode != resultItem?.translationMode else {
+                            return
+                        }
+                        Task {
+                            await retranslate(item, using: nextMode)
+                        }
+                    }
+
+                    if isRetranslating {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    Spacer()
+                }
+            } else if resultItem != nil {
+                Text("当前服务商不支持 AI 模式重译")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+
             if let favoriteErrorMessage {
                 Text(favoriteErrorMessage)
+                    .font(.caption2)
+                    .foregroundStyle(.red)
+                    .lineLimit(1)
+            }
+
+            if let retranslateErrorMessage {
+                Text(retranslateErrorMessage)
                     .font(.caption2)
                     .foregroundStyle(.red)
                     .lineLimit(1)
@@ -506,18 +576,79 @@ struct FloatingTranslateView: View {
     }
 
     private var resultItem: TranslationHistoryItem? {
+        if let currentItem {
+            return currentItem
+        }
         if case .result(let item) = state {
             return item
         }
         return nil
     }
 
+    private var comparisonText: String? {
+        guard let item = resultItem else {
+            return nil
+        }
+
+        guard let previousItem else {
+            return item.translatedText
+        }
+
+        return """
+        上一版（\(previousItem.translationMode.displayName)）
+        \(previousItem.translatedText)
+
+        当前（\(item.translationMode.displayName)）
+        \(item.translatedText)
+        """
+    }
+
     private func bilingualText(for item: TranslationHistoryItem) -> String {
         "\(item.sourceText)\n\n\(item.translatedText)"
     }
 
-    private func refreshFavoriteState() async {
+    private func syncResultState() {
         guard case .result(let item) = state else {
+            currentItem = nil
+            previousItem = nil
+            retranslateErrorMessage = nil
+            isRetranslating = false
+            selectedTranslationMode = .accurate
+            return
+        }
+
+        currentItem = item
+        previousItem = nil
+        retranslateErrorMessage = nil
+        isRetranslating = false
+        selectedTranslationMode = item.translationMode
+    }
+
+    private func retranslate(_ item: TranslationHistoryItem, using mode: TranslationMode) async {
+        guard !isRetranslating else {
+            return
+        }
+
+        isRetranslating = true
+        retranslateErrorMessage = nil
+        defer {
+            isRetranslating = false
+        }
+
+        do {
+            let updatedItem = try await onRetranslate(item, mode)
+            previousItem = item
+            currentItem = updatedItem
+            selectedTranslationMode = updatedItem.translationMode
+            favoriteErrorMessage = nil
+        } catch {
+            retranslateErrorMessage = error.localizedDescription
+            selectedTranslationMode = item.translationMode
+        }
+    }
+
+    private func refreshFavoriteState() async {
+        guard let item = resultItem else {
             isFavorite = false
             favoriteErrorMessage = nil
             return
