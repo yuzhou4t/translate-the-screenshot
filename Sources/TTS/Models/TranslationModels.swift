@@ -466,6 +466,10 @@ struct AppConfiguration: Codable, Equatable {
             next.append(placeholder)
         }
 
+        for index in next.indices {
+            next[index].displayName = next[index].id.displayName
+        }
+
         return next.sorted { $0.priority < $1.priority }
     }
 }
