@@ -62,13 +62,18 @@ struct InputTranslateView: View {
 
     private var controls: some View {
         HStack(spacing: 10) {
-            Text("目标语言")
+            Text("翻译方向")
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            TextField("例如 zh-CN / en / ja", text: $viewModel.targetLanguage)
-                .textFieldStyle(.roundedBorder)
-                .frame(width: 180)
+            Picker("", selection: $viewModel.translationDirection) {
+                ForEach(TranslationDirection.allCases) { direction in
+                    Text(direction.displayName)
+                        .tag(direction)
+                }
+            }
+            .labelsHidden()
+            .frame(width: 220)
 
             Spacer()
 
@@ -156,6 +161,7 @@ struct InputTranslateView: View {
 final class InputTranslateViewModel: ObservableObject {
     @Published var inputText = ""
     @Published var targetLanguage: String
+    @Published var translationDirection: TranslationDirection
     @Published var resultItem: TranslationHistoryItem?
     @Published var isResultFavorite = false
     @Published var isTranslating = false
@@ -168,6 +174,7 @@ final class InputTranslateViewModel: ObservableObject {
         self.translationService = translationService
         self.favoriteStore = favoriteStore
         targetLanguage = translationService.defaultTargetLanguage
+        translationDirection = TranslationDirection.inferred(from: translationService.defaultTargetLanguage)
     }
 
     func translate() async {
@@ -180,7 +187,8 @@ final class InputTranslateViewModel: ObservableObject {
         do {
             let item = try await translationService.translate(
                 text: inputText,
-                targetLanguage: targetLanguage,
+                sourceLanguage: translationDirection.sourceLanguage,
+                targetLanguage: translationDirection.targetLanguage ?? targetLanguage,
                 mode: .input
             )
             resultItem = item

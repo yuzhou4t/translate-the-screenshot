@@ -20,6 +20,7 @@ final class TranslationService {
 
     func translate(
         text: String,
+        sourceLanguage: String? = nil,
         targetLanguage: String? = nil,
         mode: TranslationHistoryMode
     ) async throws -> TranslationHistoryItem {
@@ -34,10 +35,11 @@ final class TranslationService {
             ? requestedTargetLanguage!
             : providerFactory.targetLanguage
         let translationMode = providerFactory.defaultTranslationMode
+        let finalSourceLanguage = sourceLanguage ?? providerFactory.sourceLanguage
 
         let request = TranslationRequest(
             text: trimmedText,
-            sourceLanguage: nil,
+            sourceLanguage: finalSourceLanguage,
             targetLanguage: finalTargetLanguage,
             translationMode: translationMode
         )

@@ -57,12 +57,16 @@ struct SettingsView: View {
                 }
 
                 HStack {
-                    Text("目标语言")
-                    TextField("例如 zh-CN / en / ja", text: $viewModel.targetLanguage)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 220)
+                    Picker("翻译方向", selection: $viewModel.translationDirection) {
+                        ForEach(TranslationDirection.allCases) { direction in
+                            Text(direction.displayName)
+                                .tag(direction)
+                        }
+                    }
+                    .frame(width: 280)
+
                     Button("保存") {
-                        viewModel.saveTargetLanguage()
+                        viewModel.saveTranslationDirection()
                     }
                     Spacer()
                 }
@@ -532,6 +536,7 @@ final class SettingsViewModel: ObservableObject {
     @Published var timeout: Double = 30
     @Published var shouldFallbackOnAuthFailure = true
     @Published var targetLanguage: String
+    @Published var translationDirection: TranslationDirection
     @Published var defaultTranslationMode: TranslationMode
     @Published var statusMessage = ""
     @Published var statusIsError = false
@@ -553,6 +558,7 @@ final class SettingsViewModel: ObservableObject {
         self.providerRegistry = providerRegistry
         defaultProviderID = configurationStore.defaultProviderID
         targetLanguage = configurationStore.targetLanguage
+        translationDirection = configurationStore.translationDirection
         defaultTranslationMode = configurationStore.defaultTranslationMode
         reload()
         refreshPermissions()
@@ -581,6 +587,7 @@ final class SettingsViewModel: ObservableObject {
         providerConfigs = configurationStore.providerConfigs
         defaultProviderID = configurationStore.defaultProviderID
         targetLanguage = configurationStore.targetLanguage
+        translationDirection = configurationStore.translationDirection
         defaultTranslationMode = configurationStore.defaultTranslationMode
 
         if selectedProviderID == nil || selectedProviderConfig == nil {
@@ -623,11 +630,10 @@ final class SettingsViewModel: ObservableObject {
         reload()
     }
 
-    func saveTargetLanguage() {
-        configurationStore.update { configuration in
-            configuration.targetLanguage = targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
-        }
-        status("目标语言已保存。", isError: false)
+    func saveTranslationDirection() {
+        configurationStore.setTranslationDirection(translationDirection)
+        reload()
+        status("翻译方向已保存。", isError: false)
     }
 
     func saveDefaultTranslationMode() {

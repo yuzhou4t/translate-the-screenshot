@@ -47,7 +47,15 @@ final class ProviderConfigStore: ObservableObject {
     }
 
     var targetLanguage: String {
-        configuration.targetLanguage
+        configuration.translationDirection.targetLanguage ?? configuration.targetLanguage
+    }
+
+    var sourceLanguage: String? {
+        configuration.translationDirection.sourceLanguage
+    }
+
+    var translationDirection: TranslationDirection {
+        configuration.translationDirection
     }
 
     var defaultTranslationMode: TranslationMode {
@@ -56,6 +64,15 @@ final class ProviderConfigStore: ObservableObject {
 
     func providerConfig(for id: TranslationProviderID) -> ProviderConfig? {
         configuration.providerConfigs.first { $0.id == id }
+    }
+
+    func setTranslationDirection(_ direction: TranslationDirection) {
+        update { configuration in
+            configuration.translationDirection = direction
+            if let targetLanguage = direction.targetLanguage {
+                configuration.targetLanguage = targetLanguage
+            }
+        }
     }
 
     func setDefaultTranslationMode(_ mode: TranslationMode) {

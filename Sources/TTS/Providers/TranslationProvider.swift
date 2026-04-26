@@ -56,6 +56,10 @@ final class TranslationProviderFactory {
         configurationStore.targetLanguage
     }
 
+    var sourceLanguage: String? {
+        configurationStore.sourceLanguage
+    }
+
     var defaultTranslationMode: TranslationMode {
         configurationStore.defaultTranslationMode
     }

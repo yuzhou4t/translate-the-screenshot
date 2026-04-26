@@ -300,6 +300,7 @@ struct AppConfiguration: Codable, Equatable {
     var openAICompatibleEndpoint: URL
     var openAICompatibleModel: String
     var targetLanguage: String
+    var translationDirection: TranslationDirection
     var providerConfigs: [ProviderConfig]
     var defaultProviderID: TranslationProviderID
     var defaultTranslationMode: TranslationMode
@@ -309,6 +310,7 @@ struct AppConfiguration: Codable, Equatable {
         openAICompatibleEndpoint: URL(string: "https://api.openai.com/v1/chat/completions")!,
         openAICompatibleModel: "gpt-4o-mini",
         targetLanguage: "zh-CN",
+        translationDirection: .autoToChinese,
         providerConfigs: [.openAICompatibleDefault, .myMemoryDefault],
         defaultProviderID: .myMemory,
         defaultTranslationMode: .accurate
@@ -319,6 +321,7 @@ struct AppConfiguration: Codable, Equatable {
         case openAICompatibleEndpoint
         case openAICompatibleModel
         case targetLanguage
+        case translationDirection
         case providerConfigs
         case defaultProviderID
         case defaultTranslationMode
@@ -329,6 +332,7 @@ struct AppConfiguration: Codable, Equatable {
         openAICompatibleEndpoint: URL,
         openAICompatibleModel: String,
         targetLanguage: String,
+        translationDirection: TranslationDirection,
         providerConfigs: [ProviderConfig],
         defaultProviderID: TranslationProviderID,
         defaultTranslationMode: TranslationMode
@@ -337,6 +341,7 @@ struct AppConfiguration: Codable, Equatable {
         self.openAICompatibleEndpoint = openAICompatibleEndpoint
         self.openAICompatibleModel = openAICompatibleModel
         self.targetLanguage = targetLanguage
+        self.translationDirection = translationDirection
         self.providerConfigs = providerConfigs
         self.defaultProviderID = defaultProviderID
         self.defaultTranslationMode = defaultTranslationMode
@@ -348,6 +353,8 @@ struct AppConfiguration: Codable, Equatable {
         openAICompatibleEndpoint = try container.decodeIfPresent(URL.self, forKey: .openAICompatibleEndpoint) ?? AppConfiguration.default.openAICompatibleEndpoint
         openAICompatibleModel = try container.decodeIfPresent(String.self, forKey: .openAICompatibleModel) ?? AppConfiguration.default.openAICompatibleModel
         targetLanguage = try container.decodeIfPresent(String.self, forKey: .targetLanguage) ?? AppConfiguration.default.targetLanguage
+        translationDirection = try container.decodeIfPresent(TranslationDirection.self, forKey: .translationDirection) ??
+            TranslationDirection.inferred(from: targetLanguage)
         defaultProviderID = try container.decodeIfPresent(TranslationProviderID.self, forKey: .defaultProviderID) ?? providerID
         defaultTranslationMode = try container.decodeIfPresent(TranslationMode.self, forKey: .defaultTranslationMode) ?? .accurate
 
