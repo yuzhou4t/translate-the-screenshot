@@ -223,6 +223,12 @@ struct SettingsView: View {
                 TextField("模型 / 区域", text: $viewModel.model)
                     .textFieldStyle(.roundedBorder)
 
+                ModelSuggestionPicker(
+                    title: "常用模型",
+                    providerID: config.id,
+                    modelName: $viewModel.model
+                )
+
                 TextField("App ID / SecretId / AccessKeyId", text: $viewModel.appID)
                     .textFieldStyle(.roundedBorder)
 
@@ -418,6 +424,12 @@ struct SettingsView: View {
 
                     TextField("Model Name", text: $viewModel.modelProfileModelName)
                         .textFieldStyle(.roundedBorder)
+
+                    ModelSuggestionPicker(
+                        title: "常用模型",
+                        providerID: viewModel.modelProfileProviderID,
+                        modelName: $viewModel.modelProfileModelName
+                    )
 
                     Picker("用途", selection: $viewModel.modelProfilePurpose) {
                         ForEach(ModelPurpose.allCases) { purpose in
@@ -634,6 +646,51 @@ private struct ModelCapabilityScoreView: View {
     }
 }
 
+private struct ModelSuggestionPicker: View {
+    var title: String
+    var providerID: TranslationProviderID
+    @Binding var modelName: String
+
+    private var suggestions: [String] {
+        providerID.suggestedModelNames
+    }
+
+    var body: some View {
+        if !suggestions.isEmpty {
+            Picker(title, selection: selection) {
+                if isCustomModel {
+                    Text("自定义：\(modelName)")
+                        .tag(modelName)
+                }
+
+                ForEach(suggestions, id: \.self) { model in
+                    Text(model)
+                        .tag(model)
+                }
+            }
+            .pickerStyle(.menu)
+        }
+    }
+
+    private var selection: Binding<String> {
+        Binding(
+            get: {
+                if suggestions.contains(modelName) {
+                    return modelName
+                }
+                return modelName.isEmpty ? suggestions[0] : modelName
+            },
+            set: { nextModel in
+                modelName = nextModel
+            }
+        )
+    }
+
+    private var isCustomModel: Bool {
+        !modelName.isEmpty && !suggestions.contains(modelName)
+    }
+}
+
 private struct ProviderConfigRow: View {
     var config: ProviderConfig
     var isDefault: Bool
@@ -751,7 +808,9 @@ final class SettingsViewModel: ObservableObject {
     private let aiProviderIDs: Set<TranslationProviderID> = [
         .openAICompatible,
         .glm4Flash,
-        .siliconFlow
+        .siliconFlow,
+        .deepSeek,
+        .gemini
     ]
 
     init(

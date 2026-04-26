@@ -70,6 +70,12 @@
 - `TranslationService` 接入 `TranslationRouter`，按划词、输入、截图、OCR 修复、技术和学术场景选择首选 ModelProfile；路由失败或首选失败时继续使用原有默认 Provider/fallback 链。
 - 翻译历史记录最终使用的 provider、model 和 scenario，并在历史与收藏列表中显示相关元数据。
 
+### 大模型服务商扩展
+
+- 新增 DeepSeek 和 Gemini 大模型服务商，复用 OpenAI-compatible 聊天接口实现，不改变传统翻译服务调用方式。
+- 将智谱服务商显示名调整为“智谱 GLM”，并保留原有配置兼容。
+- 设置页“翻译服务”和“模型配置”增加常用模型选择器，支持在智谱 GLM、DeepSeek、Gemini、硅基流动和 OpenAI-compatible 等服务商下快速切换模型，同时继续支持手动输入自定义 model name。
+
 ### 工作流约定
 
 - 后续开发默认直接在 `main` 上修改。

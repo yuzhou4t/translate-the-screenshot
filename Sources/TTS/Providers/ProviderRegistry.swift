@@ -266,6 +266,44 @@ final class ProviderRegistry {
                 apiKey: apiKey,
                 timeout: config.timeout
             )
+        case .deepSeek:
+            guard let apiKeyRef = config.apiKeyRef,
+                  let apiKey = try keychainService.loadAPIKey(account: apiKeyRef),
+                  !apiKey.isEmpty else {
+                throw TranslationProviderError.missingAPIKey
+            }
+
+            guard let endpoint = config.endpoint else {
+                throw TranslationProviderError.invalidEndpoint
+            }
+
+            return OpenAICompatibleProvider(
+                id: .deepSeek,
+                displayName: config.displayName,
+                endpoint: endpoint,
+                model: config.model ?? "deepseek-v4-flash",
+                apiKey: apiKey,
+                timeout: config.timeout
+            )
+        case .gemini:
+            guard let apiKeyRef = config.apiKeyRef,
+                  let apiKey = try keychainService.loadAPIKey(account: apiKeyRef),
+                  !apiKey.isEmpty else {
+                throw TranslationProviderError.missingAPIKey
+            }
+
+            guard let endpoint = config.endpoint else {
+                throw TranslationProviderError.invalidEndpoint
+            }
+
+            return OpenAICompatibleProvider(
+                id: .gemini,
+                displayName: config.displayName,
+                endpoint: endpoint,
+                model: config.model ?? "gemini-2.5-flash",
+                apiKey: apiKey,
+                timeout: config.timeout
+            )
         }
     }
 
@@ -290,6 +328,8 @@ final class ProviderRegistry {
         register(.init(id: .volcengine, displayName: TranslationProviderID.volcengine.displayName, type: .volcengine, isImplemented: true))
         register(.init(id: .glm4Flash, displayName: TranslationProviderID.glm4Flash.displayName, type: .glm4Flash, isImplemented: true))
         register(.init(id: .siliconFlow, displayName: TranslationProviderID.siliconFlow.displayName, type: .siliconFlow, isImplemented: true))
+        register(.init(id: .deepSeek, displayName: TranslationProviderID.deepSeek.displayName, type: .deepSeek, isImplemented: true))
+        register(.init(id: .gemini, displayName: TranslationProviderID.gemini.displayName, type: .gemini, isImplemented: true))
     }
 
     private func secretKeyAccount(for id: TranslationProviderID) -> String {

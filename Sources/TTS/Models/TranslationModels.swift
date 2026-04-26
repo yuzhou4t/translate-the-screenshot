@@ -11,6 +11,8 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
     case volcengine = "volcengine"
     case glm4Flash = "glm-4-flash"
     case siliconFlow = "siliconflow"
+    case deepSeek = "deepseek"
+    case gemini = "gemini"
     case localOCR = "local-ocr"
 
     var id: String { rawValue }
@@ -34,9 +36,13 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
         case .volcengine:
             "火山翻译"
         case .glm4Flash:
-            "GLM-4-Flash"
+            "智谱 GLM"
         case .siliconFlow:
             "硅基流动"
+        case .deepSeek:
+            "DeepSeek"
+        case .gemini:
+            "Gemini"
         case .localOCR:
             "本地 OCR"
         }
@@ -44,7 +50,7 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
 
     var isTranslationProvider: Bool {
         switch self {
-        case .openAICompatible, .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .glm4Flash, .siliconFlow:
+        case .openAICompatible, .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
             true
         case .localOCR:
             false
@@ -53,10 +59,27 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
 
     var supportsTranslationModePrompts: Bool {
         switch self {
-        case .openAICompatible, .glm4Flash, .siliconFlow:
+        case .openAICompatible, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
             true
         case .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .localOCR:
             false
+        }
+    }
+
+    var suggestedModelNames: [String] {
+        switch self {
+        case .openAICompatible:
+            ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"]
+        case .glm4Flash:
+            ["glm-4-flash-250414", "glm-4-flash", "glm-4-plus", "glm-4-air", "glm-4-airx", "glm-4-long", "glm-z1-flash"]
+        case .siliconFlow:
+            ["Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "Qwen/Qwen2.5-32B-Instruct", "deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1"]
+        case .deepSeek:
+            ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"]
+        case .gemini:
+            ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash"]
+        case .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .localOCR:
+            []
         }
     }
 }
@@ -72,6 +95,8 @@ enum TranslationProviderType: String, Codable, CaseIterable, Identifiable {
     case volcengine
     case glm4Flash
     case siliconFlow
+    case deepSeek
+    case gemini
 
     var id: String { rawValue }
 
@@ -94,9 +119,13 @@ enum TranslationProviderType: String, Codable, CaseIterable, Identifiable {
         case .volcengine:
             "火山翻译"
         case .glm4Flash:
-            "GLM-4-Flash"
+            "智谱 GLM"
         case .siliconFlow:
             "硅基流动"
+        case .deepSeek:
+            "DeepSeek"
+        case .gemini:
+            "Gemini"
         }
     }
 }
@@ -174,6 +203,12 @@ struct ProviderConfig: Identifiable, Codable, Equatable {
         case .siliconFlow:
             endpoint = URL(string: "https://api.siliconflow.cn/v1/chat/completions")
             model = "Qwen/Qwen2.5-7B-Instruct"
+        case .deepSeek:
+            endpoint = URL(string: "https://api.deepseek.com/chat/completions")
+            model = "deepseek-v4-flash"
+        case .gemini:
+            endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+            model = "gemini-2.5-flash"
         case .openAICompatible, .myMemory:
             endpoint = nil
             model = nil
@@ -422,7 +457,9 @@ struct AppConfiguration: Codable, Equatable {
             .placeholder(id: .tencent, type: .tencent, priority: 70),
             .placeholder(id: .volcengine, type: .volcengine, priority: 80),
             .placeholder(id: .glm4Flash, type: .glm4Flash, priority: 90),
-            .placeholder(id: .siliconFlow, type: .siliconFlow, priority: 100)
+            .placeholder(id: .siliconFlow, type: .siliconFlow, priority: 100),
+            .placeholder(id: .deepSeek, type: .deepSeek, priority: 110),
+            .placeholder(id: .gemini, type: .gemini, priority: 120)
         ]
 
         for placeholder in placeholders where !next.contains(where: { $0.id == placeholder.id }) {
