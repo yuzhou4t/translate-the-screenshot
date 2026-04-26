@@ -95,6 +95,31 @@ final class ProviderRegistry {
         }
     }
 
+    func isProviderReady(for id: TranslationProviderID) -> Bool {
+        guard let config = configStore.providerConfig(for: id) else {
+            return false
+        }
+        return isProviderReady(config)
+    }
+
+    func isProviderReady(_ config: ProviderConfig) -> Bool {
+        guard config.isEnabled,
+              descriptor(for: config.id)?.isImplemented == true else {
+            return false
+        }
+
+        switch config.type {
+        case .myMemory:
+            return true
+        case .openAICompatible, .deepL, .google, .bing, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
+            return config.endpoint != nil && hasAPIKey(account: config.apiKeyRef)
+        case .tencent, .volcengine, .baidu:
+            return config.endpoint != nil &&
+                config.appID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false &&
+                hasAPIKey(account: secretKeyAccount(for: config.id))
+        }
+    }
+
     func makeProvider(config: ProviderConfig) throws -> any TranslationProvider {
         guard descriptor(for: config.id)?.isImplemented == true else {
             throw TranslationProviderError.providerMessage("\(config.displayName) 尚未接入。")
@@ -334,5 +359,14 @@ final class ProviderRegistry {
 
     private func secretKeyAccount(for id: TranslationProviderID) -> String {
         "\(id.rawValue).secretKey"
+    }
+
+    private func hasAPIKey(account: String?) -> Bool {
+        guard let account else {
+            return false
+        }
+        return (try? keychainService.loadAPIKey(account: account))?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .isEmpty == false
     }
 }

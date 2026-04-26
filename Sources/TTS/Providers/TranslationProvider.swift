@@ -83,6 +83,10 @@ final class TranslationProviderFactory {
     func providerAttempt(config: ProviderConfig) -> ProviderAttempt {
         providerRegistry.providerAttempt(config: config)
     }
+
+    func isProviderReady(for id: TranslationProviderID) -> Bool {
+        providerRegistry.isProviderReady(for: id)
+    }
 }
 
 struct ProviderAttempt: Identifiable {

@@ -121,9 +121,12 @@ final class TranslationService {
         translationMode: TranslationMode
     ) -> [ProviderAttempt] {
         var attempts = providerFactory.providerAttempts()
+        let routableProfiles = providerFactory.modelProfiles.filter { profile in
+            providerFactory.isProviderReady(for: profile.providerID)
+        }
         guard let profile = TranslationRouter().recommendedProfile(
             for: scenario,
-            modelProfiles: providerFactory.modelProfiles,
+            modelProfiles: routableProfiles,
             translationMode: translationMode
         ), var config = providerFactory.providerConfig(for: profile.providerID) else {
             return attempts

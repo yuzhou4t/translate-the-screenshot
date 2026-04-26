@@ -69,6 +69,7 @@
 - 新增 `TranslationRouterRuleChecks.runBasicRoutingChecks()` 简单校验函数，覆盖 fast 选择、academic fallback、disabled 跳过和 priority 排序。
 - `TranslationService` 接入 `TranslationRouter`，按划词、输入、截图、OCR 修复、技术和学术场景选择首选 ModelProfile；路由失败或首选失败时继续使用原有默认 Provider/fallback 链。
 - 翻译历史记录最终使用的 provider、model 和 scenario，并在历史与收藏列表中显示相关元数据。
+- 模型路由会跳过未启用、未接入或缺少必要 API Key/密钥配置的 Provider，避免未配置的大模型厂商被选中后导致翻译失败。
 
 ### 大模型服务商扩展
 
