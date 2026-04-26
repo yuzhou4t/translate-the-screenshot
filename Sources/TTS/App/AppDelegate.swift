@@ -69,11 +69,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(openFavorites),
             keyEquivalent: "f"
         ))
-        menu.addItem(NSMenuItem(
-            title: "检查权限",
-            action: #selector(checkPermissions),
-            keyEquivalent: ""
-        ))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
             title: "退出 TTS",
@@ -123,11 +118,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openFavorites() {
         NSApp.activate(ignoringOtherApps: true)
         services.favoritesWindowController.show()
-    }
-
-    @objc private func checkPermissions() {
-        services.permissionManager.openAccessibilityPromptIfNeeded()
-        services.permissionManager.requestScreenRecordingIfNeeded()
     }
 
     @objc private func quit() {
