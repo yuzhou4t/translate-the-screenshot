@@ -64,6 +64,9 @@
 - 默认提供 Fast Model、Quality Model、Academic Model、Technical Model、OCR Cleanup Model 和 Fallback Model。
 - 设置页“模型配置”分区改为 profile 列表和详情编辑，允许修改名称、Provider、Model Name、用途、优先级和启用状态。
 - 当前模型 Profile 仅用于配置准备，暂不接入真实翻译路由和 fallback 逻辑。
+- 新增 `TranslationScenario` 和 `TranslationRouter`，可根据场景、模型 Profile 和可选 AI 翻译模式推荐最合适的模型 Profile。
+- `TranslationRouter` 支持 selection、input、screenshot、ocrCleanup、technical、academic 场景，按用途优先级、启用状态、priority 和能力评分排序，暂不发起网络请求。
+- 新增 `TranslationRouterRuleChecks.runBasicRoutingChecks()` 简单校验函数，覆盖 fast 选择、academic fallback、disabled 跳过和 priority 排序。
 
 ### 工作流约定
 
