@@ -4,6 +4,8 @@
 
 Translate the Screenshot 是一个轻量的 macOS 菜单栏翻译与 OCR 工具，灵感来自Bob和easydict。使用 Swift、SwiftUI、AppKit、Apple Vision 和 Keychain 构建。应用打包为 `TTS.app`，启动后常驻菜单栏，不默认显示主窗口。
 
+TTS 专注于轻量化 AI 截图翻译，而不是传统词典式翻译。
+
 ### 主要功能
 
 - `Option + D` 划词翻译
@@ -85,6 +87,8 @@ TTS 需要以下 macOS 权限：
 ## English
 
 Translate the Screenshot is a lightweight macOS menu bar translation and OCR tool built with Swift, SwiftUI, AppKit, Apple Vision, and Keychain. The app is packaged as `TTS.app` and runs as a menu bar utility without showing a main window by default.
+
+TTS focuses on lightweight AI-first screenshot translation rather than dictionary-style translation.
 
 ### Features
 
