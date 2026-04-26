@@ -9,6 +9,23 @@ enum TranslationScenario: String, Codable, CaseIterable, Identifiable, Equatable
     case academic
 
     var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .selection:
+            "划词"
+        case .input:
+            "输入"
+        case .screenshot:
+            "截图"
+        case .ocrCleanup:
+            "OCR 修复"
+        case .technical:
+            "技术"
+        case .academic:
+            "学术"
+        }
+    }
 }
 
 struct TranslationRouter {

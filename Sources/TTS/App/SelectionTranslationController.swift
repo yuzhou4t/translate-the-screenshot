@@ -38,6 +38,7 @@ final class SelectionTranslationController {
 
                 let item = try await translationService.translate(
                     text: selectedText,
+                    scenario: .selection,
                     mode: .selectedText
                 )
                 try Task.checkCancellation()

@@ -64,12 +64,24 @@ final class TranslationProviderFactory {
         configurationStore.defaultTranslationMode
     }
 
+    var modelProfiles: [ModelProfile] {
+        configurationStore.modelProfiles
+    }
+
+    func providerConfig(for id: TranslationProviderID) -> ProviderConfig? {
+        configurationStore.providerConfig(for: id)
+    }
+
     func makeActiveProvider() throws -> any TranslationProvider {
         try providerRegistry.makeDefaultProvider()
     }
 
     func providerAttempts() -> [ProviderAttempt] {
         providerRegistry.providerAttempts()
+    }
+
+    func providerAttempt(config: ProviderConfig) -> ProviderAttempt {
+        providerRegistry.providerAttempt(config: config)
     }
 }
 

@@ -123,6 +123,12 @@ private struct FavoriteRowView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 MetadataPill(historyItem.providerID.displayName, systemImage: "network")
                 MetadataPill(historyItem.translationMode.displayName, systemImage: historyItem.translationMode.systemImage)
+                if let scenario = historyItem.scenario {
+                    MetadataPill(scenario.displayName, systemImage: "point.3.connected.trianglepath.dotted")
+                }
+                if let modelName = historyItem.modelName, !modelName.isEmpty {
+                    MetadataPill(modelName, systemImage: "cpu")
+                }
                 MetadataPill("收藏于 \(item.createdAt.formatted(date: .numeric, time: .shortened))", systemImage: "calendar")
                 MetadataPill("备注：暂未设置", systemImage: "note.text")
 

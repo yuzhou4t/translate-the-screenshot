@@ -82,12 +82,16 @@ final class ProviderRegistry {
             }
 
         return enabled.map { config in
-            ProviderAttempt(config: config) { [weak self] in
-                guard let self else {
-                    throw TranslationProviderError.providerMessage("ProviderRegistry 已释放。")
-                }
-                return try self.makeProvider(config: config)
+            providerAttempt(config: config)
+        }
+    }
+
+    func providerAttempt(config: ProviderConfig) -> ProviderAttempt {
+        ProviderAttempt(config: config) { [weak self] in
+            guard let self else {
+                throw TranslationProviderError.providerMessage("ProviderRegistry 已释放。")
             }
+            return try self.makeProvider(config: config)
         }
     }
 

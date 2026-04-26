@@ -239,6 +239,8 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
     var createdAt: Date
     var mode: TranslationHistoryMode
     var translationMode: TranslationMode
+    var modelName: String?
+    var scenario: TranslationScenario?
 
     init(
         id: UUID = UUID(),
@@ -249,7 +251,9 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         targetLanguage: String,
         createdAt: Date,
         mode: TranslationHistoryMode = .selectedText,
-        translationMode: TranslationMode = .accurate
+        translationMode: TranslationMode = .accurate,
+        modelName: String? = nil,
+        scenario: TranslationScenario? = nil
     ) {
         self.id = id
         self.sourceText = sourceText
@@ -260,6 +264,8 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.mode = mode
         self.translationMode = translationMode
+        self.modelName = modelName
+        self.scenario = scenario
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -272,6 +278,8 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         case createdAt
         case mode
         case translationMode
+        case modelName
+        case scenario
     }
 
     init(from decoder: Decoder) throws {
@@ -285,6 +293,8 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         mode = try container.decodeIfPresent(TranslationHistoryMode.self, forKey: .mode) ?? .selectedText
         translationMode = try container.decodeIfPresent(TranslationMode.self, forKey: .translationMode) ?? .accurate
+        modelName = try container.decodeIfPresent(String.self, forKey: .modelName)
+        scenario = try container.decodeIfPresent(TranslationScenario.self, forKey: .scenario)
     }
 }
 
