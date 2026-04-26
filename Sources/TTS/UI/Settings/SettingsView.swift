@@ -57,12 +57,19 @@ struct SettingsView: View {
                 }
 
                 HStack {
-                    Text("翻译方向")
-                    TranslationDirectionMenu(selection: $viewModel.translationDirection, width: 220)
+                    Picker("翻译方向", selection: $viewModel.translationDirection) {
+                        ForEach(TranslationDirection.allCases) { direction in
+                            Text(direction.displayName)
+                                .tag(direction)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 280)
 
                     Button("保存") {
                         viewModel.saveTranslationDirection()
                     }
+                    .buttonStyle(.bordered)
                     Spacer()
                 }
 
