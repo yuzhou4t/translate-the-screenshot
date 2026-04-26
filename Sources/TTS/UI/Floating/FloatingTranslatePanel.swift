@@ -9,8 +9,8 @@ final class FloatingTranslatePanel {
     private var globalMouseDownMonitor: Any?
     private let favoriteStore: FavoriteStore
     private let translationService: TranslationService
-    private let normalPanelSize = NSSize(width: 520, height: 520)
-    private let comparisonPanelSize = NSSize(width: 760, height: 560)
+    private let normalPanelSize = NSSize(width: 560, height: 560)
+    private let comparisonPanelSize = NSSize(width: 800, height: 600)
     private var currentPresentationID: UUID?
     private var dismissedPresentationID: UUID?
     private var currentSourceText: String?
@@ -249,7 +249,7 @@ struct FloatingTranslateView: View {
             footer
         }
         .padding(16)
-        .frame(width: isComparisonVisible ? 740 : 500, height: isComparisonVisible ? 540 : 500, alignment: .topLeading)
+        .frame(width: isComparisonVisible ? 780 : 540, height: isComparisonVisible ? 580 : 540, alignment: .topLeading)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
@@ -310,7 +310,7 @@ struct FloatingTranslateView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(headerTitle)
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundStyle(.primary)
                 Text(headerStatus)
                     .font(.caption)
@@ -498,8 +498,8 @@ struct FloatingTranslateView: View {
             title: "原文",
             text: text,
             placeholder: placeholder,
-            minHeight: 88,
-            maxHeight: 118,
+            minHeight: 96,
+            maxHeight: 132,
             isEmphasized: false
         )
     }
@@ -509,8 +509,8 @@ struct FloatingTranslateView: View {
             title: "译文",
             text: text,
             placeholder: placeholder,
-            minHeight: 132,
-            maxHeight: 190,
+            minHeight: 170,
+            maxHeight: 248,
             isEmphasized: true
         )
     }
@@ -546,7 +546,7 @@ struct FloatingTranslateView: View {
                 .foregroundStyle(.secondary)
 
             Text(text)
-                .font(.callout)
+                .font(.system(size: 15))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .textSelection(.enabled)
@@ -579,8 +579,8 @@ struct FloatingTranslateView: View {
 
             ScrollView {
                 Text(item.translatedText)
-                    .font(.system(size: 15))
-                    .lineSpacing(4)
+                    .font(.system(size: 16))
+                    .lineSpacing(4.5)
                     .foregroundStyle(.primary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -606,7 +606,7 @@ struct FloatingTranslateView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Text(title)
-                    .font(.caption2.weight(.semibold))
+                    .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
             }
@@ -614,15 +614,15 @@ struct FloatingTranslateView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(displayText(text, placeholder: placeholder))
-                        .font(.system(size: 15, weight: .regular))
-                        .lineSpacing(3)
+                        .font(.system(size: isEmphasized ? 18 : 16, weight: .regular))
+                        .lineSpacing(isEmphasized ? 5 : 4)
                         .foregroundStyle(textColor(hasText: hasText(text), isEmphasized: isEmphasized))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .padding(10)
+            .padding(12)
             .frame(maxWidth: .infinity, minHeight: minHeight, maxHeight: maxHeight, alignment: .topLeading)
             .background(sectionBackground(isEmphasized: isEmphasized), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
@@ -642,11 +642,11 @@ struct FloatingTranslateView: View {
     private func errorSection(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("错误信息")
-                .font(.caption2.weight(.semibold))
+                .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
 
             Text(message)
-                .font(.callout)
+                .font(.system(size: 16))
                 .foregroundStyle(.primary)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
