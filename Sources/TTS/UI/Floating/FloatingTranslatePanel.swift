@@ -9,8 +9,8 @@ final class FloatingTranslatePanel {
     private var globalMouseDownMonitor: Any?
     private let favoriteStore: FavoriteStore
     private let translationService: TranslationService
-    private let normalPanelSize = NSSize(width: 560, height: 560)
-    private let comparisonPanelSize = NSSize(width: 800, height: 600)
+    private let normalPanelSize = NSSize(width: 560, height: 520)
+    private let comparisonPanelSize = NSSize(width: 800, height: 560)
     private var currentPresentationID: UUID?
     private var dismissedPresentationID: UUID?
     private var currentSourceText: String?
@@ -243,13 +243,13 @@ struct FloatingTranslateView: View {
     @State private var retranslateErrorMessage: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
+        VStack(alignment: .leading, spacing: 10) {
             header
             contentArea
             footer
         }
-        .padding(16)
-        .frame(width: isComparisonVisible ? 780 : 540, height: isComparisonVisible ? 580 : 540, alignment: .topLeading)
+        .padding(14)
+        .frame(width: isComparisonVisible ? 780 : 540, height: isComparisonVisible ? 540 : 500, alignment: .topLeading)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
@@ -271,7 +271,7 @@ struct FloatingTranslateView: View {
     }
 
     private var contentArea: some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             statusRow
             aiModeControl
 
@@ -310,7 +310,7 @@ struct FloatingTranslateView: View {
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(headerTitle)
-                    .font(.system(size: 16, weight: .semibold))
+                    .font(.system(size: 17, weight: .semibold))
                     .foregroundStyle(.primary)
                 Text(headerStatus)
                     .font(.caption)
@@ -403,13 +403,13 @@ struct FloatingTranslateView: View {
         HStack(spacing: 8) {
             statusIndicator
             Text(statusText)
-                .font(.caption)
+                .font(.system(size: 13))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
             Spacer()
         }
         .padding(.horizontal, 10)
-        .padding(.vertical, 7)
+        .padding(.vertical, 5)
         .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
@@ -446,7 +446,7 @@ struct FloatingTranslateView: View {
         if let item = resultItem, item.providerID.supportsTranslationModePrompts {
             HStack(spacing: 8) {
                 Label("AI 模式", systemImage: "sparkles")
-                    .font(.caption.weight(.medium))
+                    .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
 
                 Picker("", selection: $selectedTranslationMode) {
@@ -475,19 +475,19 @@ struct FloatingTranslateView: View {
                 Spacer()
 
                 Text(selectedTranslationMode.description)
-                    .font(.caption2)
+                    .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 7)
+            .padding(.vertical, 5)
             .background(Color(NSColor.controlBackgroundColor).opacity(0.75), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         } else if resultItem != nil {
             Text("当前服务商不支持 AI 模式重译")
-                .font(.caption2)
+                .font(.system(size: 12))
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 10)
-                .padding(.vertical, 7)
+                .padding(.vertical, 5)
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .background(Color(NSColor.controlBackgroundColor).opacity(0.75), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
@@ -498,8 +498,8 @@ struct FloatingTranslateView: View {
             title: "原文",
             text: text,
             placeholder: placeholder,
-            minHeight: 96,
-            maxHeight: 132,
+            minHeight: 116,
+            maxHeight: 150,
             isEmphasized: false
         )
     }
@@ -509,8 +509,8 @@ struct FloatingTranslateView: View {
             title: "译文",
             text: text,
             placeholder: placeholder,
-            minHeight: 170,
-            maxHeight: 248,
+            minHeight: 190,
+            maxHeight: 230,
             isEmphasized: true
         )
     }
@@ -519,7 +519,7 @@ struct FloatingTranslateView: View {
         previous: TranslationHistoryItem,
         current: TranslationHistoryItem
     ) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+        VStack(alignment: .leading, spacing: 8) {
             sourcePreview(text: current.sourceText)
 
             HStack(alignment: .top, spacing: 10) {
@@ -535,24 +535,24 @@ struct FloatingTranslateView: View {
                     tint: .accentColor
                 )
             }
-            .frame(maxWidth: .infinity, maxHeight: 250, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: 260, alignment: .top)
         }
     }
 
     private func sourcePreview(text: String) -> some View {
         VStack(alignment: .leading, spacing: 5) {
             Text("原文")
-                .font(.caption2.weight(.semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
 
             Text(text)
-                .font(.system(size: 15))
+                .font(.system(size: 18))
                 .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding(10)
+        .padding(11)
         .background(Color(NSColor.controlBackgroundColor).opacity(0.82), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
@@ -564,11 +564,11 @@ struct FloatingTranslateView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(title)
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.secondary)
 
                 Text(item.translationMode.displayName)
-                    .font(.caption2.weight(.medium))
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(tint)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
@@ -579,14 +579,14 @@ struct FloatingTranslateView: View {
 
             ScrollView {
                 Text(item.translatedText)
-                    .font(.system(size: 16))
-                    .lineSpacing(4.5)
+                    .font(.system(size: 18))
+                    .lineSpacing(5)
                     .foregroundStyle(.primary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .padding(11)
+        .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
         .background(Color(NSColor.textBackgroundColor).opacity(0.75), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
@@ -606,7 +606,7 @@ struct FloatingTranslateView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Text(title)
-                    .font(.caption.weight(.semibold))
+                    .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(.secondary)
                 Spacer()
             }
@@ -614,15 +614,15 @@ struct FloatingTranslateView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 0) {
                     Text(displayText(text, placeholder: placeholder))
-                        .font(.system(size: isEmphasized ? 18 : 16, weight: .regular))
-                        .lineSpacing(isEmphasized ? 5 : 4)
+                        .font(.system(size: 18, weight: .regular))
+                        .lineSpacing(5)
                         .foregroundStyle(textColor(hasText: hasText(text), isEmphasized: isEmphasized))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
-            .padding(12)
+            .padding(11)
             .frame(maxWidth: .infinity, minHeight: minHeight, maxHeight: maxHeight, alignment: .topLeading)
             .background(sectionBackground(isEmphasized: isEmphasized), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
@@ -642,15 +642,15 @@ struct FloatingTranslateView: View {
     private func errorSection(_ message: String) -> some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("错误信息")
-                .font(.caption.weight(.semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(.secondary)
 
             Text(message)
-                .font(.system(size: 16))
+                .font(.system(size: 18))
                 .foregroundStyle(.primary)
                 .textSelection(.enabled)
                 .frame(maxWidth: .infinity, minHeight: 96, alignment: .topLeading)
-                .padding(10)
+                .padding(11)
                 .background(Color.red.opacity(0.09), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
