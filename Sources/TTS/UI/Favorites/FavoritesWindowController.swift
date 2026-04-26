@@ -15,11 +15,9 @@ final class FavoritesWindowController {
             let viewModel = FavoritesViewModel(favoriteStore: favoriteStore)
             let hostingController = NSHostingController(
                 rootView: FavoritesView(viewModel: viewModel)
-                    .preferredColorScheme(.light)
             )
             let newWindow = NSWindow(contentViewController: hostingController)
             newWindow.title = "TTS 收藏夹"
-            newWindow.appearance = NSAppearance(named: .aqua)
             newWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             newWindow.setContentSize(NSSize(width: 860, height: 560))
             newWindow.center()

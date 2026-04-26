@@ -21,7 +21,6 @@ final class InputTranslateWindowController {
                 defer: false
             )
             panel.title = "输入翻译"
-            panel.appearance = NSAppearance(named: .aqua)
             panel.titleVisibility = .hidden
             panel.titlebarAppearsTransparent = true
             panel.isMovableByWindowBackground = true
@@ -38,7 +37,6 @@ final class InputTranslateWindowController {
                         self?.close()
                     }
                 )
-                .preferredColorScheme(.light)
             )
             panel.center()
             window = panel

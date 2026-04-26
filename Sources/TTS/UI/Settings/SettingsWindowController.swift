@@ -27,11 +27,9 @@ final class SettingsWindowController {
             )
             let hostingController = NSHostingController(
                 rootView: SettingsView(viewModel: viewModel)
-                    .preferredColorScheme(.light)
             )
             let newWindow = NSWindow(contentViewController: hostingController)
             newWindow.title = "TTS 设置"
-            newWindow.appearance = NSAppearance(named: .aqua)
             newWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             newWindow.setContentSize(NSSize(width: 940, height: 660))
             newWindow.minSize = NSSize(width: 900, height: 620)

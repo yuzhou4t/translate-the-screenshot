@@ -13,7 +13,6 @@ struct TTSApp: App {
                     providerRegistry: AppServices.shared.providerRegistry
                 )
             )
-            .preferredColorScheme(.light)
         }
     }
 }

@@ -20,11 +20,9 @@ final class HistoryWindowController {
             )
             let hostingController = NSHostingController(
                 rootView: HistoryView(viewModel: viewModel)
-                    .preferredColorScheme(.light)
             )
             let newWindow = NSWindow(contentViewController: hostingController)
             newWindow.title = "TTS 历史记录"
-            newWindow.appearance = NSAppearance(named: .aqua)
             newWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable]
             newWindow.setContentSize(NSSize(width: 860, height: 560))
             newWindow.center()

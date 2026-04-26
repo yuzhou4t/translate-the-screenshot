@@ -7,7 +7,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        NSApp.appearance = NSAppearance(named: .aqua)
         NSApp.setActivationPolicy(.accessory)
         configureStatusItem()
         services.hotkeyManager.start()

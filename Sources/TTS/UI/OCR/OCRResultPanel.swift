@@ -42,7 +42,6 @@ final class OCRResultPanel {
             )
             newPanel.isOpaque = false
             newPanel.backgroundColor = .clear
-            newPanel.appearance = NSAppearance(named: .aqua)
             newPanel.hasShadow = true
             newPanel.level = .floating
             newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]

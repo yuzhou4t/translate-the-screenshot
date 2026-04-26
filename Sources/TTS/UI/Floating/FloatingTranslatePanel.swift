@@ -43,7 +43,6 @@ final class FloatingTranslatePanel {
             )
             newPanel.isOpaque = false
             newPanel.backgroundColor = .clear
-            newPanel.appearance = NSAppearance(named: .aqua)
             newPanel.hasShadow = true
             newPanel.level = .floating
             newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
@@ -161,15 +160,14 @@ struct FloatingTranslateView: View {
         }
         .padding(14)
         .frame(width: 440, height: 300, alignment: .topLeading)
-        .background(Color(red: 0.96, green: 0.96, blue: 0.95))
+        .background(Color(NSColor.windowBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.black.opacity(0.08), lineWidth: 1)
+                .stroke(Color(NSColor.separatorColor).opacity(0.55), lineWidth: 1)
         )
         .shadow(color: .black.opacity(0.16), radius: 22, x: 0, y: 10)
         .background(WindowDragView())
-        .preferredColorScheme(.light)
         .task(id: favoriteTaskID) {
             await refreshFavoriteState()
         }
@@ -179,17 +177,17 @@ struct FloatingTranslateView: View {
         HStack(spacing: 8) {
             Image(systemName: headerIcon)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color.black.opacity(0.62))
+                .foregroundStyle(.secondary)
                 .frame(width: 22, height: 22)
-                .background(Color.black.opacity(0.07), in: Circle())
+                .background(Color(NSColor.controlBackgroundColor), in: Circle())
 
             VStack(alignment: .leading, spacing: 1) {
                 Text("TTS")
                     .font(.headline)
-                    .foregroundStyle(Color.black.opacity(0.88))
+                    .foregroundStyle(.primary)
                 Text(headerStatus)
                     .font(.caption2)
-                    .foregroundStyle(Color.black.opacity(0.55))
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
@@ -202,8 +200,8 @@ struct FloatingTranslateView: View {
                     .frame(width: 24, height: 24)
             }
             .buttonStyle(.plain)
-            .foregroundStyle(Color.black.opacity(0.64))
-            .background(Color.black.opacity(0.07), in: Circle())
+            .foregroundStyle(.secondary)
+            .background(Color(NSColor.controlBackgroundColor), in: Circle())
             .help("关闭")
         }
     }
@@ -245,21 +243,21 @@ struct FloatingTranslateView: View {
                     .controlSize(.small)
                 Text("正在翻译...")
                     .font(.subheadline)
-                    .foregroundStyle(Color.black.opacity(0.62))
+                    .foregroundStyle(.secondary)
             }
 
             if let sourceText, !sourceText.isEmpty {
                 Text(sourceText)
                     .font(.callout)
-                    .foregroundStyle(Color.black.opacity(0.62))
+                    .foregroundStyle(.secondary)
                     .lineLimit(6)
                     .padding(12)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             } else {
                 Text("正在读取选中文字...")
                     .font(.callout)
-                    .foregroundStyle(Color.black.opacity(0.62))
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.top, 8)
@@ -269,27 +267,27 @@ struct FloatingTranslateView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text(item.sourceText)
                 .font(.caption)
-                .foregroundStyle(Color.black.opacity(0.58))
+                .foregroundStyle(.secondary)
                 .lineLimit(2)
                 .padding(.horizontal, 10)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
 
             ScrollView {
                 Text(item.translatedText)
                     .font(.system(size: 16, weight: .regular, design: .default))
                     .lineSpacing(3)
-                    .foregroundStyle(Color.black.opacity(0.9))
+                    .foregroundStyle(.primary)
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(12)
             }
             .frame(maxHeight: .infinity)
-            .background(Color.white.opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(Color(NSColor.textBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.black.opacity(0.06), lineWidth: 1)
+                    .stroke(Color(NSColor.separatorColor).opacity(0.45), lineWidth: 1)
             )
 
             if let favoriteErrorMessage {
@@ -335,7 +333,7 @@ struct FloatingTranslateView: View {
                 .font(.subheadline.weight(.semibold))
             Text(message)
                 .font(.callout)
-                .foregroundStyle(Color.black.opacity(0.68))
+                .foregroundStyle(.secondary)
                 .textSelection(.enabled)
         }
         .padding(12)
