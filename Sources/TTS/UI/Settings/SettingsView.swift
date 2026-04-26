@@ -294,7 +294,7 @@ struct SettingsView: View {
             }
 
             Section("提示词预留") {
-                Text("当前只保存默认 AI 模式，不接入 TranslationService。后续接入时会使用每个模式的 systemPrompt 和 userPromptTemplate。")
+                Text("大模型类服务会使用所选模式的 prompt；传统翻译服务会保持原有请求方式。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

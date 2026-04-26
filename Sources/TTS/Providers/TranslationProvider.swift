@@ -56,6 +56,10 @@ final class TranslationProviderFactory {
         configurationStore.targetLanguage
     }
 
+    var defaultTranslationMode: TranslationMode {
+        configurationStore.defaultTranslationMode
+    }
+
     func makeActiveProvider() throws -> any TranslationProvider {
         try providerRegistry.makeDefaultProvider()
     }

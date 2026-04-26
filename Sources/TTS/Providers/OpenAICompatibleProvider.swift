@@ -40,11 +40,15 @@ struct OpenAICompatibleProvider: TranslationProvider {
             messages: [
                 .init(
                     role: "system",
-                    content: """
-                    You are a translation engine. Translate the user's text into \(request.targetLanguage). Preserve formatting and code. Return only the translated text.
-                    """
+                    content: request.translationMode.systemPrompt
                 ),
-                .init(role: "user", content: request.text)
+                .init(
+                    role: "user",
+                    content: request.translationMode.userPrompt(
+                        text: request.text,
+                        targetLanguage: request.targetLanguage
+                    )
+                )
             ],
             temperature: 0.2
         )

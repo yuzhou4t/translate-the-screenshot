@@ -127,6 +127,7 @@ private struct HistoryRowView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 MetadataPill(item.providerID.displayName, systemImage: "network")
                 MetadataPill(item.mode.displayName, systemImage: "tag")
+                MetadataPill(item.translationMode.displayName, systemImage: item.translationMode.systemImage)
 
                 Text(item.createdAt.formatted(date: .numeric, time: .shortened))
                     .font(.caption)

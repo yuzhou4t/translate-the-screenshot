@@ -46,7 +46,7 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
         case .technical:
             "保留代码、变量名、Markdown、API 名称和技术术语。"
         case .ocrCleanup:
-            "先修复 OCR 识别噪声并恢复段落，再进行翻译。"
+            "修复 OCR 识别噪声并恢复段落，保留原语言和原意。"
         case .bilingual:
             "同时输出原文和译文，便于对照阅读。"
         case .polished:
@@ -88,7 +88,7 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
         case .technical:
             "You are a technical translation engine. Preserve code, variable names, Markdown, API names, commands, URLs, and technical identifiers exactly unless they are natural-language prose. Return only the translation."
         case .ocrCleanup:
-            "You are an OCR cleanup and translation engine. First infer and repair obvious OCR errors, restore paragraph structure, and remove recognition noise without changing meaning. Then translate. Return only the cleaned translation."
+            "You are an OCR cleanup engine. Repair obvious OCR errors, restore paragraph structure, and remove recognition noise. Preserve the original language and meaning. Do not translate or rewrite beyond cleanup. Return only the cleaned text."
         case .bilingual:
             "You are a bilingual translation engine. Output the original text and the translation in a clear two-part format. Preserve formatting where useful."
         case .polished:
@@ -109,11 +109,17 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
         case .technical:
             "Translate the following technical text into {{targetLanguage}}. Preserve code, variables, Markdown, API names, commands, URLs, and identifiers:\n\n{{text}}"
         case .ocrCleanup:
-            "Clean up likely OCR errors, restore paragraphs, and translate the following text into {{targetLanguage}} without changing its meaning:\n\n{{text}}"
+            "Clean up likely OCR errors and restore paragraphs in the following text. Preserve the original language and meaning. Do not translate:\n\n{{text}}"
         case .bilingual:
             "Create a bilingual output for the following text. Include the original text and the {{targetLanguage}} translation:\n\n{{text}}"
         case .polished:
             "Translate the following text into {{targetLanguage}}, then polish the expression for clarity and readability:\n\n{{text}}"
         }
+    }
+
+    func userPrompt(text: String, targetLanguage: String) -> String {
+        userPromptTemplate
+            .replacingOccurrences(of: "{{targetLanguage}}", with: targetLanguage)
+            .replacingOccurrences(of: "{{text}}", with: text)
     }
 }

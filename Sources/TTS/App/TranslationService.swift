@@ -14,6 +14,10 @@ final class TranslationService {
         providerFactory.targetLanguage
     }
 
+    var defaultTranslationMode: TranslationMode {
+        providerFactory.defaultTranslationMode
+    }
+
     func translate(
         text: String,
         targetLanguage: String? = nil,
@@ -29,11 +33,13 @@ final class TranslationService {
         let finalTargetLanguage = requestedTargetLanguage?.isEmpty == false
             ? requestedTargetLanguage!
             : providerFactory.targetLanguage
+        let translationMode = providerFactory.defaultTranslationMode
 
         let request = TranslationRequest(
             text: trimmedText,
             sourceLanguage: nil,
-            targetLanguage: finalTargetLanguage
+            targetLanguage: finalTargetLanguage,
+            translationMode: translationMode
         )
         let response = try await translateWithFallback(request)
         let item = TranslationHistoryItem(
@@ -43,7 +49,8 @@ final class TranslationService {
             sourceLanguage: response.detectedSourceLanguage,
             targetLanguage: request.targetLanguage,
             createdAt: Date(),
-            mode: mode
+            mode: mode,
+            translationMode: translationMode
         )
 
         try await historyStore.add(item)

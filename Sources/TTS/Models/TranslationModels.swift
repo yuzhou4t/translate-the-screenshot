@@ -191,6 +191,7 @@ struct TranslationRequest: Codable, Equatable {
     var text: String
     var sourceLanguage: String?
     var targetLanguage: String
+    var translationMode: TranslationMode
 }
 
 struct TranslationResponse: Codable, Equatable {
@@ -228,6 +229,7 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
     var targetLanguage: String
     var createdAt: Date
     var mode: TranslationHistoryMode
+    var translationMode: TranslationMode
 
     init(
         id: UUID = UUID(),
@@ -237,7 +239,8 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         sourceLanguage: String?,
         targetLanguage: String,
         createdAt: Date,
-        mode: TranslationHistoryMode = .selectedText
+        mode: TranslationHistoryMode = .selectedText,
+        translationMode: TranslationMode = .accurate
     ) {
         self.id = id
         self.sourceText = sourceText
@@ -247,6 +250,7 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         self.targetLanguage = targetLanguage
         self.createdAt = createdAt
         self.mode = mode
+        self.translationMode = translationMode
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -258,6 +262,7 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         case targetLanguage
         case createdAt
         case mode
+        case translationMode
     }
 
     init(from decoder: Decoder) throws {
@@ -270,6 +275,7 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         targetLanguage = try container.decode(String.self, forKey: .targetLanguage)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         mode = try container.decodeIfPresent(TranslationHistoryMode.self, forKey: .mode) ?? .selectedText
+        translationMode = try container.decodeIfPresent(TranslationMode.self, forKey: .translationMode) ?? .accurate
     }
 }
 

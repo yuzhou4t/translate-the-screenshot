@@ -122,6 +122,7 @@ private struct FavoriteRowView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 MetadataPill(historyItem.providerID.displayName, systemImage: "network")
+                MetadataPill(historyItem.translationMode.displayName, systemImage: historyItem.translationMode.systemImage)
                 MetadataPill("收藏于 \(item.createdAt.formatted(date: .numeric, time: .shortened))", systemImage: "calendar")
                 MetadataPill("备注：暂未设置", systemImage: "note.text")
 
