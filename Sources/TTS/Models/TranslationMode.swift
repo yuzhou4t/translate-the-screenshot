@@ -42,7 +42,7 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
         case .natural:
             "在准确基础上，让译文更符合目标语言的自然表达。"
         case .academic:
-            "使用正式、严谨、术语稳定的学术表达。"
+            "使用论文、报告风格的正式表达，强调术语一致、逻辑清晰和客观语气。"
         case .technical:
             "保留代码、变量名、Markdown、API 名称和技术术语。"
         case .ocrCleanup:
@@ -84,7 +84,7 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
         case .natural:
             "You are a natural translation editor. Translate faithfully, then phrase the result in fluent, idiomatic target-language expression. Return only the translation."
         case .academic:
-            "You are an academic translation engine. Use formal, precise, rigorous wording. Keep terminology consistent and avoid casual phrasing. Return only the translation."
+            "You are a senior academic translator. Produce publication-quality academic prose with formal register, precise terminology, consistent concepts, clear logical connectors, and an objective tone. Avoid colloquial wording, over-polishing, marketing language, and unsupported additions. Preserve citations, numbers, headings, and paragraph structure. Return only the translation."
         case .technical:
             "You are a technical translation engine. Preserve code, variable names, Markdown, API names, commands, URLs, and technical identifiers exactly unless they are natural-language prose. Return only the translation."
         case .ocrCleanup:
@@ -105,7 +105,7 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
         case .natural:
             "Translate the following text into natural {{targetLanguage}} while preserving the original meaning:\n\n{{text}}"
         case .academic:
-            "Translate the following text into formal academic {{targetLanguage}}, keeping terminology stable:\n\n{{text}}"
+            "Translate the following text into publication-quality academic {{targetLanguage}}. Use formal journal/report style, keep terminology and named concepts consistent, preserve evidence, numbers, citations, headings, and paragraph structure, and do not add claims not present in the source:\n\n{{text}}"
         case .technical:
             "Translate the following technical text into {{targetLanguage}}. Preserve code, variables, Markdown, API names, commands, URLs, and identifiers:\n\n{{text}}"
         case .ocrCleanup:

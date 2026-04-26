@@ -66,14 +66,7 @@ struct InputTranslateView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
 
-            Picker("", selection: $viewModel.translationDirection) {
-                ForEach(TranslationDirection.allCases) { direction in
-                    Text(direction.displayName)
-                        .tag(direction)
-                }
-            }
-            .labelsHidden()
-            .frame(width: 220)
+            TranslationDirectionMenu(selection: $viewModel.translationDirection, width: 210)
 
             Spacer()
 

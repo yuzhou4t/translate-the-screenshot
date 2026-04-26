@@ -9,6 +9,7 @@ final class FloatingTranslatePanel {
     private var globalMouseDownMonitor: Any?
     private let favoriteStore: FavoriteStore
     private let translationService: TranslationService
+    private let comparisonPanel = TranslationComparisonPanel()
     private let panelSize = NSSize(width: 520, height: 520)
     private var currentPresentationID: UUID?
     private var dismissedPresentationID: UUID?
@@ -66,6 +67,7 @@ final class FloatingTranslatePanel {
             state: state,
             favoriteStore: favoriteStore,
             onRetranslate: retranslate(_:using:),
+            onShowComparison: showComparison(previous:current:),
             onCopyText: copyToPasteboard(_:),
             onClose: hide
         )
@@ -180,6 +182,14 @@ final class FloatingTranslatePanel {
             mode: item.mode
         )
     }
+
+    private func showComparison(previous: TranslationHistoryItem, current: TranslationHistoryItem) {
+        comparisonPanel.show(
+            previous: previous,
+            current: current,
+            onCopyText: copyToPasteboard(_:)
+        )
+    }
 }
 
 enum FloatingTranslateState: Equatable {
@@ -192,6 +202,7 @@ struct FloatingTranslateView: View {
     var state: FloatingTranslateState
     var favoriteStore: FavoriteStore
     var onRetranslate: (TranslationHistoryItem, TranslationMode) async throws -> TranslationHistoryItem
+    var onShowComparison: (TranslationHistoryItem, TranslationHistoryItem) -> Void
     var onCopyText: (String) -> Void
     var onClose: () -> Void
 
@@ -210,7 +221,7 @@ struct FloatingTranslateView: View {
             footer
         }
         .padding(16)
-        .frame(width: 500, height: 420, alignment: .topLeading)
+        .frame(width: 500, height: 500, alignment: .topLeading)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
@@ -234,6 +245,7 @@ struct FloatingTranslateView: View {
     private var contentArea: some View {
         VStack(alignment: .leading, spacing: 10) {
             statusRow
+            aiModeControl
 
             switch state {
             case .loading(let sourceText):
@@ -241,13 +253,14 @@ struct FloatingTranslateView: View {
                 translationSection(text: nil, placeholder: "译文会在完成后显示")
             case .result:
                 sourceSection(text: resultItem?.sourceText, placeholder: "无原文")
-                translationSection(text: comparisonText, placeholder: "无译文")
+                translationSection(text: resultItem?.translatedText, placeholder: "无译文")
             case .error(let message, let sourceText):
                 sourceSection(text: sourceText, placeholder: "暂无原文")
                 errorSection(message)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .layoutPriority(1)
     }
 
     private var header: some View {
@@ -378,12 +391,65 @@ struct FloatingTranslateView: View {
         }
     }
 
+    @ViewBuilder
+    private var aiModeControl: some View {
+        if let item = resultItem, item.providerID.supportsTranslationModePrompts {
+            HStack(spacing: 8) {
+                Label("AI 模式", systemImage: "sparkles")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+
+                Picker("", selection: $selectedTranslationMode) {
+                    ForEach(TranslationMode.allCases) { mode in
+                        Text(mode.displayName)
+                            .tag(mode)
+                    }
+                }
+                .labelsHidden()
+                .frame(width: 180)
+                .disabled(isRetranslating)
+                .onChange(of: selectedTranslationMode) { nextMode in
+                    guard let item = resultItem, nextMode != item.translationMode else {
+                        return
+                    }
+                    Task {
+                        await retranslate(item, using: nextMode)
+                    }
+                }
+
+                if isRetranslating {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Spacer()
+
+                Text(selectedTranslationMode.description)
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            .padding(.horizontal, 10)
+            .padding(.vertical, 7)
+            .background(Color(NSColor.controlBackgroundColor).opacity(0.75), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        } else if resultItem != nil {
+            Text("当前服务商不支持 AI 模式重译")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color(NSColor.controlBackgroundColor).opacity(0.75), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        }
+    }
+
     private func sourceSection(text: String?, placeholder: String) -> some View {
         textSection(
             title: "原文",
             text: text,
             placeholder: placeholder,
             minHeight: 88,
+            maxHeight: 118,
             isEmphasized: false
         )
     }
@@ -394,6 +460,7 @@ struct FloatingTranslateView: View {
             text: text,
             placeholder: placeholder,
             minHeight: 132,
+            maxHeight: 190,
             isEmphasized: true
         )
     }
@@ -403,6 +470,7 @@ struct FloatingTranslateView: View {
         text: String?,
         placeholder: String,
         minHeight: CGFloat,
+        maxHeight: CGFloat,
         isEmphasized: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -425,7 +493,7 @@ struct FloatingTranslateView: View {
                 .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .padding(10)
-            .frame(maxWidth: .infinity, minHeight: minHeight, maxHeight: .infinity, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: minHeight, maxHeight: maxHeight, alignment: .topLeading)
             .background(sectionBackground(isEmphasized: isEmphasized), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -482,38 +550,6 @@ struct FloatingTranslateView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let item = resultItem, item.providerID.supportsTranslationModePrompts {
-                HStack(spacing: 8) {
-                    Picker("AI 模式", selection: $selectedTranslationMode) {
-                        ForEach(TranslationMode.allCases) { mode in
-                            Text(mode.displayName)
-                                .tag(mode)
-                        }
-                    }
-                    .frame(width: 250)
-                    .disabled(isRetranslating)
-                    .onChange(of: selectedTranslationMode) { nextMode in
-                        guard nextMode != resultItem?.translationMode else {
-                            return
-                        }
-                        Task {
-                            await retranslate(item, using: nextMode)
-                        }
-                    }
-
-                    if isRetranslating {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-
-                    Spacer()
-                }
-            } else if resultItem != nil {
-                Text("当前服务商不支持 AI 模式重译")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            }
-
             if let favoriteErrorMessage {
                 Text(favoriteErrorMessage)
                     .font(.caption2)
@@ -561,6 +597,15 @@ struct FloatingTranslateView: View {
                 }
                 .disabled(resultItem == nil)
 
+                Button {
+                    if let pair = comparisonPair {
+                        onShowComparison(pair.previous, pair.current)
+                    }
+                } label: {
+                    Label("对比", systemImage: "rectangle.split.2x1")
+                }
+                .disabled(comparisonPair == nil)
+
                 Spacer()
 
                 Button {
@@ -585,22 +630,11 @@ struct FloatingTranslateView: View {
         return nil
     }
 
-    private var comparisonText: String? {
-        guard let item = resultItem else {
+    private var comparisonPair: (previous: TranslationHistoryItem, current: TranslationHistoryItem)? {
+        guard let previousItem, let resultItem else {
             return nil
         }
-
-        guard let previousItem else {
-            return item.translatedText
-        }
-
-        return """
-        上一版（\(previousItem.translationMode.displayName)）
-        \(previousItem.translatedText)
-
-        当前（\(item.translationMode.displayName)）
-        \(item.translatedText)
-        """
+        return (previousItem, resultItem)
     }
 
     private func bilingualText(for item: TranslationHistoryItem) -> String {
@@ -641,6 +675,7 @@ struct FloatingTranslateView: View {
             currentItem = updatedItem
             selectedTranslationMode = updatedItem.translationMode
             favoriteErrorMessage = nil
+            onShowComparison(item, updatedItem)
         } catch {
             retranslateErrorMessage = error.localizedDescription
             selectedTranslationMode = item.translationMode
@@ -683,6 +718,222 @@ private extension FloatingTranslatePanel {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
+    }
+}
+
+@MainActor
+private final class TranslationComparisonPanel {
+    private var panel: NSPanel?
+    private var hostingController: NSHostingController<TranslationComparisonView>?
+    private let panelSize = NSSize(width: 760, height: 500)
+
+    func show(
+        previous: TranslationHistoryItem,
+        current: TranslationHistoryItem,
+        onCopyText: @escaping (String) -> Void
+    ) {
+        let view = TranslationComparisonView(
+            previous: previous,
+            current: current,
+            onCopyText: onCopyText,
+            onClose: { [weak self] in
+                self?.panel?.orderOut(nil)
+            }
+        )
+
+        if panel == nil {
+            let newPanel = NSPanel(
+                contentRect: NSRect(origin: centeredOrigin(), size: panelSize),
+                styleMask: [.titled, .closable, .utilityWindow, .nonactivatingPanel],
+                backing: .buffered,
+                defer: false
+            )
+            newPanel.title = "翻译对比"
+            newPanel.isOpaque = false
+            newPanel.backgroundColor = .clear
+            newPanel.hasShadow = true
+            newPanel.level = .floating
+            newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
+            newPanel.hidesOnDeactivate = false
+            newPanel.isReleasedWhenClosed = false
+            panel = newPanel
+        }
+
+        if let hostingController {
+            hostingController.rootView = view
+        } else {
+            let controller = NSHostingController(rootView: view)
+            hostingController = controller
+            panel?.contentViewController = controller
+        }
+
+        panel?.setFrame(NSRect(origin: centeredOrigin(), size: panelSize), display: true)
+        panel?.orderFrontRegardless()
+    }
+
+    private func centeredOrigin() -> NSPoint {
+        guard let visibleFrame = NSScreen.main?.visibleFrame else {
+            return NSPoint(x: 200, y: 200)
+        }
+
+        return NSPoint(
+            x: visibleFrame.midX - panelSize.width / 2,
+            y: visibleFrame.midY - panelSize.height / 2
+        )
+    }
+}
+
+private struct TranslationComparisonView: View {
+    var previous: TranslationHistoryItem
+    var current: TranslationHistoryItem
+    var onCopyText: (String) -> Void
+    var onClose: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            header
+            sourcePreview
+
+            HStack(alignment: .top, spacing: 12) {
+                comparisonCard(
+                    title: "上一版",
+                    mode: previous.translationMode,
+                    text: previous.translatedText,
+                    tint: .secondary
+                )
+
+                comparisonCard(
+                    title: "当前",
+                    mode: current.translationMode,
+                    text: current.translatedText,
+                    tint: .accentColor
+                )
+            }
+            .frame(maxHeight: .infinity)
+
+            footer
+        }
+        .padding(18)
+        .frame(width: 760, height: 500, alignment: .topLeading)
+        .background(.regularMaterial)
+    }
+
+    private var header: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "rectangle.split.2x1")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.accentColor)
+                .frame(width: 30, height: 30)
+                .background(Color.accentColor.opacity(0.13), in: Circle())
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text("翻译版本对比")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text("\(previous.translationMode.displayName) → \(current.translationMode.displayName)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            Button {
+                onClose()
+            } label: {
+                Label("关闭", systemImage: "xmark")
+            }
+            .controlSize(.small)
+        }
+    }
+
+    private var sourcePreview: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("原文")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.secondary)
+
+            Text(previous.sourceText)
+                .font(.callout)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding(10)
+        .background(Color(NSColor.controlBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+
+    private var footer: some View {
+        HStack(spacing: 8) {
+            Button {
+                onCopyText(current.translatedText)
+            } label: {
+                Label("复制当前译文", systemImage: "doc.on.doc")
+            }
+
+            Button {
+                onCopyText(comparisonText)
+            } label: {
+                Label("复制对比", systemImage: "text.append")
+            }
+
+            Spacer()
+
+            Text(current.providerID.displayName)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .controlSize(.small)
+    }
+
+    private func comparisonCard(
+        title: String,
+        mode: TranslationMode,
+        text: String,
+        tint: Color
+    ) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+
+                Text(mode.displayName)
+                    .font(.caption2.weight(.medium))
+                    .foregroundStyle(tint)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(tint.opacity(0.12), in: Capsule())
+
+                Spacer()
+            }
+
+            ScrollView {
+                Text(text)
+                    .font(.system(size: 15))
+                    .lineSpacing(4)
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .background(Color(NSColor.textBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(Color(NSColor.separatorColor).opacity(0.35), lineWidth: 1)
+        )
+    }
+
+    private var comparisonText: String {
+        """
+        上一版（\(previous.translationMode.displayName)）
+        \(previous.translatedText)
+
+        当前（\(current.translationMode.displayName)）
+        \(current.translatedText)
+        """
     }
 }
 
