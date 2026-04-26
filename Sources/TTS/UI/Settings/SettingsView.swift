@@ -238,12 +238,28 @@ struct SettingsView: View {
 
     private var shortcutSettings: some View {
         Form {
-            KeyboardShortcuts.Recorder("划词翻译", name: .translateSelection)
-            KeyboardShortcuts.Recorder("截图翻译", name: .screenshotTranslate)
-            KeyboardShortcuts.Recorder("输入翻译", name: .inputTranslate)
-            KeyboardShortcuts.Recorder("截图 OCR", name: .screenshotOCR)
-            KeyboardShortcuts.Recorder("静默截图 OCR", name: .silentScreenshotOCR)
+            Section("快捷键") {
+                KeyboardShortcuts.Recorder("划词翻译", name: .translateSelection)
+                KeyboardShortcuts.Recorder("输入翻译", name: .inputTranslate)
+                KeyboardShortcuts.Recorder("截图翻译", name: .screenshotTranslate)
+                KeyboardShortcuts.Recorder("截图 OCR", name: .screenshotOCR)
+                KeyboardShortcuts.Recorder("静默截图 OCR", name: .silentScreenshotOCR)
+            }
+
+            Section("说明") {
+                SettingsInfoRow(
+                    title: "全局快捷键",
+                    message: "这些快捷键由系统监听，TTS 在菜单栏常驻时即可触发对应操作。",
+                    systemImage: "keyboard"
+                )
+                SettingsInfoRow(
+                    title: "截图相关快捷键",
+                    message: "截图翻译会先 OCR 再翻译；截图 OCR 只显示识别文本；静默截图 OCR 会直接复制识别结果。",
+                    systemImage: "viewfinder"
+                )
+            }
         }
+        .formStyle(.grouped)
         .padding()
     }
 
