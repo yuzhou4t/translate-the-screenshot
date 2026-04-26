@@ -8,7 +8,7 @@ final class FloatingTranslatePanel {
     private var localMouseDownMonitor: Any?
     private var globalMouseDownMonitor: Any?
     private let favoriteStore: FavoriteStore
-    private let panelSize = NSSize(width: 480, height: 360)
+    private let panelSize = NSSize(width: 500, height: 420)
     private var currentPresentationID: UUID?
     private var dismissedPresentationID: UUID?
     private var currentSourceText: String?
@@ -185,11 +185,10 @@ struct FloatingTranslateView: View {
         VStack(alignment: .leading, spacing: 14) {
             header
             contentArea
-            Spacer(minLength: 0)
             footer
         }
         .padding(16)
-        .frame(width: 480, height: 360, alignment: .topLeading)
+        .frame(width: 500, height: 420, alignment: .topLeading)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
@@ -223,6 +222,7 @@ struct FloatingTranslateView: View {
                 errorSection(message)
             }
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 
     private var header: some View {
@@ -352,8 +352,7 @@ struct FloatingTranslateView: View {
             title: "原文",
             text: text,
             placeholder: placeholder,
-            minHeight: 62,
-            lineLimit: 3,
+            minHeight: 88,
             isEmphasized: false
         )
     }
@@ -363,8 +362,7 @@ struct FloatingTranslateView: View {
             title: "译文",
             text: text,
             placeholder: placeholder,
-            minHeight: 112,
-            lineLimit: nil,
+            minHeight: 132,
             isEmphasized: true
         )
     }
@@ -374,7 +372,6 @@ struct FloatingTranslateView: View {
         text: String?,
         placeholder: String,
         minHeight: CGFloat,
-        lineLimit: Int?,
         isEmphasized: Bool
     ) -> some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -385,33 +382,32 @@ struct FloatingTranslateView: View {
                 Spacer()
             }
 
-            Group {
-                if isEmphasized {
-                    ScrollView {
-                        Text(displayText(text, placeholder: placeholder))
-                            .font(.system(size: 15, weight: .regular))
-                            .lineSpacing(3)
-                            .foregroundStyle(hasText(text) ? Color.primary : Color.secondary)
-                            .textSelection(.enabled)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                } else {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
                     Text(displayText(text, placeholder: placeholder))
-                        .font(.caption)
-                        .foregroundStyle(hasText(text) ? Color.secondary : Color.secondary.opacity(0.75))
-                        .lineLimit(lineLimit)
+                        .font(.system(size: 15, weight: .regular))
+                        .lineSpacing(3)
+                        .foregroundStyle(textColor(hasText: hasText(text), isEmphasized: isEmphasized))
                         .textSelection(.enabled)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
             }
             .padding(10)
-            .frame(maxWidth: .infinity, minHeight: minHeight, alignment: .topLeading)
+            .frame(maxWidth: .infinity, minHeight: minHeight, maxHeight: .infinity, alignment: .topLeading)
             .background(sectionBackground(isEmphasized: isEmphasized), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .stroke(Color(NSColor.separatorColor).opacity(isEmphasized ? 0.45 : 0.25), lineWidth: 1)
             )
         }
+    }
+
+    private func textColor(hasText: Bool, isEmphasized: Bool) -> Color {
+        guard hasText else {
+            return .secondary
+        }
+        return isEmphasized ? .primary : .secondary
     }
 
     private func errorSection(_ message: String) -> some View {
@@ -505,6 +501,8 @@ struct FloatingTranslateView: View {
             }
             .controlSize(.small)
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
     }
 
     private var resultItem: TranslationHistoryItem? {
