@@ -50,8 +50,18 @@ final class ProviderConfigStore: ObservableObject {
         configuration.targetLanguage
     }
 
+    var defaultTranslationMode: TranslationMode {
+        configuration.defaultTranslationMode
+    }
+
     func providerConfig(for id: TranslationProviderID) -> ProviderConfig? {
         configuration.providerConfigs.first { $0.id == id }
+    }
+
+    func setDefaultTranslationMode(_ mode: TranslationMode) {
+        update { configuration in
+            configuration.defaultTranslationMode = mode
+        }
     }
 
     func setDefaultProvider(_ id: TranslationProviderID) {

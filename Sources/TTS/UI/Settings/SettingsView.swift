@@ -265,27 +265,39 @@ struct SettingsView: View {
 
     private var aiModeSettings: some View {
         Form {
-            Section("AI 翻译模式") {
-                SettingsInfoRow(
-                    title: "平衡模式",
-                    message: "当前默认策略：在速度和翻译质量之间保持平衡。",
-                    systemImage: "dial.medium"
-                )
-                SettingsInfoRow(
-                    title: "质量优先",
-                    message: "预留：后续可用于更强提示词、更完整上下文和更细 OCR 后处理。",
-                    systemImage: "sparkles"
-                )
-                SettingsInfoRow(
-                    title: "速度优先",
-                    message: "预留：后续可用于更快模型或更轻量的后处理策略。",
-                    systemImage: "bolt"
-                )
+            Section("默认 AI 翻译模式") {
+                Picker("默认模式", selection: $viewModel.defaultTranslationMode) {
+                    ForEach(TranslationMode.allCases) { mode in
+                        Text(mode.displayName)
+                            .tag(mode)
+                    }
+                }
+
+                Text(viewModel.defaultTranslationMode.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                Button("保存默认 AI 模式") {
+                    viewModel.saveDefaultTranslationMode()
+                }
             }
 
-            Section("说明") {
-                Text("这里先保留信息架构入口，不接入业务逻辑，也不会改变当前翻译流程。")
+            Section("模式说明") {
+                ForEach(TranslationMode.allCases) { mode in
+                    SettingsInfoRow(
+                        title: mode.displayName,
+                        message: mode.description,
+                        systemImage: mode.systemImage
+                    )
+                }
+            }
+
+            Section("提示词预留") {
+                Text("当前只保存默认 AI 模式，不接入 TranslationService。后续接入时会使用每个模式的 systemPrompt 和 userPromptTemplate。")
+                    .font(.caption)
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
@@ -520,6 +532,7 @@ final class SettingsViewModel: ObservableObject {
     @Published var timeout: Double = 30
     @Published var shouldFallbackOnAuthFailure = true
     @Published var targetLanguage: String
+    @Published var defaultTranslationMode: TranslationMode
     @Published var statusMessage = ""
     @Published var statusIsError = false
     @Published var isAccessibilityTrusted = false
@@ -540,6 +553,7 @@ final class SettingsViewModel: ObservableObject {
         self.providerRegistry = providerRegistry
         defaultProviderID = configurationStore.defaultProviderID
         targetLanguage = configurationStore.targetLanguage
+        defaultTranslationMode = configurationStore.defaultTranslationMode
         reload()
         refreshPermissions()
     }
@@ -567,6 +581,7 @@ final class SettingsViewModel: ObservableObject {
         providerConfigs = configurationStore.providerConfigs
         defaultProviderID = configurationStore.defaultProviderID
         targetLanguage = configurationStore.targetLanguage
+        defaultTranslationMode = configurationStore.defaultTranslationMode
 
         if selectedProviderID == nil || selectedProviderConfig == nil {
             selectedProviderID = defaultProviderID
@@ -613,6 +628,12 @@ final class SettingsViewModel: ObservableObject {
             configuration.targetLanguage = targetLanguage.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         status("目标语言已保存。", isError: false)
+    }
+
+    func saveDefaultTranslationMode() {
+        configurationStore.setDefaultTranslationMode(defaultTranslationMode)
+        reload()
+        status("默认 AI 模式已保存。", isError: false)
     }
 
     func saveSelectedProvider() {

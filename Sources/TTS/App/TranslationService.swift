@@ -17,7 +17,7 @@ final class TranslationService {
     func translate(
         text: String,
         targetLanguage: String? = nil,
-        mode: TranslationMode
+        mode: TranslationHistoryMode
     ) async throws -> TranslationHistoryItem {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {

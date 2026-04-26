@@ -199,7 +199,7 @@ struct TranslationResponse: Codable, Equatable {
     var detectedSourceLanguage: String?
 }
 
-enum TranslationMode: String, Codable, Equatable {
+enum TranslationHistoryMode: String, Codable, Equatable {
     case selectedText
     case ocr
     case ocrTranslate
@@ -227,7 +227,7 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
     var sourceLanguage: String?
     var targetLanguage: String
     var createdAt: Date
-    var mode: TranslationMode
+    var mode: TranslationHistoryMode
 
     init(
         id: UUID = UUID(),
@@ -237,7 +237,7 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         sourceLanguage: String?,
         targetLanguage: String,
         createdAt: Date,
-        mode: TranslationMode = .selectedText
+        mode: TranslationHistoryMode = .selectedText
     ) {
         self.id = id
         self.sourceText = sourceText
@@ -269,7 +269,7 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         sourceLanguage = try container.decodeIfPresent(String.self, forKey: .sourceLanguage)
         targetLanguage = try container.decode(String.self, forKey: .targetLanguage)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
-        mode = try container.decodeIfPresent(TranslationMode.self, forKey: .mode) ?? .selectedText
+        mode = try container.decodeIfPresent(TranslationHistoryMode.self, forKey: .mode) ?? .selectedText
     }
 }
 
@@ -296,6 +296,7 @@ struct AppConfiguration: Codable, Equatable {
     var targetLanguage: String
     var providerConfigs: [ProviderConfig]
     var defaultProviderID: TranslationProviderID
+    var defaultTranslationMode: TranslationMode
 
     static let `default` = AppConfiguration(
         providerID: .myMemory,
@@ -303,7 +304,8 @@ struct AppConfiguration: Codable, Equatable {
         openAICompatibleModel: "gpt-4o-mini",
         targetLanguage: "zh-CN",
         providerConfigs: [.openAICompatibleDefault, .myMemoryDefault],
-        defaultProviderID: .myMemory
+        defaultProviderID: .myMemory,
+        defaultTranslationMode: .accurate
     )
 
     private enum CodingKeys: String, CodingKey {
@@ -313,6 +315,7 @@ struct AppConfiguration: Codable, Equatable {
         case targetLanguage
         case providerConfigs
         case defaultProviderID
+        case defaultTranslationMode
     }
 
     init(
@@ -321,7 +324,8 @@ struct AppConfiguration: Codable, Equatable {
         openAICompatibleModel: String,
         targetLanguage: String,
         providerConfigs: [ProviderConfig],
-        defaultProviderID: TranslationProviderID
+        defaultProviderID: TranslationProviderID,
+        defaultTranslationMode: TranslationMode
     ) {
         self.providerID = providerID
         self.openAICompatibleEndpoint = openAICompatibleEndpoint
@@ -329,6 +333,7 @@ struct AppConfiguration: Codable, Equatable {
         self.targetLanguage = targetLanguage
         self.providerConfigs = providerConfigs
         self.defaultProviderID = defaultProviderID
+        self.defaultTranslationMode = defaultTranslationMode
     }
 
     init(from decoder: Decoder) throws {
@@ -338,6 +343,7 @@ struct AppConfiguration: Codable, Equatable {
         openAICompatibleModel = try container.decodeIfPresent(String.self, forKey: .openAICompatibleModel) ?? AppConfiguration.default.openAICompatibleModel
         targetLanguage = try container.decodeIfPresent(String.self, forKey: .targetLanguage) ?? AppConfiguration.default.targetLanguage
         defaultProviderID = try container.decodeIfPresent(TranslationProviderID.self, forKey: .defaultProviderID) ?? providerID
+        defaultTranslationMode = try container.decodeIfPresent(TranslationMode.self, forKey: .defaultTranslationMode) ?? .accurate
 
         let decodedConfigs = try container.decodeIfPresent([ProviderConfig].self, forKey: .providerConfigs) ?? []
         providerConfigs = AppConfiguration.normalizedConfigs(
