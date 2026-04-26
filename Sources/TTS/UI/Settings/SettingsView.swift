@@ -156,26 +156,16 @@ struct SettingsView: View {
             .padding(.top, 8)
 
             List(selection: $viewModel.selectedProviderID) {
-                ForEach(viewModel.providerConfigs) { config in
-                    ProviderConfigRow(
-                        config: config,
-                        isDefault: config.id == viewModel.defaultProviderID,
-                        isImplemented: viewModel.isImplemented(config.id),
-                        onSelect: {
-                            viewModel.selectProvider(config.id)
-                        },
-                        onToggleEnabled: { isEnabled in
-                            viewModel.setEnabled(isEnabled, for: config.id)
-                        },
-                        onSetDefault: {
-                            viewModel.setDefaultProvider(config.id)
-                        },
-                        onPriorityChange: { priority in
-                            viewModel.setPriority(priority, for: config.id)
-                        }
-                    )
-                    .tag(config.id)
-                    .listRowSeparator(.hidden)
+                Section("AI 大模型") {
+                    ForEach(viewModel.aiProviderConfigs) { config in
+                        providerRow(config)
+                    }
+                }
+
+                Section("传统翻译") {
+                    ForEach(viewModel.traditionalProviderConfigs) { config in
+                        providerRow(config)
+                    }
                 }
             }
             .listStyle(.inset)
@@ -184,6 +174,28 @@ struct SettingsView: View {
         }
         .frame(maxHeight: .infinity)
         .background(.background)
+    }
+
+    private func providerRow(_ config: ProviderConfig) -> some View {
+        ProviderConfigRow(
+            config: config,
+            isDefault: config.id == viewModel.defaultProviderID,
+            isImplemented: viewModel.isImplemented(config.id),
+            onSelect: {
+                viewModel.selectProvider(config.id)
+            },
+            onToggleEnabled: { isEnabled in
+                viewModel.setEnabled(isEnabled, for: config.id)
+            },
+            onSetDefault: {
+                viewModel.setDefaultProvider(config.id)
+            },
+            onPriorityChange: { priority in
+                viewModel.setPriority(priority, for: config.id)
+            }
+        )
+        .tag(config.id)
+        .listRowSeparator(.hidden)
     }
 
     @ViewBuilder
@@ -547,6 +559,11 @@ final class SettingsViewModel: ObservableObject {
     private let keychainService: KeychainService
     private let providerRegistry: ProviderRegistry
     private let permissionManager = AppServices.shared.permissionManager
+    private let aiProviderIDs: Set<TranslationProviderID> = [
+        .openAICompatible,
+        .glm4Flash,
+        .siliconFlow
+    ]
 
     init(
         configurationStore: AppConfigurationStore,
@@ -573,6 +590,14 @@ final class SettingsViewModel: ObservableObject {
 
     var enabledProviderCount: Int {
         providerConfigs.filter(\.isEnabled).count
+    }
+
+    var aiProviderConfigs: [ProviderConfig] {
+        providerConfigs.filter { aiProviderIDs.contains($0.id) }
+    }
+
+    var traditionalProviderConfigs: [ProviderConfig] {
+        providerConfigs.filter { !aiProviderIDs.contains($0.id) }
     }
 
     var accessibilityStatus: String {
