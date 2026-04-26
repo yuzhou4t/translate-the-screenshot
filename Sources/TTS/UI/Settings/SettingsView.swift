@@ -6,9 +6,9 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            providerSettings
+            generalSettings
                 .tabItem {
-                    Label("服务", systemImage: "network")
+                    Label("通用", systemImage: "gearshape")
                 }
 
             shortcutSettings
@@ -16,34 +16,106 @@ struct SettingsView: View {
                     Label("快捷键", systemImage: "keyboard")
                 }
 
-            permissionSettings
+            translationServiceSettings
                 .tabItem {
-                    Label("权限", systemImage: "lock.shield")
+                    Label("翻译服务", systemImage: "network")
+                }
+
+            aiModeSettings
+                .tabItem {
+                    Label("AI 模式", systemImage: "sparkles")
+                }
+
+            modelConfigurationSettings
+                .tabItem {
+                    Label("模型配置", systemImage: "slider.horizontal.3")
+                }
+
+            permissionPrivacySettings
+                .tabItem {
+                    Label("权限与隐私", systemImage: "lock.shield")
                 }
         }
-        .frame(minWidth: 900, idealWidth: 940, minHeight: 620, idealHeight: 660)
+        .frame(minWidth: 960, idealWidth: 1000, minHeight: 680, idealHeight: 720)
         .background(.background)
+        .onAppear {
+            viewModel.reload()
+        }
     }
 
-    private var providerSettings: some View {
+    private var generalSettings: some View {
+        Form {
+            Section("基础设置") {
+                LabeledContent("产品定位") {
+                    Text("轻量化 AI 截图翻译")
+                        .foregroundStyle(.secondary)
+                }
+
+                LabeledContent("默认翻译服务") {
+                    Text(viewModel.defaultProviderID.displayName)
+                        .foregroundStyle(.secondary)
+                }
+
+                HStack {
+                    Text("目标语言")
+                    TextField("例如 zh-CN / en / ja", text: $viewModel.targetLanguage)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 220)
+                    Button("保存") {
+                        viewModel.saveTargetLanguage()
+                    }
+                    Spacer()
+                }
+
+                if !viewModel.statusMessage.isEmpty {
+                    Text(viewModel.statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(viewModel.statusIsError ? Color.red : Color.secondary)
+                }
+            }
+
+            Section("核心工作流") {
+                SettingsInfoRow(
+                    title: "划词翻译",
+                    message: "读取选中文字后直接使用默认服务翻译。",
+                    systemImage: "text.cursor"
+                )
+                SettingsInfoRow(
+                    title: "截图翻译",
+                    message: "先通过本地 OCR 识别截图文本，再交给翻译服务处理。",
+                    systemImage: "viewfinder"
+                )
+                SettingsInfoRow(
+                    title: "服务 fallback",
+                    message: "已启用的服务会按默认服务和优先级进行尝试。",
+                    systemImage: "arrow.triangle.branch"
+                )
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
+    private var translationServiceSettings: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Label("翻译服务", systemImage: "network")
                     .font(.headline)
 
-                TextField("目标语言", text: $viewModel.targetLanguage)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 180)
-
-                Button("保存目标语言") {
-                    viewModel.saveTargetLanguage()
-                }
+                Text("\(viewModel.enabledProviderCount) 个已启用")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(.quaternary, in: Capsule())
 
                 Spacer()
 
-                Text(viewModel.statusMessage)
-                    .font(.caption)
-                    .foregroundStyle(viewModel.statusIsError ? Color.red : Color.secondary)
+                if !viewModel.statusMessage.isEmpty {
+                    Text(viewModel.statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(viewModel.statusIsError ? Color.red : Color.secondary)
+                }
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
@@ -63,9 +135,6 @@ struct SettingsView: View {
                     .padding(.vertical, 12)
             }
             .frame(maxHeight: .infinity)
-        }
-        .onAppear {
-            viewModel.reload()
         }
     }
 
@@ -178,37 +247,133 @@ struct SettingsView: View {
         .padding()
     }
 
-    private var permissionSettings: some View {
+    private var aiModeSettings: some View {
         Form {
-            LabeledContent("辅助功能") {
-                Text(viewModel.accessibilityStatus)
-                    .foregroundStyle(viewModel.isAccessibilityTrusted ? Color.green : Color.red)
+            Section("AI 翻译模式") {
+                SettingsInfoRow(
+                    title: "平衡模式",
+                    message: "当前默认策略：在速度和翻译质量之间保持平衡。",
+                    systemImage: "dial.medium"
+                )
+                SettingsInfoRow(
+                    title: "质量优先",
+                    message: "预留：后续可用于更强提示词、更完整上下文和更细 OCR 后处理。",
+                    systemImage: "sparkles"
+                )
+                SettingsInfoRow(
+                    title: "速度优先",
+                    message: "预留：后续可用于更快模型或更轻量的后处理策略。",
+                    systemImage: "bolt"
+                )
             }
 
-            LabeledContent("屏幕录制") {
-                Text(viewModel.screenRecordingStatus)
-                    .foregroundStyle(viewModel.isScreenRecordingTrusted ? Color.green : Color.red)
+            Section("说明") {
+                Text("这里先保留信息架构入口，不接入业务逻辑，也不会改变当前翻译流程。")
+                    .foregroundStyle(.secondary)
             }
-
-            HStack {
-                Button("请求辅助功能权限") {
-                    viewModel.requestAccessibility()
-                }
-
-                Button("请求屏幕录制权限") {
-                    viewModel.requestScreenRecording()
-                }
-
-                Button("刷新状态") {
-                    viewModel.refreshPermissions()
-                }
-            }
-
-            Text("如果已经授权但这里仍显示未授权，请完全退出并重新打开 /Applications/TTS.app。macOS 会按具体 app 路径记录权限。")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
+        .formStyle(.grouped)
+        .padding()
+    }
+
+    private var modelConfigurationSettings: some View {
+        Form {
+            Section("当前服务商模型") {
+                if let config = viewModel.selectedProviderConfig {
+                    LabeledContent("服务商") {
+                        Text(config.displayName)
+                            .foregroundStyle(.secondary)
+                    }
+
+                    TextField("Endpoint", text: $viewModel.endpoint)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("模型 / 区域", text: $viewModel.model)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        Text("超时")
+                        TextField("秒", value: $viewModel.timeout, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                        Text("秒")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("保存模型配置") {
+                        viewModel.saveSelectedProvider()
+                    }
+                    .keyboardShortcut(.defaultAction)
+                } else {
+                    Text("请先在翻译服务中选择一个服务商。")
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Section("后续预留") {
+                SettingsInfoRow(
+                    title: "模型路由",
+                    message: "预留：按场景选择不同模型，例如截图翻译、长文本翻译和快速翻译。",
+                    systemImage: "point.3.connected.trianglepath.dotted"
+                )
+                SettingsInfoRow(
+                    title: "OCR 后处理",
+                    message: "预留：管理段落恢复、换行清理和中英混排策略。",
+                    systemImage: "text.viewfinder"
+                )
+            }
+        }
+        .formStyle(.grouped)
+        .padding()
+    }
+
+    private var permissionPrivacySettings: some View {
+        Form {
+            Section("权限状态") {
+                LabeledContent("辅助功能") {
+                    Text(viewModel.accessibilityStatus)
+                        .foregroundStyle(viewModel.isAccessibilityTrusted ? Color.green : Color.red)
+                }
+
+                LabeledContent("屏幕录制") {
+                    Text(viewModel.screenRecordingStatus)
+                        .foregroundStyle(viewModel.isScreenRecordingTrusted ? Color.green : Color.red)
+                }
+
+                HStack {
+                    Button("请求辅助功能权限") {
+                        viewModel.requestAccessibility()
+                    }
+
+                    Button("请求屏幕录制权限") {
+                        viewModel.requestScreenRecording()
+                    }
+
+                    Button("刷新状态") {
+                        viewModel.refreshPermissions()
+                    }
+                }
+            }
+
+            Section("隐私说明") {
+                SettingsInfoRow(
+                    title: "截图 OCR",
+                    message: "截图内容用于本机 Apple Vision OCR；截图翻译会把识别后的文本交给你启用的翻译服务。",
+                    systemImage: "viewfinder"
+                )
+                SettingsInfoRow(
+                    title: "API Key",
+                    message: "API Key 继续使用 Keychain 保存，不写入仓库、构建产物或本地明文配置。",
+                    systemImage: "key"
+                )
+
+                Text("如果已经授权但这里仍显示未授权，请完全退出并重新打开 /Applications/TTS.app。macOS 会按具体 app 路径记录权限。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .formStyle(.grouped)
         .padding()
         .onAppear {
             viewModel.refreshPermissions()
@@ -216,6 +381,31 @@ struct SettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             viewModel.refreshPermissions()
         }
+    }
+}
+
+private struct SettingsInfoRow: View {
+    var title: String
+    var message: String
+    var systemImage: String
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(message)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding(.vertical, 2)
     }
 }
 
@@ -343,6 +533,10 @@ final class SettingsViewModel: ObservableObject {
             return nil
         }
         return providerConfigs.first { $0.id == selectedProviderID }
+    }
+
+    var enabledProviderCount: Int {
+        providerConfigs.filter(\.isEnabled).count
     }
 
     var accessibilityStatus: String {
