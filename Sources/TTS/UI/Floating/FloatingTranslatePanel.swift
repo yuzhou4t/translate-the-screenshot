@@ -9,8 +9,8 @@ final class FloatingTranslatePanel {
     private var globalMouseDownMonitor: Any?
     private let favoriteStore: FavoriteStore
     private let translationService: TranslationService
-    private let normalPanelSize = NSSize(width: 560, height: 520)
-    private let comparisonPanelSize = NSSize(width: 800, height: 560)
+    private let normalPanelSize = NSSize(width: 560, height: 540)
+    private let comparisonPanelSize = NSSize(width: 800, height: 600)
     private var currentPresentationID: UUID?
     private var dismissedPresentationID: UUID?
     private var currentSourceText: String?
@@ -249,7 +249,7 @@ struct FloatingTranslateView: View {
             footer
         }
         .padding(14)
-        .frame(width: isComparisonVisible ? 780 : 540, height: isComparisonVisible ? 540 : 500, alignment: .topLeading)
+        .frame(width: isComparisonVisible ? 780 : 540, height: isComparisonVisible ? 580 : 520, alignment: .topLeading)
         .background(panelBackground)
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
@@ -297,7 +297,7 @@ struct FloatingTranslateView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .layoutPriority(1)
+        .layoutPriority(0)
     }
 
     private var header: some View {
@@ -498,8 +498,8 @@ struct FloatingTranslateView: View {
             title: "原文",
             text: text,
             placeholder: placeholder,
-            minHeight: 116,
-            maxHeight: 150,
+            minHeight: 90,
+            maxHeight: 108,
             isEmphasized: false
         )
     }
@@ -509,8 +509,8 @@ struct FloatingTranslateView: View {
             title: "译文",
             text: text,
             placeholder: placeholder,
-            minHeight: 190,
-            maxHeight: 230,
+            minHeight: 158,
+            maxHeight: 178,
             isEmphasized: true
         )
     }
@@ -519,8 +519,21 @@ struct FloatingTranslateView: View {
         previous: TranslationHistoryItem,
         current: TranslationHistoryItem
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 9) {
             sourcePreview(text: current.sourceText)
+
+            HStack {
+                Label("版本对比", systemImage: "rectangle.split.2x1")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(.secondary)
+
+                Spacer()
+
+                Text("\(previous.translationMode.displayName) → \(current.translationMode.displayName)")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(.secondary)
+            }
+            .padding(.top, 4)
 
             HStack(alignment: .top, spacing: 10) {
                 comparisonCard(
@@ -535,7 +548,7 @@ struct FloatingTranslateView: View {
                     tint: .accentColor
                 )
             }
-            .frame(maxWidth: .infinity, maxHeight: 260, alignment: .top)
+            .frame(maxWidth: .infinity, maxHeight: 286, alignment: .top)
         }
     }
 
@@ -561,7 +574,9 @@ struct FloatingTranslateView: View {
         item: TranslationHistoryItem,
         tint: Color
     ) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
+        let isCurrent = title == "当前"
+
+        return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Text(title)
                     .font(.system(size: 13, weight: .semibold))
@@ -575,6 +590,12 @@ struct FloatingTranslateView: View {
                     .background(tint.opacity(0.12), in: Capsule())
 
                 Spacer()
+
+                if isCurrent {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(tint)
+                }
             }
 
             ScrollView {
@@ -588,11 +609,18 @@ struct FloatingTranslateView: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(Color(NSColor.textBackgroundColor).opacity(0.75), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(comparisonCardBackground(isCurrent: isCurrent, tint: tint), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color(NSColor.separatorColor).opacity(0.35), lineWidth: 1)
+                .stroke(isCurrent ? tint.opacity(0.55) : Color(NSColor.separatorColor).opacity(0.35), lineWidth: isCurrent ? 1.4 : 1)
         )
+    }
+
+    private func comparisonCardBackground(isCurrent: Bool, tint: Color) -> Color {
+        if isCurrent {
+            return tint.opacity(0.08)
+        }
+        return Color(NSColor.controlBackgroundColor).opacity(0.82)
     }
 
     private func textSection(
@@ -749,6 +777,7 @@ struct FloatingTranslateView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
+        .layoutPriority(2)
     }
 
     private var resultItem: TranslationHistoryItem? {
