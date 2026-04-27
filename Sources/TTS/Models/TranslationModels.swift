@@ -75,7 +75,7 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
         case .siliconFlow:
             ["Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "Qwen/Qwen2.5-32B-Instruct", "deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1"]
         case .deepSeek:
-            ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-chat", "deepseek-reasoner"]
+            ["deepseek-chat", "deepseek-reasoner"]
         case .gemini:
             ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash"]
         case .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .localOCR:
@@ -205,7 +205,7 @@ struct ProviderConfig: Identifiable, Codable, Equatable {
             model = "Qwen/Qwen2.5-7B-Instruct"
         case .deepSeek:
             endpoint = URL(string: "https://api.deepseek.com/chat/completions")
-            model = "deepseek-v4-flash"
+            model = "deepseek-chat"
         case .gemini:
             endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
             model = "gemini-2.5-flash"
@@ -274,8 +274,6 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
     var createdAt: Date
     var mode: TranslationHistoryMode
     var translationMode: TranslationMode
-    var modelName: String?
-    var scenario: TranslationScenario?
 
     init(
         id: UUID = UUID(),
@@ -286,9 +284,7 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         targetLanguage: String,
         createdAt: Date,
         mode: TranslationHistoryMode = .selectedText,
-        translationMode: TranslationMode = .accurate,
-        modelName: String? = nil,
-        scenario: TranslationScenario? = nil
+        translationMode: TranslationMode = .accurate
     ) {
         self.id = id
         self.sourceText = sourceText
@@ -299,8 +295,6 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.mode = mode
         self.translationMode = translationMode
-        self.modelName = modelName
-        self.scenario = scenario
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -313,8 +307,6 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         case createdAt
         case mode
         case translationMode
-        case modelName
-        case scenario
     }
 
     init(from decoder: Decoder) throws {
@@ -328,8 +320,6 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         mode = try container.decodeIfPresent(TranslationHistoryMode.self, forKey: .mode) ?? .selectedText
         translationMode = try container.decodeIfPresent(TranslationMode.self, forKey: .translationMode) ?? .accurate
-        modelName = try container.decodeIfPresent(String.self, forKey: .modelName)
-        scenario = try container.decodeIfPresent(TranslationScenario.self, forKey: .scenario)
     }
 }
 
@@ -358,7 +348,6 @@ struct AppConfiguration: Codable, Equatable {
     var providerConfigs: [ProviderConfig]
     var defaultProviderID: TranslationProviderID
     var defaultTranslationMode: TranslationMode
-    var modelProfiles: [ModelProfile]
 
     static let `default` = AppConfiguration(
         providerID: .myMemory,
@@ -368,8 +357,7 @@ struct AppConfiguration: Codable, Equatable {
         translationDirection: .autoToChinese,
         providerConfigs: [.openAICompatibleDefault, .myMemoryDefault],
         defaultProviderID: .myMemory,
-        defaultTranslationMode: .accurate,
-        modelProfiles: ModelProfile.defaultProfiles
+        defaultTranslationMode: .accurate
     )
 
     private enum CodingKeys: String, CodingKey {
@@ -381,7 +369,6 @@ struct AppConfiguration: Codable, Equatable {
         case providerConfigs
         case defaultProviderID
         case defaultTranslationMode
-        case modelProfiles
     }
 
     init(
@@ -392,8 +379,7 @@ struct AppConfiguration: Codable, Equatable {
         translationDirection: TranslationDirection,
         providerConfigs: [ProviderConfig],
         defaultProviderID: TranslationProviderID,
-        defaultTranslationMode: TranslationMode,
-        modelProfiles: [ModelProfile]
+        defaultTranslationMode: TranslationMode
     ) {
         self.providerID = providerID
         self.openAICompatibleEndpoint = openAICompatibleEndpoint
@@ -403,7 +389,6 @@ struct AppConfiguration: Codable, Equatable {
         self.providerConfigs = providerConfigs
         self.defaultProviderID = defaultProviderID
         self.defaultTranslationMode = defaultTranslationMode
-        self.modelProfiles = modelProfiles
     }
 
     init(from decoder: Decoder) throws {
@@ -416,7 +401,6 @@ struct AppConfiguration: Codable, Equatable {
             TranslationDirection.inferred(from: targetLanguage)
         defaultProviderID = try container.decodeIfPresent(TranslationProviderID.self, forKey: .defaultProviderID) ?? providerID
         defaultTranslationMode = try container.decodeIfPresent(TranslationMode.self, forKey: .defaultTranslationMode) ?? .accurate
-        modelProfiles = try container.decodeIfPresent([ModelProfile].self, forKey: .modelProfiles) ?? ModelProfile.defaultProfiles
 
         let decodedConfigs = try container.decodeIfPresent([ProviderConfig].self, forKey: .providerConfigs) ?? []
         providerConfigs = AppConfiguration.normalizedConfigs(

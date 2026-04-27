@@ -82,41 +82,12 @@ final class ProviderRegistry {
             }
 
         return enabled.map { config in
-            providerAttempt(config: config)
-        }
-    }
-
-    func providerAttempt(config: ProviderConfig) -> ProviderAttempt {
-        ProviderAttempt(config: config) { [weak self] in
-            guard let self else {
-                throw TranslationProviderError.providerMessage("ProviderRegistry 已释放。")
+            ProviderAttempt(config: config) { [weak self] in
+                guard let self else {
+                    throw TranslationProviderError.providerMessage("ProviderRegistry 已释放。")
+                }
+                return try self.makeProvider(config: config)
             }
-            return try self.makeProvider(config: config)
-        }
-    }
-
-    func isProviderReady(for id: TranslationProviderID) -> Bool {
-        guard let config = configStore.providerConfig(for: id) else {
-            return false
-        }
-        return isProviderReady(config)
-    }
-
-    func isProviderReady(_ config: ProviderConfig) -> Bool {
-        guard config.isEnabled,
-              descriptor(for: config.id)?.isImplemented == true else {
-            return false
-        }
-
-        switch config.type {
-        case .myMemory:
-            return true
-        case .openAICompatible, .deepL, .google, .bing, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
-            return config.endpoint != nil && hasAPIKey(account: config.apiKeyRef)
-        case .tencent, .volcengine, .baidu:
-            return config.endpoint != nil &&
-                config.appID?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false &&
-                hasAPIKey(account: secretKeyAccount(for: config.id))
         }
     }
 
@@ -306,7 +277,7 @@ final class ProviderRegistry {
                 id: .deepSeek,
                 displayName: config.displayName,
                 endpoint: endpoint,
-                model: config.model ?? "deepseek-v4-flash",
+                model: config.model ?? "deepseek-chat",
                 apiKey: apiKey,
                 timeout: config.timeout
             )
@@ -359,14 +330,5 @@ final class ProviderRegistry {
 
     private func secretKeyAccount(for id: TranslationProviderID) -> String {
         "\(id.rawValue).secretKey"
-    }
-
-    private func hasAPIKey(account: String?) -> Bool {
-        guard let account else {
-            return false
-        }
-        return (try? keychainService.loadAPIKey(account: account))?
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-            .isEmpty == false
     }
 }

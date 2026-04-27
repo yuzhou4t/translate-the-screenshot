@@ -128,12 +128,6 @@ private struct HistoryRowView: View {
                 MetadataPill(item.providerID.displayName, systemImage: "network")
                 MetadataPill(item.mode.displayName, systemImage: "tag")
                 MetadataPill(item.translationMode.displayName, systemImage: item.translationMode.systemImage)
-                if let scenario = item.scenario {
-                    MetadataPill(scenario.displayName, systemImage: "point.3.connected.trianglepath.dotted")
-                }
-                if let modelName = item.modelName, !modelName.isEmpty {
-                    MetadataPill(modelName, systemImage: "cpu")
-                }
 
                 Text(item.createdAt.formatted(date: .numeric, time: .shortened))
                     .font(.caption)

@@ -2,6 +2,17 @@
 
 本文件用于记录 TTS 的产品、UI、配置和核心能力变更，方便后续回看设计取舍与开发进度。
 
+## 2026-04-27
+
+### 翻译服务商与模型选择
+
+- 暂停任务 7-9 的模型 Profile、TranslationRouter 和场景路由实现，当前阶段不引入自动模型路由，翻译流程继续按默认服务商和 fallback 优先级执行。
+- 保留设置页“模型配置”作为当前服务商模型编辑入口，不接入真实路由逻辑。
+- 新增 DeepSeek 和 Gemini 大模型服务商，并继续保留 OpenAI 兼容接口、智谱 GLM 和硅基流动。
+- 在翻译服务设置中将 DeepSeek 和 Gemini 归入“AI 大模型”分组。
+- 为智谱 GLM、硅基流动、DeepSeek、Gemini 和 OpenAI 兼容接口提供常用模型下拉选择，同时仍允许用户手填自定义模型。
+- 旧配置中的服务商显示名会自动归一到当前名称，例如将 GLM-4-Flash 显示为“智谱 GLM”。
+
 ## 2026-04-26
 
 ### 产品定位与文档
@@ -54,28 +65,6 @@
 - 传统翻译服务商保持原有行为，不强行使用 prompt。
 - 翻译历史记录本次使用的 AI 翻译模式，旧历史记录兼容默认准确翻译。
 - 优化学术翻译 prompt，使其更偏论文/报告风格，强调术语一致、逻辑清晰、客观语气和不添加原文外信息。
-
-### 精细化模型配置
-
-- 新增 `ModelPurpose`，包含快速、高质量、学术、技术、OCR 修复和备用用途。
-- 新增 `ModelCapabilityScore`，记录速度、质量、学术、技术、OCR 修复、格式遵循和成本效率评分。
-- 新增 `ModelProfile`，保存模型名称、Provider、实际 model name、用途、优先级、启用状态和能力评分。
-- `AppConfigurationStore` 开始保存 `modelProfiles`，旧配置缺失时自动补齐默认 profiles。
-- 默认提供 Fast Model、Quality Model、Academic Model、Technical Model、OCR Cleanup Model 和 Fallback Model。
-- 设置页“模型配置”分区改为 profile 列表和详情编辑，允许修改名称、Provider、Model Name、用途、优先级和启用状态。
-- 当前模型 Profile 仅用于配置准备，暂不接入真实翻译路由和 fallback 逻辑。
-- 新增 `TranslationScenario` 和 `TranslationRouter`，可根据场景、模型 Profile 和可选 AI 翻译模式推荐最合适的模型 Profile。
-- `TranslationRouter` 支持 selection、input、screenshot、ocrCleanup、technical、academic 场景，按用途优先级、启用状态、priority 和能力评分排序，暂不发起网络请求。
-- 新增 `TranslationRouterRuleChecks.runBasicRoutingChecks()` 简单校验函数，覆盖 fast 选择、academic fallback、disabled 跳过和 priority 排序。
-- `TranslationService` 接入 `TranslationRouter`，按划词、输入、截图、OCR 修复、技术和学术场景选择首选 ModelProfile；路由失败或首选失败时继续使用原有默认 Provider/fallback 链。
-- 翻译历史记录最终使用的 provider、model 和 scenario，并在历史与收藏列表中显示相关元数据。
-- 模型路由会跳过未启用、未接入或缺少必要 API Key/密钥配置的 Provider，避免未配置的大模型厂商被选中后导致翻译失败。
-
-### 大模型服务商扩展
-
-- 新增 DeepSeek 和 Gemini 大模型服务商，复用 OpenAI-compatible 聊天接口实现，不改变传统翻译服务调用方式。
-- 将智谱服务商显示名调整为“智谱 GLM”，并保留原有配置兼容。
-- 设置页“翻译服务”和“模型配置”增加常用模型选择器，支持在智谱 GLM、DeepSeek、Gemini、硅基流动和 OpenAI-compatible 等服务商下快速切换模型，同时继续支持手动输入自定义 model name。
 
 ### 工作流约定
 

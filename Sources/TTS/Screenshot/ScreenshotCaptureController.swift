@@ -171,7 +171,6 @@ final class ScreenshotCaptureController {
                 case .translate:
                     let item = try await translationService.translate(
                         text: plainText,
-                        scenario: .screenshot,
                         mode: .ocrTranslate
                     )
                     await MainActor.run {

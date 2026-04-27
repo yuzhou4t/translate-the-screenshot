@@ -24,8 +24,10 @@ TTS 专注于轻量化 AI 截图翻译，而不是传统词典式翻译。
 ### 已接入翻译服务
 
 - OpenAI-compatible API
-- GLM-4-Flash
+- 智谱 GLM
 - 硅基流动 SiliconFlow
+- DeepSeek
+- Gemini
 - DeepL
 - Google Cloud Translation
 - Microsoft Translator / Bing
@@ -108,8 +110,10 @@ TTS focuses on lightweight AI-first screenshot translation rather than dictionar
 ### Translation Providers
 
 - OpenAI-compatible API
-- GLM-4-Flash
+- Zhipu GLM
 - SiliconFlow
+- DeepSeek
+- Gemini
 - DeepL
 - Google Cloud Translation
 - Microsoft Translator / Bing

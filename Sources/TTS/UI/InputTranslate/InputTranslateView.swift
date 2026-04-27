@@ -191,7 +191,6 @@ final class InputTranslateViewModel: ObservableObject {
                 text: inputText,
                 sourceLanguage: translationDirection.sourceLanguage,
                 targetLanguage: translationDirection.targetLanguage ?? targetLanguage,
-                scenario: .input,
                 mode: .input
             )
             resultItem = item

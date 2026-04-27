@@ -330,147 +330,60 @@ struct SettingsView: View {
     }
 
     private var modelConfigurationSettings: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(spacing: 10) {
-                Label("模型配置", systemImage: "slider.horizontal.3")
-                    .font(.headline)
+        Form {
+            Section("当前服务商模型") {
+                if let config = viewModel.selectedProviderConfig {
+                    LabeledContent("服务商") {
+                        Text(config.displayName)
+                            .foregroundStyle(.secondary)
+                    }
 
-                Text("\(viewModel.modelProfiles.count) 个 Profile")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 4)
-                    .background(.quaternary, in: Capsule())
-
-                Spacer()
-
-                if !viewModel.statusMessage.isEmpty {
-                    Text(viewModel.statusMessage)
-                        .font(.caption)
-                        .foregroundStyle(viewModel.statusIsError ? Color.red : Color.secondary)
-                }
-            }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(.bar)
-
-            Divider()
-
-            HStack(alignment: .top, spacing: 0) {
-                modelProfileList
-                    .frame(minWidth: 300, idealWidth: 330, maxWidth: 360)
-
-                Divider()
-
-                modelProfileDetails
-                    .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
-            }
-            .frame(maxHeight: .infinity)
-        }
-    }
-
-    private var modelProfileList: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                Text("用途 Profile")
-                    .font(.headline)
-                Spacer()
-                Text("暂不参与路由")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
-
-            List(selection: $viewModel.selectedModelProfileID) {
-                ForEach(viewModel.modelProfiles) { profile in
-                    ModelProfileRow(
-                        profile: profile,
-                        providerName: profile.providerID.displayName,
-                        isSelected: profile.id == viewModel.selectedModelProfileID,
-                        onSelect: {
-                            viewModel.selectModelProfile(profile.id)
-                        }
-                    )
-                    .tag(profile.id)
-                    .listRowSeparator(.hidden)
-                }
-            }
-            .listStyle(.inset)
-            .frame(maxHeight: .infinity)
-            .scrollContentBackground(.hidden)
-        }
-        .frame(maxHeight: .infinity)
-        .background(.background)
-    }
-
-    @ViewBuilder
-    private var modelProfileDetails: some View {
-        if viewModel.selectedModelProfile != nil {
-            Form {
-                Section("基础信息") {
-                    TextField("名称", text: $viewModel.modelProfileName)
+                    TextField("Endpoint", text: $viewModel.endpoint)
                         .textFieldStyle(.roundedBorder)
 
-                    Picker("Provider", selection: $viewModel.modelProfileProviderID) {
-                        ForEach(viewModel.translationProviderIDs) { providerID in
-                            Text(providerID.displayName)
-                                .tag(providerID)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    TextField("Model Name", text: $viewModel.modelProfileModelName)
+                    TextField("模型 / 区域", text: $viewModel.model)
                         .textFieldStyle(.roundedBorder)
 
                     ModelSuggestionPicker(
                         title: "常用模型",
-                        providerID: viewModel.modelProfileProviderID,
-                        modelName: $viewModel.modelProfileModelName
+                        providerID: config.id,
+                        modelName: $viewModel.model
                     )
 
-                    Picker("用途", selection: $viewModel.modelProfilePurpose) {
-                        ForEach(ModelPurpose.allCases) { purpose in
-                            Text(purpose.displayName)
-                                .tag(purpose)
-                        }
+                    HStack {
+                        Text("超时")
+                        TextField("秒", value: $viewModel.timeout, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                        Text("秒")
+                            .foregroundStyle(.secondary)
                     }
-                    .pickerStyle(.menu)
 
-                    Text(viewModel.modelProfilePurpose.description)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-
-                Section("调度设置") {
-                    Toggle("启用", isOn: $viewModel.modelProfileIsEnabled)
-
-                    Stepper("优先级 \(viewModel.modelProfilePriority)", value: $viewModel.modelProfilePriority, in: 1...999)
-                }
-
-                if let profile = viewModel.selectedModelProfile {
-                    Section("能力评分") {
-                        ModelCapabilityScoreView(score: profile.capabilityScore)
-                    }
-                }
-
-                Section {
-                    Button("保存模型 Profile") {
-                        viewModel.saveSelectedModelProfile()
+                    Button("保存模型配置") {
+                        viewModel.saveSelectedProvider()
                     }
                     .keyboardShortcut(.defaultAction)
-                } footer: {
-                    Text("当前仅保存精细化模型配置，为后续模型路由和 fallback 做准备，暂不影响真实翻译调用。")
+                } else {
+                    Text("请先在翻译服务中选择一个服务商。")
+                        .foregroundStyle(.secondary)
                 }
             }
-            .formStyle(.grouped)
-        } else {
-            Text("请选择一个模型 Profile")
-                .foregroundStyle(.secondary)
+
+            Section("后续预留") {
+                SettingsInfoRow(
+                    title: "模型路由",
+                    message: "预留：按场景选择不同模型，例如截图翻译、长文本翻译和快速翻译。",
+                    systemImage: "point.3.connected.trianglepath.dotted"
+                )
+                SettingsInfoRow(
+                    title: "OCR 后处理",
+                    message: "预留：管理段落恢复、换行清理和中英混排策略。",
+                    systemImage: "text.viewfinder"
+                )
+            }
         }
+        .formStyle(.grouped)
+        .padding()
     }
 
     private var permissionPrivacySettings: some View {
@@ -552,97 +465,6 @@ private struct SettingsInfoRow: View {
             }
         }
         .padding(.vertical, 2)
-    }
-}
-
-private struct ModelProfileRow: View {
-    var profile: ModelProfile
-    var providerName: String
-    var isSelected: Bool
-    var onSelect: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(profile.name)
-                        .font(.subheadline.weight(.semibold))
-                    Text(providerName)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Spacer()
-
-                StatusPill(
-                    text: profile.purpose.displayName,
-                    systemImage: "target",
-                    tint: isSelected ? .accentColor : .secondary
-                )
-            }
-
-            HStack(spacing: 6) {
-                StatusPill(
-                    text: profile.isEnabled ? "启用" : "停用",
-                    systemImage: profile.isEnabled ? "bolt.fill" : "pause.circle",
-                    tint: profile.isEnabled ? .green : .secondary
-                )
-
-                StatusPill(
-                    text: "优先级 \(profile.priority)",
-                    systemImage: "arrow.up.arrow.down",
-                    tint: .secondary
-                )
-
-                Spacer()
-            }
-        }
-        .contentShape(Rectangle())
-        .onTapGesture(perform: onSelect)
-        .padding(10)
-        .background(isSelected ? Color.accentColor.opacity(0.12) : Color(NSColor.controlBackgroundColor).opacity(0.72), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(isSelected ? Color.accentColor.opacity(0.35) : Color.primary.opacity(0.05), lineWidth: 1)
-        )
-        .padding(.vertical, 3)
-    }
-}
-
-private struct ModelCapabilityScoreView: View {
-    var score: ModelCapabilityScore
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            scoreRow("速度", score.speed)
-            scoreRow("质量", score.quality)
-            scoreRow("学术", score.academic)
-            scoreRow("技术", score.technical)
-            scoreRow("OCR 修复", score.ocrCleanup)
-            scoreRow("格式遵循", score.formatFollowing)
-            scoreRow("成本效率", score.costEfficiency)
-        }
-    }
-
-    private func scoreRow(_ title: String, _ value: Int) -> some View {
-        HStack(spacing: 10) {
-            Text(title)
-                .frame(width: 72, alignment: .leading)
-                .foregroundStyle(.secondary)
-
-            ForEach(1...5, id: \.self) { index in
-                Circle()
-                    .fill(index <= value ? Color.accentColor : Color(NSColor.separatorColor).opacity(0.45))
-                    .frame(width: 8, height: 8)
-            }
-
-            Text("\(value)/5")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-
-            Spacer()
-        }
-        .font(.caption)
     }
 }
 
@@ -788,14 +610,6 @@ final class SettingsViewModel: ObservableObject {
     @Published var targetLanguage: String
     @Published var translationDirection: TranslationDirection
     @Published var defaultTranslationMode: TranslationMode
-    @Published var modelProfiles: [ModelProfile] = []
-    @Published var selectedModelProfileID: UUID?
-    @Published var modelProfileName = ""
-    @Published var modelProfileProviderID: TranslationProviderID = .openAICompatible
-    @Published var modelProfileModelName = ""
-    @Published var modelProfilePurpose: ModelPurpose = .quality
-    @Published var modelProfilePriority = 10
-    @Published var modelProfileIsEnabled = true
     @Published var statusMessage = ""
     @Published var statusIsError = false
     @Published var isAccessibilityTrusted = false
@@ -836,17 +650,6 @@ final class SettingsViewModel: ObservableObject {
         return providerConfigs.first { $0.id == selectedProviderID }
     }
 
-    var selectedModelProfile: ModelProfile? {
-        guard let selectedModelProfileID else {
-            return nil
-        }
-        return modelProfiles.first { $0.id == selectedModelProfileID }
-    }
-
-    var translationProviderIDs: [TranslationProviderID] {
-        TranslationProviderID.allCases.filter(\.isTranslationProvider)
-    }
-
     var enabledProviderCount: Int {
         providerConfigs.filter(\.isEnabled).count
     }
@@ -873,18 +676,12 @@ final class SettingsViewModel: ObservableObject {
         targetLanguage = configurationStore.targetLanguage
         translationDirection = configurationStore.translationDirection
         defaultTranslationMode = configurationStore.defaultTranslationMode
-        modelProfiles = configurationStore.modelProfiles
 
         if selectedProviderID == nil || selectedProviderConfig == nil {
             selectedProviderID = defaultProviderID
         }
 
-        if selectedModelProfileID == nil || selectedModelProfile == nil {
-            selectedModelProfileID = modelProfiles.first?.id
-        }
-
         loadSelectedProviderFields()
-        loadSelectedModelProfileFields()
     }
 
     func isImplemented(_ id: TranslationProviderID) -> Bool {
@@ -930,31 +727,6 @@ final class SettingsViewModel: ObservableObject {
         configurationStore.setDefaultTranslationMode(defaultTranslationMode)
         reload()
         status("默认 AI 模式已保存。", isError: false)
-    }
-
-    func selectModelProfile(_ id: UUID) {
-        selectedModelProfileID = id
-        loadSelectedModelProfileFields()
-    }
-
-    func saveSelectedModelProfile() {
-        guard var profile = selectedModelProfile else {
-            return
-        }
-
-        let trimmedName = modelProfileName.trimmingCharacters(in: .whitespacesAndNewlines)
-        profile.name = trimmedName.isEmpty ? profile.name : trimmedName
-        profile.providerID = modelProfileProviderID
-        profile.modelName = modelProfileModelName.trimmingCharacters(in: .whitespacesAndNewlines)
-        profile.purpose = modelProfilePurpose
-        profile.priority = modelProfilePriority
-        profile.isEnabled = modelProfileIsEnabled
-
-        configurationStore.updateModelProfile(profile)
-        reload()
-        selectedModelProfileID = profile.id
-        loadSelectedModelProfileFields()
-        status("模型 Profile 已保存。", isError: false)
     }
 
     func saveSelectedProvider() {
@@ -1051,25 +823,6 @@ final class SettingsViewModel: ObservableObject {
         } else {
             apiKey = ""
         }
-    }
-
-    private func loadSelectedModelProfileFields() {
-        guard let profile = selectedModelProfile else {
-            modelProfileName = ""
-            modelProfileProviderID = .openAICompatible
-            modelProfileModelName = ""
-            modelProfilePurpose = .quality
-            modelProfilePriority = 10
-            modelProfileIsEnabled = true
-            return
-        }
-
-        modelProfileName = profile.name
-        modelProfileProviderID = profile.providerID
-        modelProfileModelName = profile.modelName
-        modelProfilePurpose = profile.purpose
-        modelProfilePriority = profile.priority
-        modelProfileIsEnabled = profile.isEnabled
     }
 
     private func status(_ message: String, isError: Bool) {

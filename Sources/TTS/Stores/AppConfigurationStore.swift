@@ -62,10 +62,6 @@ final class ProviderConfigStore: ObservableObject {
         configuration.defaultTranslationMode
     }
 
-    var modelProfiles: [ModelProfile] {
-        configuration.modelProfiles.sorted { $0.priority < $1.priority }
-    }
-
     func providerConfig(for id: TranslationProviderID) -> ProviderConfig? {
         configuration.providerConfigs.first { $0.id == id }
     }
@@ -82,16 +78,6 @@ final class ProviderConfigStore: ObservableObject {
     func setDefaultTranslationMode(_ mode: TranslationMode) {
         update { configuration in
             configuration.defaultTranslationMode = mode
-        }
-    }
-
-    func updateModelProfile(_ profile: ModelProfile) {
-        update { configuration in
-            if let index = configuration.modelProfiles.firstIndex(where: { $0.id == profile.id }) {
-                configuration.modelProfiles[index] = profile
-            } else {
-                configuration.modelProfiles.append(profile)
-            }
         }
     }
 
@@ -128,10 +114,6 @@ final class ProviderConfigStore: ObservableObject {
                 endpoint: configuration.openAICompatibleEndpoint,
                 model: configuration.openAICompatibleModel
             )
-
-            if configuration.modelProfiles.isEmpty {
-                configuration.modelProfiles = ModelProfile.defaultProfiles
-            }
 
             if !configuration.providerConfigs.contains(where: { $0.id == configuration.defaultProviderID }) {
                 configuration.defaultProviderID = .myMemory
