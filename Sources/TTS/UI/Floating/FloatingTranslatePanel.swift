@@ -186,8 +186,22 @@ final class FloatingTranslatePanel {
             sourceLanguage: item.sourceLanguage,
             targetLanguage: item.targetLanguage,
             translationMode: translationMode,
+            scenario: scenario(for: item),
             mode: item.mode
         )
+    }
+
+    private func scenario(for item: TranslationHistoryItem) -> TranslationScenario {
+        switch item.mode {
+        case .selectedText:
+            .selection
+        case .input:
+            .input
+        case .ocrTranslate:
+            .screenshot
+        case .ocr:
+            item.translationMode == .ocrCleanup ? .ocrCleanup : .screenshot
+        }
     }
 
     private func setComparisonExpanded(_ isExpanded: Bool) {

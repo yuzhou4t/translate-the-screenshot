@@ -111,6 +111,84 @@
 - 补全 OpenAI 兼容接口、智谱 GLM、Gemini、DeepSeek、硅基流动的常用建议模型列表。
 - DeepSeek 下拉中明确显示 `deepseek-chat` 与 `deepseek-reasoner` 对应的 DeepSeek-V3.2 语义，避免只看到 API 别名而难以理解版本。
 
+### 简化版场景翻译配置
+
+- 新增 `TranslationScenario` 与 `SimpleScenarioTranslationConfig`，为划词翻译、输入翻译、截图翻译、OCR AI 修复和截图覆盖翻译预留独立的服务商与模型配置结构。
+- 场景配置目前只做数据结构与配置存储，不接入实际翻译流程，不引入模型评分、复杂路由或多级 fallback chain。
+- 旧配置在缺少 `scenarioTranslationConfigs` 时会自动生成默认场景配置，并继续兼容现有 provider、model 和 API Key 存储。
+
+### 场景翻译配置设置页
+
+- 设置页新增“场景配置”页签，以卡片形式展示划词翻译、输入翻译、截图翻译、OCR AI 修复和截图覆盖翻译 5 个场景。
+- 每个场景支持“使用全局默认配置”、主要服务商、主要模型、备用服务开关、备用服务商和备用模型配置。
+- OCR AI 修复和截图覆盖翻译场景补充了轻量提示文案，继续保持 API Key 只在“翻译服务”页配置，不在场景卡片中重复设置。
+
+### 场景翻译解析器
+
+- 新增 `ScenarioTranslationResolver` 与 `ScenarioTranslationPlan`，用于根据 `TranslationScenario` 和当前场景配置解析出主要服务、主要模型以及可选备用服务信息。
+- 解析器只读取用户配置和全局默认值，不读取 API Key、不发起网络请求、不做模型评分，也不引入复杂路由。
+- 当场景配置不完整时，会自动回退到全局默认 provider/model，并生成简洁的调试说明消息。
+
+### 场景配置接入翻译流程
+
+- `TranslationService` 现在支持显式传入 `TranslationScenario`，并在每次请求前通过 `ScenarioTranslationResolver` 解析当前场景应使用的主要服务和模型。
+- 划词翻译、输入翻译、截图翻译、OCR AI 修复和截图覆盖翻译都已分别接入对应场景配置。
+- 当场景启用“使用全局默认配置”时，行为继续与旧逻辑保持一致；当场景使用自定义配置时，则按场景卡片中指定的 provider/model 发起请求。
+- debug 日志会记录 `scenario`、解析后的 provider/model 与 resolver message，但不会输出 API Key。
+
+### 场景级 fallback
+
+- `TranslationService` 现在支持每个场景独立的备用服务与备用模型；主服务失败后，最多再尝试一次该场景配置的备用服务。
+- 不再对主服务做多次超时重试，第一版严格限制为“主服务一次 + 备用服务一次”。
+- 当主服务与备用服务的 provider/model 完全相同时，会跳过重复尝试。
+- 最终失败时会优先显示更简洁的场景级提示文案，并在 debug 日志中记录 `scenario`、主要服务、备用服务和错误类型。
+
+### imageOverlay Prompt 优化
+
+- 保持截图覆盖翻译继续固定使用 `TranslationMode.imageOverlay`。
+- 进一步压缩 `imageOverlay` prompt，强调短块不扩写、按钮/菜单/标签优先采用简短 UI 文案、完整句子在保证准确的前提下尽量压缩表达。
+- 明确禁止输出解释、注释、替代方案和“翻译：”之类前缀，并继续保留数字、代码、URL、品牌名和必要符号。
+
+### 截图覆盖批量翻译
+
+- 新增 `ImageOverlayBatchTranslator`，将截图覆盖翻译从逐块单独请求改为按批次请求，默认每批最多 20 个文本块。
+- 支持要求大模型按 `id + translation` 返回 JSON 数组，并在 JSON 不完整或格式异常时尽量恢复可解析结果，对缺失文本块自动标记失败而不让全流程崩溃。
+- `TranslationService` 新增截图覆盖专用批量翻译入口，并接入场景级 primary/fallback 配置；主服务失败或部分失败时，会把失败块交给该场景的备用服务继续尝试。
+- 传统翻译 provider 保持兼容：如果当前场景没有使用支持 Prompt 的 AI 服务，截图覆盖翻译会自动退回顺序翻译，不影响原有可用性。
+
+### imageOverlay 批量 Prompt 稳定化
+
+- 在 `PromptBuilder` 中新增 `buildImageOverlayBatchPrompt(blocks:targetLanguage:)`，专门为截图覆盖批量翻译生成 JSON 约束更强的 prompt。
+- 批量 prompt 明确要求：输入来自同一张截图、需要结合上下文翻译、必须按原始 `id` 一一返回、不得遗漏或新增 `id`、只输出 JSON 数组、禁止 Markdown 和代码块。
+- 继续强化覆盖场景的译文约束：短、稳、适合回填原图区域，保留数字、代码、URL、品牌名、API 名称和必要符号，UI 文案优先简短自然。
+
+### 截图覆盖翻译失败容错
+
+- `imageOverlay` 结果状态补充为 `success / failed / fallbackUsed / originalKept`，并在服务层将最终失败项自动收口为“保留原文”而不是让整张图中断。
+- 当批量 JSON 返回不完整时，已成功解析的 block 继续使用译文，缺失 block 会进入该场景的 fallback；fallback 仍失败时改为保留原文。
+- 当所有 block 都没有成功翻译时，不再生成只覆盖原文的结果图，而是直接显示整体失败提示。
+- 覆盖预览窗口现在会显示总块数、成功数量、备用完成数量和保留原文数量，方便快速判断本次结果质量。
+
+### 截图覆盖渲染优化
+
+- 优化 `ScreenshotTranslationOverlayRenderer` 的覆盖框尺寸、最小显示宽高、边界裁切和内边距，减少文字贴边和小块不可读的问题。
+- 调整字号计算逻辑：根据文本块高度和文本密度自动缩放，并设置最小字号与最大字号，在长中文场景下更容易通过缩字号加换行放入框内。
+- 优化换行与文本布局：中文块优先按字符自然换行，URL、代码、数字和技术标识符更倾向保持完整，减少被拆得过碎的情况。
+- 提升三种样式的可读性：`solid` 更清晰，`translucent` 提高对比度，`bubble` 增强圆角和阴影层次。
+
+### 截图覆盖翻译缓存
+
+- 新增 `ImageOverlayTranslationCache`，为截图覆盖翻译提供运行期内存缓存，缓存键包含 `sourceText / targetLanguage / providerID / modelName / TranslationMode.imageOverlay`。
+- 截图覆盖翻译在请求模型前会先查缓存；命中时直接复用译文，未命中才进入批量翻译。
+- 同一轮截图覆盖翻译中会对重复文本去重，只让未命中的唯一文本进入批量请求，从而减少按钮、菜单、标签等重复内容的请求次数。
+- 批量翻译成功后会把成功结果写入缓存，失败结果不会缓存；debug 日志会记录 `cache hit count` 与 `cache miss count`。
+
+### 场景配置与历史记录交互
+
+- 场景翻译配置卡片现在除了可选择服务商，也支持直接选择对应服务商的建议模型，仍然保留手动输入模型名。
+- 历史记录“清空全部”现在会先弹出确认对话框，再执行清空。
+- 删除单条历史记录或清空全部历史记录时，不再自动移除已收藏内容；收藏夹会继续保留原有收藏项。
+
 ## 2026-04-26
 
 ### 产品定位与文档

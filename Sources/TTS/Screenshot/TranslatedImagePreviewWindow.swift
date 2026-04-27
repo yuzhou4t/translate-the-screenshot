@@ -17,6 +17,7 @@ final class TranslatedImagePreviewWindowController {
         originalImage: NSImage,
         blocks: [OCRTextBlock],
         translations: [String],
+        summary: ImageOverlayTranslationSummary,
         initialStyle: ScreenshotTranslationOverlayStyle = .solid,
         title: String = "截图翻译覆盖预览"
     ) throws {
@@ -44,6 +45,7 @@ final class TranslatedImagePreviewWindowController {
             originalImage: originalImage,
             blocks: blocks,
             translations: translations,
+            summary: summary,
             initialStyle: initialStyle
         )
 
@@ -59,6 +61,13 @@ private final class TranslatedImagePreviewViewModel: ObservableObject {
     @Published var zoomScale: CGFloat = 1
     @Published var statusMessage = ""
     @Published var statusIsError = false
+    @Published var summary = ImageOverlayTranslationSummary(
+        totalCount: 0,
+        successCount: 0,
+        fallbackCount: 0,
+        originalKeptCount: 0,
+        failedCount: 0
+    )
 
     private let renderer: ScreenshotTranslationOverlayRenderer
     private var originalImage: NSImage?
@@ -78,11 +87,13 @@ private final class TranslatedImagePreviewViewModel: ObservableObject {
         originalImage: NSImage,
         blocks: [OCRTextBlock],
         translations: [String],
+        summary: ImageOverlayTranslationSummary,
         initialStyle: ScreenshotTranslationOverlayStyle
     ) throws {
         self.originalImage = originalImage
         self.blocks = blocks
         self.translations = translations
+        self.summary = summary
         zoomScale = 1
         statusMessage = ""
         statusIsError = false
@@ -213,6 +224,15 @@ private struct TranslatedImagePreviewView: View {
         }
     }
 
+    private var summaryChips: some View {
+        HStack(spacing: 8) {
+            summaryChip("总块数 \(viewModel.summary.totalCount)")
+            summaryChip("成功 \(viewModel.summary.successCount)")
+            summaryChip("备用 \(viewModel.summary.fallbackCount)")
+            summaryChip("保留原文 \(viewModel.summary.originalKeptCount)")
+        }
+    }
+
     private var header: some View {
         HStack(alignment: .center, spacing: 10) {
             Label("翻译覆盖预览", systemImage: "photo.on.rectangle")
@@ -339,12 +359,22 @@ private struct TranslatedImagePreviewView: View {
     }
 
     private var footer: some View {
-        HStack {
+        HStack(alignment: .center, spacing: 10) {
+            summaryChips
+            Spacer()
             Text("切换样式或点击重新生成时，会重新调用覆盖渲染器。")
                 .font(.caption)
                 .foregroundStyle(.secondary)
-            Spacer()
         }
+    }
+
+    private func summaryChip(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Color.primary.opacity(0.06), in: Capsule())
     }
 }
 

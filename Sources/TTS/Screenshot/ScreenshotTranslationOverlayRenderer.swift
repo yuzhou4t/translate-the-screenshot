@@ -23,6 +23,12 @@ enum ScreenshotTranslationOverlayRendererError: LocalizedError {
 }
 
 struct ScreenshotTranslationOverlayRenderer: Sendable {
+    private let minimumBlockWidth: CGFloat = 44
+    private let minimumBlockHeight: CGFloat = 24
+    private let minimumFontSize: CGFloat = 11
+    private let maximumFontSize: CGFloat = 30
+    private let edgeInset: CGFloat = 4
+
     func render(
         originalImage: NSImage,
         blocks: [OCRTextBlock],
@@ -56,29 +62,31 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
 
             let drawRect = convertToDrawingRect(block.boundingBox, imageSize: imageSize)
                 .standardized
-                .insetBy(dx: -2, dy: -2)
-                .clamped(to: imageRect)
 
-            guard drawRect.width >= 24, drawRect.height >= 14 else {
+            guard drawRect.width >= 8, drawRect.height >= 8 else {
                 continue
             }
 
-            let backgroundRect = expandIfNeeded(drawRect, within: imageRect)
+            let backgroundRect = overlayRect(
+                for: drawRect,
+                text: cleanedTranslation,
+                within: imageRect
+            )
             let textPadding = padding(for: style, rect: backgroundRect)
             let textRect = backgroundRect.insetBy(dx: textPadding.width, dy: textPadding.height)
 
-            guard textRect.width > 8, textRect.height > 8 else {
+            guard textRect.width > 12, textRect.height > 12 else {
                 continue
             }
 
-            let attributedText = fittedAttributedText(
+            let layout = fittedTextLayout(
                 cleanedTranslation,
                 in: textRect,
                 style: style
             )
 
             drawBackground(style: style, in: backgroundRect)
-            attributedText.draw(in: textRect)
+            layout.attributedText.draw(in: layout.drawRect)
         }
 
         return outputImage
@@ -93,34 +101,53 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
         )
     }
 
-    private func expandIfNeeded(_ rect: CGRect, within bounds: CGRect) -> CGRect {
-        let minHeight = max(rect.height, 28)
-        let expandedHeight = max(minHeight, rect.height * 1.12)
-        let expandedY = max(bounds.minY, rect.midY - expandedHeight / 2)
-        let adjustedHeight = min(expandedHeight, bounds.maxY - expandedY)
+    private func overlayRect(
+        for rect: CGRect,
+        text: String,
+        within bounds: CGRect
+    ) -> CGRect {
+        let prepared = rect
+            .insetBy(dx: -3, dy: -3)
+            .standardized
 
-        return CGRect(
-            x: max(bounds.minX, rect.minX),
-            y: expandedY,
-            width: min(rect.width, bounds.maxX - rect.minX),
-            height: adjustedHeight
+        let textLength = CGFloat(max(text.count, 1))
+        let horizontalGrowth = min(
+            max(prepared.height * min(textLength * 0.12, 2.8), 8),
+            bounds.width * 0.16
         )
+        let verticalGrowth = min(
+            max(prepared.height * 0.18, 4),
+            bounds.height * 0.06
+        )
+
+        let desiredWidth = max(minimumBlockWidth, prepared.width + horizontalGrowth)
+        let desiredHeight = max(minimumBlockHeight, prepared.height + verticalGrowth)
+        let centered = CGRect(
+            x: prepared.midX - desiredWidth / 2,
+            y: prepared.midY - desiredHeight / 2,
+            width: desiredWidth,
+            height: desiredHeight
+        )
+
+        return centered
+            .clamped(to: bounds.insetBy(dx: edgeInset, dy: edgeInset))
+            .integral
     }
 
     private func padding(
         for style: ScreenshotTranslationOverlayStyle,
         rect: CGRect
     ) -> CGSize {
-        let baseHorizontal = min(max(rect.width * 0.08, 6), 18)
-        let baseVertical = min(max(rect.height * 0.16, 4), 14)
+        let baseHorizontal = min(max(rect.width * 0.1, 7), 18)
+        let baseVertical = min(max(rect.height * 0.18, 5), 14)
 
         switch style {
         case .solid:
             return CGSize(width: baseHorizontal, height: baseVertical)
         case .translucent:
-            return CGSize(width: baseHorizontal + 1, height: baseVertical)
+            return CGSize(width: baseHorizontal + 1.5, height: baseVertical + 0.5)
         case .bubble:
-            return CGSize(width: baseHorizontal + 3, height: baseVertical + 2)
+            return CGSize(width: baseHorizontal + 3, height: baseVertical + 2.5)
         }
     }
 
@@ -132,25 +159,28 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
 
         switch style {
         case .solid:
-            NSColor(calibratedWhite: 0.98, alpha: 0.96).setFill()
+            NSColor(calibratedWhite: 0.985, alpha: 0.98).setFill()
             path.fill()
+            NSColor(calibratedWhite: 0.78, alpha: 0.78).setStroke()
+            path.lineWidth = 0.8
+            path.stroke()
         case .translucent:
-            NSColor(calibratedWhite: 1.0, alpha: 0.72).setFill()
+            NSColor(calibratedWhite: 1.0, alpha: 0.84).setFill()
             path.fill()
-            NSColor(calibratedWhite: 0.82, alpha: 0.55).setStroke()
+            NSColor(calibratedWhite: 0.72, alpha: 0.5).setStroke()
             path.lineWidth = 1
             path.stroke()
         case .bubble:
             NSGraphicsContext.saveGraphicsState()
             let shadow = NSShadow()
             shadow.shadowColor = NSColor.black.withAlphaComponent(0.18)
-            shadow.shadowBlurRadius = 6
-            shadow.shadowOffset = CGSize(width: 0, height: -1)
+            shadow.shadowBlurRadius = 8
+            shadow.shadowOffset = CGSize(width: 0, height: -2)
             shadow.set()
 
-            NSColor(calibratedRed: 1.0, green: 0.985, blue: 0.94, alpha: 0.94).setFill()
+            NSColor(calibratedRed: 1.0, green: 0.988, blue: 0.945, alpha: 0.96).setFill()
             path.fill()
-            NSColor(calibratedRed: 0.9, green: 0.82, blue: 0.65, alpha: 0.72).setStroke()
+            NSColor(calibratedRed: 0.88, green: 0.8, blue: 0.62, alpha: 0.72).setStroke()
             path.lineWidth = 1
             path.stroke()
             NSGraphicsContext.restoreGraphicsState()
@@ -171,29 +201,38 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
         }
     }
 
-    private func fittedAttributedText(
+    private func fittedTextLayout(
         _ text: String,
         in rect: CGRect,
         style: ScreenshotTranslationOverlayStyle
-    ) -> NSAttributedString {
-        let paragraphStyle = NSMutableParagraphStyle()
-        paragraphStyle.alignment = .left
-        paragraphStyle.lineBreakMode = .byWordWrapping
-        paragraphStyle.lineSpacing = 1.5
-
-        let minFontSize = max(10, min(rect.height * 0.22, 14))
-        let maxFontSize = max(minFontSize, min(rect.height * 0.72, rect.width * 0.22, 30))
+    ) -> FittedOverlayText {
+        let preparedText = preparedOverlayText(text)
+        let preferredLineBreakMode = lineBreakMode(for: preparedText)
+        let baseFontSize = max(
+            minimumFontSize,
+            min(rect.height * 0.58, rect.width * 0.24, maximumFontSize)
+        )
+        let densityPenalty = min(CGFloat(max(preparedText.count - 10, 0)) * 0.18, 5)
+        let maxFontSize = max(minimumFontSize, baseFontSize - densityPenalty)
         let textColor = foregroundColor(for: style)
+        let textShadow = shadow(for: style)
 
         var chosenFont = font(size: maxFontSize)
-        for size in stride(from: maxFontSize, through: minFontSize, by: -1) {
+        var chosenBounds = CGRect(origin: .zero, size: rect.size)
+
+        for size in stride(from: maxFontSize, through: minimumFontSize, by: -0.5) {
             let candidateFont = font(size: size)
+            let paragraphStyle = NSMutableParagraphStyle()
+            paragraphStyle.alignment = preparedText.count <= 12 ? .center : .left
+            paragraphStyle.lineBreakMode = preferredLineBreakMode
+            paragraphStyle.lineSpacing = max(1, candidateFont.pointSize * 0.12)
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: candidateFont,
                 .foregroundColor: textColor,
-                .paragraphStyle: paragraphStyle
+                .paragraphStyle: paragraphStyle,
+                .shadow: textShadow
             ]
-            let candidate = NSAttributedString(string: text, attributes: attributes)
+            let candidate = NSAttributedString(string: preparedText, attributes: attributes)
             let measured = candidate.boundingRect(
                 with: rect.size,
                 options: [.usesLineFragmentOrigin, .usesFontLeading]
@@ -201,22 +240,39 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
 
             if measured.width <= rect.width && measured.height <= rect.height {
                 chosenFont = candidateFont
+                chosenBounds = measured
                 break
             }
+
+            chosenFont = candidateFont
+            chosenBounds = measured
         }
 
         let finalParagraphStyle = NSMutableParagraphStyle()
-        finalParagraphStyle.alignment = .left
-        finalParagraphStyle.lineBreakMode = .byWordWrapping
-        finalParagraphStyle.lineSpacing = max(1, chosenFont.pointSize * 0.08)
+        finalParagraphStyle.alignment = preparedText.count <= 12 ? .center : .left
+        finalParagraphStyle.lineBreakMode = preferredLineBreakMode
+        finalParagraphStyle.lineSpacing = max(1, chosenFont.pointSize * 0.12)
 
-        return NSAttributedString(
-            string: text,
+        let finalAttributed = NSAttributedString(
+            string: preparedText,
             attributes: [
                 .font: chosenFont,
                 .foregroundColor: textColor,
-                .paragraphStyle: finalParagraphStyle
+                .paragraphStyle: finalParagraphStyle,
+                .shadow: textShadow
             ]
+        )
+        let finalBounds = finalAttributed.boundingRect(
+            with: rect.size,
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        ).integral
+
+        return FittedOverlayText(
+            attributedText: finalAttributed,
+            drawRect: centeredTextRect(
+                measured: finalBounds.isEmpty ? chosenBounds : finalBounds,
+                in: rect
+            )
         )
     }
 
@@ -232,6 +288,79 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
             return NSColor(calibratedWhite: 0.14, alpha: 0.98)
         }
     }
+
+    private func shadow(for style: ScreenshotTranslationOverlayStyle) -> NSShadow {
+        let shadow = NSShadow()
+        switch style {
+        case .solid:
+            shadow.shadowColor = NSColor.white.withAlphaComponent(0.15)
+            shadow.shadowBlurRadius = 0
+            shadow.shadowOffset = .zero
+        case .translucent:
+            shadow.shadowColor = NSColor.white.withAlphaComponent(0.28)
+            shadow.shadowBlurRadius = 1.2
+            shadow.shadowOffset = .zero
+        case .bubble:
+            shadow.shadowColor = NSColor.white.withAlphaComponent(0.18)
+            shadow.shadowBlurRadius = 0.8
+            shadow.shadowOffset = .zero
+        }
+        return shadow
+    }
+
+    private func preparedOverlayText(_ text: String) -> String {
+        text
+            .replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+            .replacingOccurrences(of: "\n{3,}", with: "\n\n", options: .regularExpression)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func lineBreakMode(for text: String) -> NSLineBreakMode {
+        if containsProtectedToken(text) {
+            return .byWordWrapping
+        }
+
+        return containsCJK(text) ? .byCharWrapping : .byWordWrapping
+    }
+
+    private func containsProtectedToken(_ text: String) -> Bool {
+        let patterns = [
+            #"https?://\S+"#,
+            #"[A-Za-z_][A-Za-z0-9_./:-]{3,}"#,
+            #"\d+(?:\.\d+)?(?:%|ms|s|MB|GB|KB|px|pt)?"#
+        ]
+
+        for pattern in patterns {
+            if text.range(of: pattern, options: .regularExpression) != nil {
+                return true
+            }
+        }
+
+        return false
+    }
+
+    private func containsCJK(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(Int(scalar.value)) ||
+            (0x3400...0x4DBF).contains(Int(scalar.value))
+        }
+    }
+
+    private func centeredTextRect(
+        measured: CGRect,
+        in rect: CGRect
+    ) -> CGRect {
+        let width = min(rect.width, max(measured.width, rect.width * 0.72))
+        let height = min(rect.height, measured.height)
+        let y = rect.minY + max((rect.height - height) / 2, 0)
+        return CGRect(x: rect.minX, y: y, width: width, height: height).integral
+    }
+}
+
+private struct FittedOverlayText {
+    var attributedText: NSAttributedString
+    var drawRect: CGRect
 }
 
 private extension CGRect {

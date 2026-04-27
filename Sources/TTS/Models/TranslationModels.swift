@@ -12,6 +12,73 @@ struct ModelSuggestion: Identifiable, Hashable {
     }
 }
 
+enum TranslationScenario: String, Codable, CaseIterable, Identifiable, Equatable {
+    case selection
+    case input
+    case screenshot
+    case ocrCleanup
+    case imageOverlay
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .selection:
+            "划词翻译"
+        case .input:
+            "输入翻译"
+        case .screenshot:
+            "截图翻译"
+        case .ocrCleanup:
+            "OCR AI 修复"
+        case .imageOverlay:
+            "截图覆盖翻译"
+        }
+    }
+
+    var description: String {
+        switch self {
+        case .selection:
+            "用于划词后的快速理解与短文本翻译。"
+        case .input:
+            "用于手动输入文本后的常规翻译。"
+        case .screenshot:
+            "用于截图 OCR 后的正文翻译。"
+        case .ocrCleanup:
+            "用于 OCR 文本的 AI 修复，不做目标语言翻译。"
+        case .imageOverlay:
+            "用于截图覆盖翻译，强调短小、紧凑和适合回填原图区域。"
+        }
+    }
+
+    var defaultTranslationMode: TranslationMode {
+        switch self {
+        case .selection:
+            .accurate
+        case .input:
+            .natural
+        case .screenshot:
+            .accurate
+        case .ocrCleanup:
+            .ocrCleanup
+        case .imageOverlay:
+            .imageOverlay
+        }
+    }
+}
+
+struct SimpleScenarioTranslationConfig: Codable, Equatable, Identifiable {
+    var scenario: TranslationScenario
+    var useGlobalDefault: Bool
+    var providerID: String
+    var modelName: String
+    var fallbackEnabled: Bool
+    var fallbackProviderID: String
+    var fallbackModelName: String
+
+    var id: TranslationScenario { scenario }
+}
+
 enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
     case openAICompatible = "openai-compatible"
     case myMemory = "mymemory"
@@ -124,8 +191,10 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
             ]
         case .deepSeek:
             [
-                .init("deepseek-chat", label: "deepseek-chat / DeepSeek-V3.2"),
-                .init("deepseek-reasoner", label: "deepseek-reasoner / DeepSeek-V3.2 Thinking")
+                .init("deepseek-v4-flash", label: "deepseek-v4-flash / DeepSeek-V4-Flash"),
+                .init("deepseek-v4-pro", label: "deepseek-v4-pro / DeepSeek-V4-Pro"),
+                .init("deepseek-chat", label: "deepseek-chat / 兼容别名（当前对应 V4-Flash 非思考）"),
+                .init("deepseek-reasoner", label: "deepseek-reasoner / 兼容别名（当前对应 V4-Flash 思考）")
             ]
         case .gemini:
             [
@@ -262,7 +331,7 @@ struct ProviderConfig: Identifiable, Codable, Equatable {
             model = "Qwen/Qwen2.5-7B-Instruct"
         case .deepSeek:
             endpoint = URL(string: "https://api.deepseek.com/chat/completions")
-            model = "deepseek-chat"
+            model = "deepseek-v4-flash"
         case .gemini:
             endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
             model = "gemini-2.5-flash"
@@ -408,6 +477,7 @@ struct AppConfiguration: Codable, Equatable {
     var fallbackProviderID: TranslationProviderID?
     var fallbackModel: String?
     var defaultTranslationMode: TranslationMode
+    var scenarioTranslationConfigs: [SimpleScenarioTranslationConfig]
 
     static let `default` = AppConfiguration(
         providerID: .myMemory,
@@ -420,7 +490,12 @@ struct AppConfiguration: Codable, Equatable {
         fallbackEnabled: false,
         fallbackProviderID: nil,
         fallbackModel: nil,
-        defaultTranslationMode: .accurate
+        defaultTranslationMode: .accurate,
+        scenarioTranslationConfigs: defaultScenarioConfigs(
+            defaultProviderID: .myMemory,
+            providerConfigs: [.openAICompatibleDefault, .myMemoryDefault],
+            openAICompatibleModel: "gpt-4o-mini"
+        )
     )
 
     private enum CodingKeys: String, CodingKey {
@@ -435,6 +510,7 @@ struct AppConfiguration: Codable, Equatable {
         case fallbackProviderID
         case fallbackModel
         case defaultTranslationMode
+        case scenarioTranslationConfigs
     }
 
     init(
@@ -448,7 +524,8 @@ struct AppConfiguration: Codable, Equatable {
         fallbackEnabled: Bool,
         fallbackProviderID: TranslationProviderID?,
         fallbackModel: String?,
-        defaultTranslationMode: TranslationMode
+        defaultTranslationMode: TranslationMode,
+        scenarioTranslationConfigs: [SimpleScenarioTranslationConfig]
     ) {
         self.providerID = providerID
         self.openAICompatibleEndpoint = openAICompatibleEndpoint
@@ -461,6 +538,7 @@ struct AppConfiguration: Codable, Equatable {
         self.fallbackProviderID = fallbackProviderID
         self.fallbackModel = fallbackModel
         self.defaultTranslationMode = defaultTranslationMode
+        self.scenarioTranslationConfigs = scenarioTranslationConfigs
     }
 
     init(from decoder: Decoder) throws {
@@ -483,6 +561,16 @@ struct AppConfiguration: Codable, Equatable {
             providerID: providerID,
             endpoint: openAICompatibleEndpoint,
             model: openAICompatibleModel
+        )
+        let decodedScenarioConfigs = try container.decodeIfPresent(
+            [SimpleScenarioTranslationConfig].self,
+            forKey: .scenarioTranslationConfigs
+        ) ?? []
+        scenarioTranslationConfigs = AppConfiguration.normalizedScenarioConfigs(
+            decodedScenarioConfigs,
+            defaultProviderID: defaultProviderID,
+            providerConfigs: providerConfigs,
+            openAICompatibleModel: openAICompatibleModel
         )
 
         if fallbackProviderID == defaultProviderID {
@@ -535,5 +623,59 @@ struct AppConfiguration: Codable, Equatable {
         }
 
         return next.sorted { $0.priority < $1.priority }
+    }
+
+    static func defaultScenarioConfigs(
+        defaultProviderID: TranslationProviderID,
+        providerConfigs: [ProviderConfig],
+        openAICompatibleModel: String
+    ) -> [SimpleScenarioTranslationConfig] {
+        normalizedScenarioConfigs(
+            [],
+            defaultProviderID: defaultProviderID,
+            providerConfigs: providerConfigs,
+            openAICompatibleModel: openAICompatibleModel
+        )
+    }
+
+    static func normalizedScenarioConfigs(
+        _ configs: [SimpleScenarioTranslationConfig],
+        defaultProviderID: TranslationProviderID,
+        providerConfigs: [ProviderConfig],
+        openAICompatibleModel: String
+    ) -> [SimpleScenarioTranslationConfig] {
+        let globalProviderID = defaultProviderID.rawValue
+        let globalModelName = globalModelName(
+            defaultProviderID: defaultProviderID,
+            providerConfigs: providerConfigs,
+            openAICompatibleModel: openAICompatibleModel
+        )
+
+        return TranslationScenario.allCases.map { scenario in
+            let existing = configs.first { $0.scenario == scenario }
+            let useGlobalDefault = existing?.useGlobalDefault ?? true
+
+            return SimpleScenarioTranslationConfig(
+                scenario: scenario,
+                useGlobalDefault: useGlobalDefault,
+                providerID: useGlobalDefault ? globalProviderID : (existing?.providerID ?? globalProviderID),
+                modelName: useGlobalDefault ? globalModelName : (existing?.modelName ?? globalModelName),
+                fallbackEnabled: existing?.fallbackEnabled ?? false,
+                fallbackProviderID: existing?.fallbackProviderID ?? "",
+                fallbackModelName: existing?.fallbackModelName ?? ""
+            )
+        }
+    }
+
+    private static func globalModelName(
+        defaultProviderID: TranslationProviderID,
+        providerConfigs: [ProviderConfig],
+        openAICompatibleModel: String
+    ) -> String {
+        if defaultProviderID == .openAICompatible {
+            return openAICompatibleModel
+        }
+
+        return providerConfigs.first(where: { $0.id == defaultProviderID })?.model ?? ""
     }
 }

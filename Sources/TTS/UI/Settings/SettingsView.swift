@@ -21,6 +21,11 @@ struct SettingsView: View {
                     Label("翻译服务", systemImage: "network")
                 }
 
+            scenarioTranslationSettings
+                .tabItem {
+                    Label("场景配置", systemImage: "square.grid.2x2")
+                }
+
             aiModeSettings
                 .tabItem {
                     Label("AI 模式", systemImage: "sparkles")
@@ -359,6 +364,46 @@ struct SettingsView: View {
         .padding()
     }
 
+    private var scenarioTranslationSettings: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 10) {
+                    Label("场景翻译配置", systemImage: "square.grid.2x2")
+                        .font(.headline)
+
+                    Spacer()
+
+                    Button("保存场景配置") {
+                        viewModel.saveScenarioTranslationConfigs()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
+                Text("为不同功能指定主要服务和可选备用服务。这里不会重复配置 API Key，服务商认证信息仍然在“翻译服务”页维护。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                if !viewModel.statusMessage.isEmpty {
+                    Text(viewModel.statusMessage)
+                        .font(.caption)
+                        .foregroundStyle(viewModel.statusIsError ? Color.red : Color.secondary)
+                }
+
+                VStack(spacing: 14) {
+                    ForEach($viewModel.scenarioTranslationConfigs) { $config in
+                        ScenarioTranslationConfigCard(
+                            config: $config,
+                            availableProviders: viewModel.availableScenarioProviderConfigs
+                        )
+                    }
+                }
+            }
+            .padding()
+        }
+        .background(.background)
+    }
+
     private var permissionPrivacySettings: some View {
         Form {
             Section("权限状态") {
@@ -491,6 +536,158 @@ private struct ModelSuggestionPicker: View {
     }
 }
 
+private struct ScenarioTranslationConfigCard: View {
+    @Binding var config: SimpleScenarioTranslationConfig
+    var availableProviders: [ProviderConfig]
+
+    private var scenario: TranslationScenario {
+        config.scenario
+    }
+
+    private var providerSelection: Binding<String> {
+        Binding(
+            get: {
+                if config.providerID.isEmpty {
+                    return availableProviders.first?.id.rawValue ?? ""
+                }
+                return config.providerID
+            },
+            set: { config.providerID = $0 }
+        )
+    }
+
+    private var fallbackProviderSelection: Binding<String> {
+        Binding(
+            get: { config.fallbackProviderID },
+            set: { config.fallbackProviderID = $0 }
+        )
+    }
+
+    private var selectedPrimaryProviderID: TranslationProviderID? {
+        TranslationProviderID(rawValue: config.providerID)
+    }
+
+    private var selectedFallbackProviderID: TranslationProviderID? {
+        TranslationProviderID(rawValue: config.fallbackProviderID)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(scenario.displayName)
+                    .font(.headline)
+
+                Text(scenario.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Toggle("使用全局默认配置", isOn: $config.useGlobalDefault)
+
+            if config.useGlobalDefault {
+                Text("此场景将使用翻译服务页中的默认配置。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Picker("主要服务商", selection: providerSelection) {
+                        ForEach(availableProviders) { provider in
+                            Text(provider.displayName)
+                                .tag(provider.id.rawValue)
+                        }
+                    }
+                    .pickerStyle(.menu)
+
+                    TextField("主要模型", text: $config.modelName)
+                        .textFieldStyle(.roundedBorder)
+
+                    if let selectedPrimaryProviderID {
+                        ModelSuggestionPicker(
+                            title: "主要模型建议",
+                            providerID: selectedPrimaryProviderID,
+                            modelName: $config.modelName
+                        )
+                    }
+
+                    Toggle("启用备用服务", isOn: $config.fallbackEnabled)
+
+                    if config.fallbackEnabled {
+                        Picker("备用服务商", selection: fallbackProviderSelection) {
+                            Text("未选择")
+                                .tag("")
+
+                            ForEach(availableProviders) { provider in
+                                Text(provider.displayName)
+                                    .tag(provider.id.rawValue)
+                            }
+                        }
+                        .pickerStyle(.menu)
+
+                        TextField("备用模型", text: $config.fallbackModelName)
+                            .textFieldStyle(.roundedBorder)
+
+                        if let selectedFallbackProviderID {
+                            ModelSuggestionPicker(
+                                title: "备用模型建议",
+                                providerID: selectedFallbackProviderID,
+                                modelName: $config.fallbackModelName
+                            )
+                        }
+                    }
+                }
+            }
+
+            if scenario == .ocrCleanup {
+                hintRow(
+                    "该场景需要支持 Prompt 的 AI 模型，不适合传统翻译 API。",
+                    systemImage: "sparkles.rectangle.stack"
+                )
+            }
+
+            if scenario == .imageOverlay {
+                hintRow(
+                    "建议选择输出稳定、译文简洁的 AI 模型。",
+                    systemImage: "text.below.photo"
+                )
+            }
+
+            Text("默认翻译模式：\(scenario.defaultTranslationMode.displayName)")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        )
+    }
+
+    private func hintRow(_ text: String, systemImage: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.secondary)
+                .padding(.top, 1)
+
+            Text(text)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+    }
+}
+
 private struct ProviderConfigRow: View {
     var config: ProviderConfig
     var isDefault: Bool
@@ -584,6 +781,7 @@ final class SettingsViewModel: ObservableObject {
     @Published var targetLanguage: String
     @Published var translationDirection: TranslationDirection
     @Published var defaultTranslationMode: TranslationMode
+    @Published var scenarioTranslationConfigs: [SimpleScenarioTranslationConfig] = []
     @Published var statusMessage = ""
     @Published var statusIsError = false
     @Published var isAccessibilityTrusted = false
@@ -644,6 +842,13 @@ final class SettingsViewModel: ObservableObject {
         providerConfigs.filter { !aiProviderIDs.contains($0.id) }
     }
 
+    var availableScenarioProviderConfigs: [ProviderConfig] {
+        providerConfigs.filter {
+            $0.id.isTranslationProvider &&
+            isImplemented($0.id)
+        }
+    }
+
     var accessibilityStatus: String {
         isAccessibilityTrusted ? "已授权" : "未授权"
     }
@@ -661,6 +866,7 @@ final class SettingsViewModel: ObservableObject {
         targetLanguage = configurationStore.targetLanguage
         translationDirection = configurationStore.translationDirection
         defaultTranslationMode = configurationStore.defaultTranslationMode
+        scenarioTranslationConfigs = configurationStore.scenarioTranslationConfigs
 
         if fallbackProviderID == defaultProviderID {
             fallbackProviderID = nil
@@ -718,6 +924,25 @@ final class SettingsViewModel: ObservableObject {
         )
         reload()
         status("fallback 设置已保存。", isError: false)
+    }
+
+    func saveScenarioTranslationConfigs() {
+        configurationStore.setScenarioTranslationConfigs(
+            scenarioTranslationConfigs.map { config in
+                var next = config
+                if next.useGlobalDefault {
+                    next.fallbackEnabled = false
+                    next.fallbackProviderID = ""
+                    next.fallbackModelName = ""
+                } else if !next.fallbackEnabled {
+                    next.fallbackProviderID = ""
+                    next.fallbackModelName = ""
+                }
+                return next
+            }
+        )
+        reload()
+        status("场景翻译配置已保存。", isError: false)
     }
 
     func saveSelectedProvider() {

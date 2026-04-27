@@ -3,6 +3,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @StateObject var viewModel: HistoryViewModel
+    @State private var showingClearAllConfirmation = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -12,6 +13,20 @@ struct HistoryView: View {
         }
         .frame(minWidth: 760, minHeight: 460)
         .background(.background)
+        .confirmationDialog(
+            "清空全部历史记录？",
+            isPresented: $showingClearAllConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("清空历史记录", role: .destructive) {
+                Task {
+                    await viewModel.clearAll()
+                }
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("这只会清空历史记录，已收藏内容会继续保留。")
+        }
         .task {
             await viewModel.load()
         }
@@ -44,9 +59,7 @@ struct HistoryView: View {
             }
 
             Button(role: .destructive) {
-                Task {
-                    await viewModel.clearAll()
-                }
+                showingClearAllConfirmation = true
             } label: {
                 Label("清空全部", systemImage: "trash")
             }
@@ -307,9 +320,7 @@ final class HistoryViewModel: ObservableObject {
     func delete(_ item: TranslationHistoryItem) async {
         do {
             try await historyStore.remove(id: item.id)
-            try await favoriteStore.removeFavorite(historyItemID: item.id)
             items.removeAll { $0.id == item.id }
-            favoriteIDs.remove(item.id)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription
@@ -318,11 +329,8 @@ final class HistoryViewModel: ObservableObject {
 
     func clearAll() async {
         do {
-            let ids = Set(items.map(\.id))
             try await historyStore.clearAll()
-            try await favoriteStore.removeFavorites(historyItemIDs: ids)
             items = []
-            favoriteIDs.subtract(ids)
             errorMessage = nil
         } catch {
             errorMessage = error.localizedDescription

@@ -45,7 +45,7 @@ final class OCRResultPanel {
             onCopy: copyToPasteboard(_:),
             onAICleanup: performAICleanup(text:),
             onTranslate: translateText(_:),
-            supportsAICleanup: providerFactory.defaultProviderSupportsTranslationModePrompts,
+            supportsAICleanup: true,
             onClose: hide
         )
 
@@ -142,13 +142,10 @@ final class OCRResultPanel {
     }
 
     private func performAICleanup(text: String) async throws -> String {
-        guard providerFactory.defaultProviderSupportsTranslationModePrompts else {
-            throw TranslationProviderError.providerMessage("当前默认服务不支持 AI 修复，请切换到 AI 大模型服务。")
-        }
-
         let item = try await translationService.translate(
             text: text,
             translationMode: .ocrCleanup,
+            scenario: .ocrCleanup,
             mode: .ocr
         )
         return item.translatedText
@@ -161,6 +158,7 @@ final class OCRResultPanel {
         do {
             let item = try await translationService.translate(
                 text: text,
+                scenario: .screenshot,
                 mode: .ocrTranslate
             )
             floatingPanel.showResult(item: item, near: anchor, presentationID: presentationID)

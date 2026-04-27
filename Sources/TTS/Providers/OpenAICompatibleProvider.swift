@@ -1,6 +1,6 @@
 import Foundation
 
-struct OpenAICompatibleProvider: TranslationProvider {
+struct OpenAICompatibleProvider: PromptCompletionProvider {
     let id: TranslationProviderID
     let displayName: String
 
@@ -29,30 +29,48 @@ struct OpenAICompatibleProvider: TranslationProvider {
     }
 
     func translate(_ request: TranslationRequest) async throws -> TranslationResponse {
-        var urlRequest = URLRequest(url: endpoint)
-        urlRequest.httpMethod = "POST"
-        urlRequest.timeoutInterval = timeout
-        urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
         let prompt = PromptBuilder.build(
             mode: request.translationMode,
             sourceText: request.text,
             targetLanguage: request.targetLanguage
         )
+        let translatedText = try await complete(
+            systemPrompt: prompt.system,
+            userPrompt: prompt.user,
+            temperature: 0.2
+        )
+
+        return TranslationResponse(
+            translatedText: translatedText,
+            providerID: id,
+            detectedSourceLanguage: nil
+        )
+    }
+
+    func complete(
+        systemPrompt: String,
+        userPrompt: String,
+        temperature: Double
+    ) async throws -> String {
+        var urlRequest = URLRequest(url: endpoint)
+        urlRequest.httpMethod = "POST"
+        urlRequest.timeoutInterval = timeout
+        urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
 
         let body = ChatCompletionRequest(
             model: model,
             messages: [
                 .init(
                     role: "system",
-                    content: prompt.system
+                    content: systemPrompt
                 ),
                 .init(
                     role: "user",
-                    content: prompt.user
+                    content: userPrompt
                 )
             ],
-            temperature: 0.2
+            temperature: temperature
         )
         urlRequest.httpBody = try JSONEncoder().encode(body)
 
@@ -72,11 +90,7 @@ struct OpenAICompatibleProvider: TranslationProvider {
                 throw TranslationProviderError.invalidResponse
             }
 
-            return TranslationResponse(
-                translatedText: translatedText,
-                providerID: id,
-                detectedSourceLanguage: nil
-            )
+            return translatedText
         } catch let error as TranslationProviderError {
             throw error
         } catch let urlError as URLError {

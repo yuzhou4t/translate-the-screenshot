@@ -217,34 +217,12 @@ final class ScreenshotCaptureController {
                         throw ScreenshotCaptureError.noRecognizedText
                     }
 
-                    var translatedBlocks: [String] = []
-                    translatedBlocks.reserveCapacity(groupedBlocks.count)
-                    var successCount = 0
+                    let translationResults = try await translationService.translateImageOverlayBlocks(groupedBlocks)
+                    let translatedBlocks = translationResults.map(\.translatedText)
+                    let summary = translationResults.imageOverlaySummary
+                    let translatedCount = summary.successCount + summary.fallbackCount
 
-                    for block in groupedBlocks {
-                        do {
-                            let response = try await translationService.translateTextOnly(
-                                block.text,
-                                translationMode: .imageOverlay
-                            )
-                            let translatedText = response.translatedText
-                                .trimmingCharacters(in: .whitespacesAndNewlines)
-
-                            if translatedText.isEmpty {
-                                translatedBlocks.append(block.text)
-                            } else {
-                                translatedBlocks.append(translatedText)
-                                if translatedText != block.text {
-                                    successCount += 1
-                                }
-                            }
-                        } catch {
-                            translatedBlocks.append(block.text)
-                            print("overlay block translation failed: \(error.localizedDescription)")
-                        }
-                    }
-
-                    guard successCount > 0 else {
+                    guard translatedCount > 0 else {
                         throw ScreenshotCaptureError.overlayTranslationFailed
                     }
 
@@ -254,10 +232,15 @@ final class ScreenshotCaptureController {
                             originalImage: originalImage,
                             blocks: groupedBlocks,
                             translations: translatedBlocks,
+                            summary: summary,
                             initialStyle: .solid
                         )
-                        if successCount < groupedBlocks.count {
-                            toastPanel.show("部分文本块翻译失败，已保留原文", near: point)
+                        if summary.fallbackCount > 0 && summary.originalKeptCount > 0 {
+                            toastPanel.show("部分文本块使用备用服务完成翻译。部分文本块翻译失败，已保留原文。", near: point)
+                        } else if summary.fallbackCount > 0 {
+                            toastPanel.show("部分文本块使用备用服务完成翻译。", near: point)
+                        } else if summary.originalKeptCount > 0 {
+                            toastPanel.show("部分文本块翻译失败，已保留原文。", near: point)
                         }
                     }
                     return
@@ -293,6 +276,7 @@ final class ScreenshotCaptureController {
                 case .translate:
                     let item = try await translationService.translate(
                         text: plainText,
+                        scenario: .screenshot,
                         mode: .ocrTranslate
                     )
                     await MainActor.run {

@@ -6,6 +6,11 @@ struct PromptBuilder {
         var user: String
     }
 
+    struct ImageOverlayBatchBlock: Encodable {
+        var id: String
+        var text: String
+    }
+
     static func build(
         mode: TranslationMode,
         sourceText: String,
@@ -167,15 +172,20 @@ struct PromptBuilder {
             Prompt(
                 system: """
                 You are a translation engine for image overlay replacement.
-                Translate the text into the target language with wording that is as concise as possible while preserving the intended meaning.
-                The result should fit back into the original image text region, so prefer shorter natural phrasing when possible.
-                Do not explain, annotate, add notes, add prefixes, or include alternatives.
-                Preserve numbers, units, brand names, product names, code, identifiers, URLs, and other text that should remain unchanged.
+                Translate the text into the target language with the shortest natural wording that still preserves the intended meaning.
+                The result will be drawn back into the original image text region, so prioritize compact, stable phrasing.
+                Do not explain, annotate, add notes, add prefixes such as "Translation:", or include alternatives.
+                Do not expand short source text into longer sentences.
+                For buttons, menus, labels, and UI text, prefer brief interface-style wording.
+                For full sentences, keep the meaning accurate but compress the expression when possible.
+                Preserve numbers, units, brand names, product names, code, identifiers, URLs, and necessary symbols.
+                Avoid long sentences unless the source itself clearly requires them.
                 Return only the translated text.
                 """,
                 user: """
                 Translate the following text into \(targetLanguage) for image overlay use.
                 Keep it short, clear, and suitable for placing back into the original image area.
+                If the source is a short text block, keep the translation equally short.
 
                 <source_text>
                 \(sourceText)
@@ -183,5 +193,58 @@ struct PromptBuilder {
                 """
             )
         }
+    }
+
+    static func buildImageOverlayBatchPrompt(
+        blocks: [ImageOverlayBatchBlock],
+        targetLanguage: String
+    ) -> Prompt {
+        let encodedBlocks = (try? JSONEncoder().encode(blocks))
+            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
+
+        return Prompt(
+            system: """
+            You translate a batch of OCR text blocks extracted from the same screenshot for image overlay replacement.
+            Use the shared screenshot context to keep wording accurate and consistent across blocks.
+            Return ONLY a JSON array.
+            Do not output Markdown.
+            Do not output code fences.
+            Do not output explanations, notes, comments, or any text before or after the JSON.
+
+            You must return one JSON object for every input block id.
+            Do not omit any id.
+            Do not add any new id.
+            If a block is empty, unclear, or should not be translated, return the original source text as the translation for that same id.
+
+            Required JSON format:
+            [
+              {
+                "id": "original block id",
+                "translation": "concise translation"
+              }
+            ]
+
+            Translation rules:
+            - Translate into \(targetLanguage).
+            - Keep each translation concise and suitable for placing back into the original image region.
+            - Preserve numbers, units, code, variable names, API names, identifiers, URLs, brand names, product names, and necessary symbols.
+            - For UI text, menus, buttons, labels, tabs, and tags, prefer short and natural interface wording.
+            - For technical text, do not arbitrarily translate technical identifiers or API names.
+            - Do not expand short text into longer sentences.
+            - Do not add explanations.
+            - Do not add parentheses notes.
+            - Do not add prefixes such as "Translation:".
+            """
+            ,
+            user: """
+            Translate the following OCR text blocks from the same screenshot into \(targetLanguage).
+            Keep context consistency across blocks.
+            Return only the JSON array in the required schema and preserve exact id alignment.
+
+            <input_blocks_json>
+            \(encodedBlocks)
+            </input_blocks_json>
+            """
+        )
     }
 }

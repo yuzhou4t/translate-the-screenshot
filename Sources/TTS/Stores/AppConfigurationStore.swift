@@ -29,6 +29,12 @@ final class ProviderConfigStore: ObservableObject {
             endpoint: next.openAICompatibleEndpoint,
             model: next.openAICompatibleModel
         )
+        next.scenarioTranslationConfigs = AppConfiguration.normalizedScenarioConfigs(
+            next.scenarioTranslationConfigs,
+            defaultProviderID: next.defaultProviderID,
+            providerConfigs: next.providerConfigs,
+            openAICompatibleModel: next.openAICompatibleModel
+        )
         next.providerID = next.defaultProviderID
         configuration = next
         persist()
@@ -74,6 +80,10 @@ final class ProviderConfigStore: ObservableObject {
         configuration.defaultTranslationMode
     }
 
+    var scenarioTranslationConfigs: [SimpleScenarioTranslationConfig] {
+        configuration.scenarioTranslationConfigs
+    }
+
     func providerConfig(for id: TranslationProviderID) -> ProviderConfig? {
         configuration.providerConfigs.first { $0.id == id }
     }
@@ -90,6 +100,12 @@ final class ProviderConfigStore: ObservableObject {
     func setDefaultTranslationMode(_ mode: TranslationMode) {
         update { configuration in
             configuration.defaultTranslationMode = mode
+        }
+    }
+
+    func setScenarioTranslationConfigs(_ configs: [SimpleScenarioTranslationConfig]) {
+        update { configuration in
+            configuration.scenarioTranslationConfigs = configs
         }
     }
 
@@ -166,6 +182,13 @@ final class ProviderConfigStore: ObservableObject {
                 configuration.fallbackProviderID = nil
                 configuration.fallbackModel = nil
             }
+
+            configuration.scenarioTranslationConfigs = AppConfiguration.normalizedScenarioConfigs(
+                configuration.scenarioTranslationConfigs,
+                defaultProviderID: configuration.defaultProviderID,
+                providerConfigs: configuration.providerConfigs,
+                openAICompatibleModel: configuration.openAICompatibleModel
+            )
         }
     }
 

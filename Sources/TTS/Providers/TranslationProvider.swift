@@ -7,6 +7,14 @@ protocol TranslationProvider: Sendable {
     func translate(_ request: TranslationRequest) async throws -> TranslationResponse
 }
 
+protocol PromptCompletionProvider: TranslationProvider {
+    func complete(
+        systemPrompt: String,
+        userPrompt: String,
+        temperature: Double
+    ) async throws -> String
+}
+
 enum TranslationProviderError: LocalizedError {
     case missingAPIKey
     case invalidEndpoint
@@ -82,6 +90,25 @@ final class TranslationProviderFactory {
 
     var defaultProviderSupportsTranslationModePrompts: Bool {
         configurationStore.defaultProviderID.supportsTranslationModePrompts
+    }
+
+    var configurationStoreRef: AppConfigurationStore {
+        configurationStore
+    }
+
+    var defaultModelName: String {
+        if defaultProviderID == .openAICompatible {
+            return configurationStore.configuration.openAICompatibleModel
+        }
+        return defaultProviderConfig()?.model ?? ""
+    }
+
+    func providerConfig(for id: TranslationProviderID) -> ProviderConfig? {
+        providerRegistry.providerConfig(for: id)
+    }
+
+    func supportsTranslationModePrompts(providerID: TranslationProviderID) -> Bool {
+        providerID.supportsTranslationModePrompts
     }
 
     func defaultProviderConfig() -> ProviderConfig? {
