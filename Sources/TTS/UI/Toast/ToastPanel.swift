@@ -11,7 +11,29 @@ final class ToastPanel {
     func show(_ message: String, near point: NSPoint? = nil) {
         dismissTask?.cancel()
 
-        let view = ToastView(message: message)
+        let view = ToastView(message: message, isLoading: false)
+        present(view: view, near: point)
+
+        dismissTask = Task { [weak self] in
+            try? await Task.sleep(for: .seconds(1.6))
+            await MainActor.run {
+                self?.panel?.orderOut(nil)
+            }
+        }
+    }
+
+    func showLoading(_ message: String, near point: NSPoint? = nil) {
+        dismissTask?.cancel()
+        let view = ToastView(message: message, isLoading: true)
+        present(view: view, near: point)
+    }
+
+    func hide() {
+        dismissTask?.cancel()
+        panel?.orderOut(nil)
+    }
+
+    private func present(view: ToastView, near point: NSPoint?) {
         if panel == nil {
             let newPanel = NSPanel(
                 contentRect: NSRect(origin: .zero, size: panelSize),
@@ -38,13 +60,6 @@ final class ToastPanel {
 
         panel?.setFrame(NSRect(origin: origin(near: point), size: panelSize), display: true)
         panel?.orderFrontRegardless()
-
-        dismissTask = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(1.6))
-            await MainActor.run {
-                self?.panel?.orderOut(nil)
-            }
-        }
     }
 
     private func origin(near point: NSPoint?) -> NSPoint {
@@ -72,11 +87,21 @@ final class ToastPanel {
 
 private struct ToastView: View {
     var message: String
+    var isLoading: Bool
 
     var body: some View {
-        Text(message)
-            .font(.system(size: 14, weight: .medium))
-            .foregroundStyle(.primary)
+        HStack(spacing: 10) {
+            if isLoading {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
+            Text(message)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(.primary)
+                .multilineTextAlignment(.leading)
+                .lineLimit(2)
+        }
             .frame(width: 220, height: 56)
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))

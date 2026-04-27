@@ -64,6 +64,41 @@ final class TranslationProviderFactory {
         configurationStore.defaultTranslationMode
     }
 
+    var defaultProviderID: TranslationProviderID {
+        configurationStore.defaultProviderID
+    }
+
+    var fallbackEnabled: Bool {
+        configurationStore.fallbackEnabled
+    }
+
+    var fallbackProviderID: TranslationProviderID? {
+        configurationStore.fallbackProviderID
+    }
+
+    var fallbackModel: String? {
+        configurationStore.fallbackModel
+    }
+
+    var defaultProviderSupportsTranslationModePrompts: Bool {
+        configurationStore.defaultProviderID.supportsTranslationModePrompts
+    }
+
+    func defaultProviderConfig() -> ProviderConfig? {
+        providerRegistry.defaultProviderConfig
+    }
+
+    func fallbackProviderConfig() -> ProviderConfig? {
+        guard let id = configurationStore.fallbackProviderID else {
+            return nil
+        }
+        return providerRegistry.providerConfig(for: id)
+    }
+
+    func makeProvider(config: ProviderConfig, modelOverride: String? = nil) throws -> any TranslationProvider {
+        try providerRegistry.makeProvider(config: config, modelOverride: modelOverride)
+    }
+
     func makeActiveProvider() throws -> any TranslationProvider {
         try providerRegistry.makeDefaultProvider()
     }

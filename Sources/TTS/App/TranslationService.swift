@@ -18,13 +18,12 @@ final class TranslationService {
         providerFactory.defaultTranslationMode
     }
 
-    func translate(
-        text: String,
+    func translateTextOnly(
+        _ text: String,
         sourceLanguage: String? = nil,
         targetLanguage: String? = nil,
-        translationMode: TranslationMode? = nil,
-        mode: TranslationHistoryMode
-    ) async throws -> TranslationHistoryItem {
+        translationMode: TranslationMode? = nil
+    ) async throws -> TranslationResponse {
         let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedText.isEmpty else {
             throw TranslationServiceError.emptyText
@@ -44,13 +43,35 @@ final class TranslationService {
             targetLanguage: finalTargetLanguage,
             translationMode: finalTranslationMode
         )
-        let response = try await translateWithFallback(request)
+
+        return try await translateWithFallback(request)
+    }
+
+    func translate(
+        text: String,
+        sourceLanguage: String? = nil,
+        targetLanguage: String? = nil,
+        translationMode: TranslationMode? = nil,
+        mode: TranslationHistoryMode
+    ) async throws -> TranslationHistoryItem {
+        let finalTranslationMode = translationMode ?? providerFactory.defaultTranslationMode
+        let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let finalTargetLanguage = targetLanguage?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let response = try await translateTextOnly(
+            trimmedText,
+            sourceLanguage: sourceLanguage,
+            targetLanguage: finalTargetLanguage,
+            translationMode: finalTranslationMode
+        )
         let item = TranslationHistoryItem(
             sourceText: trimmedText,
             translatedText: response.translatedText,
             providerID: response.providerID,
             sourceLanguage: response.detectedSourceLanguage,
-            targetLanguage: request.targetLanguage,
+            targetLanguage: finalTargetLanguage?.isEmpty == false
+                ? finalTargetLanguage!
+                : providerFactory.targetLanguage,
             createdAt: Date(),
             mode: mode,
             translationMode: finalTranslationMode
@@ -61,65 +82,161 @@ final class TranslationService {
     }
 
     private func translateWithFallback(_ request: TranslationRequest) async throws -> TranslationResponse {
-        let attempts = providerFactory.providerAttempts()
-        guard !attempts.isEmpty else {
+        if request.translationMode == .ocrCleanup, !providerFactory.defaultProviderSupportsTranslationModePrompts {
+            throw TranslationProviderError.providerMessage("当前默认服务不支持 AI 修复，请切换到 AI 大模型服务。")
+        }
+
+        guard let defaultConfig = providerFactory.defaultProviderConfig() else {
             throw TranslationProviderError.providerMessage("没有已启用且已接入的翻译服务。")
         }
 
-        var lastError: Error?
-        for (index, attempt) in attempts.enumerated() {
-            let providerName = attempt.config.displayName
+        let fallbackConfig = request.translationMode == .ocrCleanup
+            ? nil
+            : providerFactory.fallbackEnabled
+                ? providerFactory.fallbackProviderConfig()
+                : nil
 
-            do {
-                print("translation provider attempt: \(providerName)")
-                let provider = try attempt.makeProvider()
-                let response = try await provider.translate(request)
-                print("translation provider success: \(providerName)")
-                return response
-            } catch {
-                lastError = error
-                let reason = error.localizedDescription
-                print("translation provider failed: \(providerName), reason: \(reason)")
+        var attemptCount = 0
+        var failureKinds: [TranslationFailureKind] = []
+        var fallbackAttempted = false
 
-                if !shouldFallback(after: error, config: attempt.config) || index == attempts.indices.last {
-                    print("translation provider fallback stopped: \(providerName)")
-                    throw error
+        do {
+            attemptCount += 1
+            return try await runAttempt(
+                request,
+                config: defaultConfig,
+                modelOverride: nil,
+                attemptNumber: attemptCount,
+                note: "primary"
+            )
+        } catch {
+            let firstKind = classify(error)
+            failureKinds.append(firstKind)
+
+            if firstKind == .timeout, attemptCount < 3 {
+                do {
+                    attemptCount += 1
+                    return try await runAttempt(
+                        request,
+                        config: defaultConfig,
+                        modelOverride: nil,
+                        attemptNumber: attemptCount,
+                        note: "timeout-retry"
+                    )
+                } catch {
+                    failureKinds.append(classify(error))
                 }
+            }
 
-                let nextProviderName = attempts[index + 1].config.displayName
-                print("translation provider fallback: \(providerName) -> \(nextProviderName), reason: \(reason)")
+            if let fallbackConfig,
+               fallbackConfig.id != defaultConfig.id,
+               attemptCount < 3 {
+                do {
+                    attemptCount += 1
+                    fallbackAttempted = true
+                    return try await runAttempt(
+                        request,
+                        config: fallbackConfig,
+                        modelOverride: providerFactory.fallbackModel,
+                        attemptNumber: attemptCount,
+                        note: "fallback"
+                    )
+                } catch {
+                    failureKinds.append(classify(error))
+                }
             }
         }
 
-        throw lastError ?? TranslationProviderError.providerMessage("所有翻译服务均失败。")
+        throw TranslationProviderError.providerMessage(
+            finalFailureMessage(
+                failureKinds: failureKinds,
+                fallbackAttempted: fallbackAttempted
+            )
+        )
     }
 
-    private func shouldFallback(after error: Error, config: ProviderConfig) -> Bool {
+    private func runAttempt(
+        _ request: TranslationRequest,
+        config: ProviderConfig,
+        modelOverride: String?,
+        attemptNumber: Int,
+        note: String
+    ) async throws -> TranslationResponse {
+        let providerLabel = config.displayName
+        let modelLabel = modelOverride ?? config.model ?? "-"
+        print("translation provider attempt[\(attemptNumber)] \(note): provider=\(providerLabel), model=\(modelLabel)")
+
+        let provider = try providerFactory.makeProvider(config: config, modelOverride: modelOverride)
+        do {
+            let response = try await provider.translate(request)
+            print("translation provider success[\(attemptNumber)]: provider=\(providerLabel)")
+            return response
+        } catch {
+            print("translation provider failed[\(attemptNumber)]: provider=\(providerLabel), kind=\(classify(error).rawValue), reason=\(error.localizedDescription)")
+            throw error
+        }
+    }
+
+    private func finalFailureMessage(
+        failureKinds: [TranslationFailureKind],
+        fallbackAttempted: Bool
+    ) -> String {
+        if failureKinds.contains(.rateLimited) {
+            return fallbackAttempted
+                ? "当前服务商请求失败，已尝试备用服务商，但仍未成功。请检查服务商额度或限流状态。"
+                : "当前服务商请求失败，请检查服务商额度或限流状态。"
+        }
+
+        if failureKinds.contains(.invalidAPIKey) {
+            return fallbackAttempted
+                ? "当前服务商请求失败，已尝试备用服务商，但仍未成功。请检查 API Key、网络连接或服务商额度。"
+                : "当前服务商请求失败，请检查 API Key、网络连接或服务商额度。"
+        }
+
+        return fallbackAttempted
+            ? "当前服务商请求失败，已尝试备用服务商，但仍未成功。请检查 API Key、网络连接或服务商额度。"
+            : "当前服务商请求失败。请检查 API Key、网络连接或服务商额度。"
+    }
+
+    private func classify(_ error: Error) -> TranslationFailureKind {
         switch error {
-        case TranslationProviderError.authenticationFailed:
-            return config.shouldFallbackOnAuthFailure
-        case TranslationProviderError.rateLimited,
-            TranslationProviderError.timeout,
-            TranslationProviderError.network,
-            TranslationProviderError.invalidResponse,
-            TranslationProviderError.invalidEndpoint,
-            TranslationProviderError.missingAPIKey,
+        case TranslationProviderError.timeout:
+            return .timeout
+        case TranslationProviderError.authenticationFailed,
+            TranslationProviderError.missingAPIKey:
+            return .invalidAPIKey
+        case TranslationProviderError.rateLimited:
+            return .rateLimited
+        case TranslationProviderError.network:
+            return .networkError
+        case TranslationProviderError.invalidResponse:
+            return .emptyResult
+        case TranslationProviderError.invalidEndpoint,
             TranslationProviderError.providerMessage:
-            return true
+            return .providerError
         default:
-            if let urlError = error as? URLError {
-                return [
-                    .timedOut,
-                    .notConnectedToInternet,
-                    .networkConnectionLost,
-                    .cannotFindHost,
-                    .cannotConnectToHost,
-                    .dnsLookupFailed
-                ].contains(urlError.code)
+            if let urlError = error as? URLError,
+               [
+                URLError.Code.notConnectedToInternet,
+                .networkConnectionLost,
+                .cannotFindHost,
+                .cannotConnectToHost,
+                .dnsLookupFailed
+               ].contains(urlError.code) {
+                return .networkError
             }
-            return true
+            return .providerError
         }
     }
+}
+
+private enum TranslationFailureKind: String {
+    case timeout
+    case invalidAPIKey
+    case rateLimited
+    case networkError
+    case providerError
+    case emptyResult
 }
 
 enum TranslationServiceError: LocalizedError {

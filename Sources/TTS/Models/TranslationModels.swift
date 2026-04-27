@@ -1,5 +1,17 @@
 import Foundation
 
+struct ModelSuggestion: Identifiable, Hashable {
+    var value: String
+    var label: String
+
+    var id: String { "\(value)|\(label)" }
+
+    init(_ value: String, label: String? = nil) {
+        self.value = value
+        self.label = label ?? value
+    }
+}
+
 enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
     case openAICompatible = "openai-compatible"
     case myMemory = "mymemory"
@@ -66,18 +78,63 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
         }
     }
 
-    var suggestedModelNames: [String] {
+    var suggestedModels: [ModelSuggestion] {
         switch self {
         case .openAICompatible:
-            ["gpt-4o-mini", "gpt-4o", "gpt-4.1-mini", "gpt-4.1"]
+            [
+                .init("gpt-5.2"),
+                .init("gpt-5.2-pro"),
+                .init("gpt-5"),
+                .init("gpt-5-mini"),
+                .init("gpt-5-nano"),
+                .init("gpt-4.1"),
+                .init("gpt-4.1-mini"),
+                .init("gpt-4o"),
+                .init("gpt-4o-mini"),
+                .init("o4-mini")
+            ]
         case .glm4Flash:
-            ["glm-4-flash-250414", "glm-4-flash", "glm-4-plus", "glm-4-air", "glm-4-airx", "glm-4-long", "glm-z1-flash"]
+            [
+                .init("glm-4.7"),
+                .init("glm-4.7-flash"),
+                .init("glm-4.7-flashx"),
+                .init("glm-4.6"),
+                .init("glm-4.5"),
+                .init("glm-4.5-air"),
+                .init("glm-4.5-x"),
+                .init("glm-4.5-flash"),
+                .init("glm-z1-flash"),
+                .init("glm-z1-air"),
+                .init("glm-z1-airx"),
+                .init("glm-z1-flashx")
+            ]
         case .siliconFlow:
-            ["Qwen/Qwen2.5-7B-Instruct", "Qwen/Qwen2.5-14B-Instruct", "Qwen/Qwen2.5-32B-Instruct", "deepseek-ai/DeepSeek-V3", "deepseek-ai/DeepSeek-R1"]
+            [
+                .init("deepseek-ai/DeepSeek-V3.2"),
+                .init("Pro/deepseek-ai/DeepSeek-V3.2"),
+                .init("deepseek-ai/DeepSeek-V3.1-Terminus"),
+                .init("deepseek-ai/DeepSeek-R1"),
+                .init("Pro/deepseek-ai/DeepSeek-R1"),
+                .init("moonshotai/Kimi-K2-Instruct-0905"),
+                .init("Pro/moonshotai/Kimi-K2-Instruct-0905"),
+                .init("Qwen/Qwen3.5-397B-A17B"),
+                .init("Qwen/Qwen2.5-32B-Instruct"),
+                .init("Qwen/Qwen2.5-14B-Instruct"),
+                .init("Qwen/Qwen2.5-7B-Instruct")
+            ]
         case .deepSeek:
-            ["deepseek-chat", "deepseek-reasoner"]
+            [
+                .init("deepseek-chat", label: "deepseek-chat / DeepSeek-V3.2"),
+                .init("deepseek-reasoner", label: "deepseek-reasoner / DeepSeek-V3.2 Thinking")
+            ]
         case .gemini:
-            ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash", "gemini-1.5-flash"]
+            [
+                .init("gemini-2.5-pro"),
+                .init("gemini-2.5-flash"),
+                .init("gemini-2.5-flash-lite"),
+                .init("gemini-2.5-flash-preview-09-2025"),
+                .init("gemini-2.5-flash-lite-preview-09-2025")
+            ]
         case .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .localOCR:
             []
         }
@@ -347,6 +404,9 @@ struct AppConfiguration: Codable, Equatable {
     var translationDirection: TranslationDirection
     var providerConfigs: [ProviderConfig]
     var defaultProviderID: TranslationProviderID
+    var fallbackEnabled: Bool
+    var fallbackProviderID: TranslationProviderID?
+    var fallbackModel: String?
     var defaultTranslationMode: TranslationMode
 
     static let `default` = AppConfiguration(
@@ -357,6 +417,9 @@ struct AppConfiguration: Codable, Equatable {
         translationDirection: .autoToChinese,
         providerConfigs: [.openAICompatibleDefault, .myMemoryDefault],
         defaultProviderID: .myMemory,
+        fallbackEnabled: false,
+        fallbackProviderID: nil,
+        fallbackModel: nil,
         defaultTranslationMode: .accurate
     )
 
@@ -368,6 +431,9 @@ struct AppConfiguration: Codable, Equatable {
         case translationDirection
         case providerConfigs
         case defaultProviderID
+        case fallbackEnabled
+        case fallbackProviderID
+        case fallbackModel
         case defaultTranslationMode
     }
 
@@ -379,6 +445,9 @@ struct AppConfiguration: Codable, Equatable {
         translationDirection: TranslationDirection,
         providerConfigs: [ProviderConfig],
         defaultProviderID: TranslationProviderID,
+        fallbackEnabled: Bool,
+        fallbackProviderID: TranslationProviderID?,
+        fallbackModel: String?,
         defaultTranslationMode: TranslationMode
     ) {
         self.providerID = providerID
@@ -388,6 +457,9 @@ struct AppConfiguration: Codable, Equatable {
         self.translationDirection = translationDirection
         self.providerConfigs = providerConfigs
         self.defaultProviderID = defaultProviderID
+        self.fallbackEnabled = fallbackEnabled
+        self.fallbackProviderID = fallbackProviderID
+        self.fallbackModel = fallbackModel
         self.defaultTranslationMode = defaultTranslationMode
     }
 
@@ -400,6 +472,9 @@ struct AppConfiguration: Codable, Equatable {
         translationDirection = try container.decodeIfPresent(TranslationDirection.self, forKey: .translationDirection) ??
             TranslationDirection.inferred(from: targetLanguage)
         defaultProviderID = try container.decodeIfPresent(TranslationProviderID.self, forKey: .defaultProviderID) ?? providerID
+        fallbackEnabled = try container.decodeIfPresent(Bool.self, forKey: .fallbackEnabled) ?? false
+        fallbackProviderID = try container.decodeIfPresent(TranslationProviderID.self, forKey: .fallbackProviderID)
+        fallbackModel = try container.decodeIfPresent(String.self, forKey: .fallbackModel)
         defaultTranslationMode = try container.decodeIfPresent(TranslationMode.self, forKey: .defaultTranslationMode) ?? .accurate
 
         let decodedConfigs = try container.decodeIfPresent([ProviderConfig].self, forKey: .providerConfigs) ?? []
@@ -409,6 +484,11 @@ struct AppConfiguration: Codable, Equatable {
             endpoint: openAICompatibleEndpoint,
             model: openAICompatibleModel
         )
+
+        if fallbackProviderID == defaultProviderID {
+            fallbackProviderID = nil
+            fallbackModel = nil
+        }
     }
 
     static func normalizedConfigs(

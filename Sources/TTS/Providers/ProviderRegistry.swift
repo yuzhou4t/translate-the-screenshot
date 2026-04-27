@@ -31,6 +31,10 @@ final class ProviderRegistry {
         configStore.providerConfig(for: configStore.defaultProviderID)
     }
 
+    func providerConfig(for id: TranslationProviderID) -> ProviderConfig? {
+        configStore.providerConfig(for: id)
+    }
+
     func register(_ descriptor: ProviderDescriptor) {
         descriptors[descriptor.id] = descriptor
     }
@@ -91,7 +95,7 @@ final class ProviderRegistry {
         }
     }
 
-    func makeProvider(config: ProviderConfig) throws -> any TranslationProvider {
+    func makeProvider(config: ProviderConfig, modelOverride: String? = nil) throws -> any TranslationProvider {
         guard descriptor(for: config.id)?.isImplemented == true else {
             throw TranslationProviderError.providerMessage("\(config.displayName) 尚未接入。")
         }
@@ -110,7 +114,7 @@ final class ProviderRegistry {
 
             return OpenAICompatibleProvider(
                 endpoint: endpoint,
-                model: config.model ?? "gpt-4o-mini",
+                model: modelOverride ?? config.model ?? "gpt-4o-mini",
                 apiKey: apiKey,
                 timeout: config.timeout
             )
@@ -165,7 +169,7 @@ final class ProviderRegistry {
                 endpoint: endpoint,
                 secretID: secretID,
                 secretKey: secretKey,
-                region: config.model ?? "ap-guangzhou",
+                region: modelOverride ?? config.model ?? "ap-guangzhou",
                 timeout: config.timeout
             )
         case .volcengine:
@@ -185,7 +189,7 @@ final class ProviderRegistry {
                 endpoint: endpoint,
                 accessKeyID: accessKeyID,
                 secretAccessKey: secretAccessKey,
-                region: config.model ?? "cn-north-1",
+                region: modelOverride ?? config.model ?? "cn-north-1",
                 timeout: config.timeout
             )
         case .bing:
@@ -202,7 +206,7 @@ final class ProviderRegistry {
             return BingTranslateProvider(
                 endpoint: endpoint,
                 apiKey: apiKey,
-                region: config.model,
+                region: modelOverride ?? config.model,
                 timeout: config.timeout
             )
         case .baidu:
@@ -239,7 +243,7 @@ final class ProviderRegistry {
                 id: .glm4Flash,
                 displayName: config.displayName,
                 endpoint: endpoint,
-                model: config.model ?? "glm-4-flash-250414",
+                model: modelOverride ?? config.model ?? "glm-4-flash-250414",
                 apiKey: apiKey,
                 timeout: config.timeout
             )
@@ -258,7 +262,7 @@ final class ProviderRegistry {
                 id: .siliconFlow,
                 displayName: config.displayName,
                 endpoint: endpoint,
-                model: config.model ?? "Qwen/Qwen2.5-7B-Instruct",
+                model: modelOverride ?? config.model ?? "Qwen/Qwen2.5-7B-Instruct",
                 apiKey: apiKey,
                 timeout: config.timeout
             )
@@ -277,7 +281,7 @@ final class ProviderRegistry {
                 id: .deepSeek,
                 displayName: config.displayName,
                 endpoint: endpoint,
-                model: config.model ?? "deepseek-chat",
+                model: modelOverride ?? config.model ?? "deepseek-chat",
                 apiKey: apiKey,
                 timeout: config.timeout
             )
@@ -296,7 +300,7 @@ final class ProviderRegistry {
                 id: .gemini,
                 displayName: config.displayName,
                 endpoint: endpoint,
-                model: config.model ?? "gemini-2.5-flash",
+                model: modelOverride ?? config.model ?? "gemini-2.5-flash",
                 apiKey: apiKey,
                 timeout: config.timeout
             )

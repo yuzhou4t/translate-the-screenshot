@@ -9,6 +9,7 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
     case ocrCleanup
     case bilingual
     case polished
+    case imageOverlay
 
     var id: String { rawValue }
 
@@ -30,6 +31,31 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
             "双语输出"
         case .polished:
             "翻译并润色"
+        case .imageOverlay:
+            "图片覆盖翻译"
+        }
+    }
+
+    var englishDisplayName: String {
+        switch self {
+        case .fast:
+            "Fast Translation"
+        case .accurate:
+            "Accurate Translation"
+        case .natural:
+            "Natural Translation"
+        case .academic:
+            "Academic Translation"
+        case .technical:
+            "Technical Translation"
+        case .ocrCleanup:
+            "OCR Cleanup"
+        case .bilingual:
+            "Bilingual Output"
+        case .polished:
+            "Polished Translation"
+        case .imageOverlay:
+            "Image Overlay Translation"
         }
     }
 
@@ -51,6 +77,8 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
             "同时输出原文和译文，便于对照阅读。"
         case .polished:
             "翻译后进一步润色，使表达更清晰流畅。"
+        case .imageOverlay:
+            "面向图片覆盖场景输出更短、更紧凑的译文，方便放回原图文字区域。"
         }
     }
 
@@ -72,54 +100,8 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
             "textformat.abc"
         case .polished:
             "wand.and.stars"
+        case .imageOverlay:
+            "text.below.photo"
         }
-    }
-
-    var systemPrompt: String {
-        switch self {
-        case .fast:
-            "You are a fast translation engine. Translate quickly and concisely. Return only the translation."
-        case .accurate:
-            "You are an accurate translation engine. Preserve the original meaning, tone, terminology, formatting, and information order. Return only the translation."
-        case .natural:
-            "You are a natural translation editor. Translate faithfully, then phrase the result in fluent, idiomatic target-language expression. Return only the translation."
-        case .academic:
-            "You are a senior academic translator. Produce publication-quality academic prose with formal register, precise terminology, consistent concepts, clear logical connectors, and an objective tone. Avoid colloquial wording, over-polishing, marketing language, and unsupported additions. Preserve citations, numbers, headings, and paragraph structure. Return only the translation."
-        case .technical:
-            "You are a technical translation engine. Preserve code, variable names, Markdown, API names, commands, URLs, and technical identifiers exactly unless they are natural-language prose. Return only the translation."
-        case .ocrCleanup:
-            "You are an OCR cleanup engine. Repair obvious OCR errors, restore paragraph structure, and remove recognition noise. Preserve the original language and meaning. Do not translate or rewrite beyond cleanup. Return only the cleaned text."
-        case .bilingual:
-            "You are a bilingual translation engine. Output the original text and the translation in a clear two-part format. Preserve formatting where useful."
-        case .polished:
-            "You are a translation and polishing editor. Translate accurately, then polish the target-language expression for clarity, flow, and readability without adding new meaning. Return only the polished translation."
-        }
-    }
-
-    var userPromptTemplate: String {
-        switch self {
-        case .fast:
-            "Translate the following text into {{targetLanguage}} quickly and concisely:\n\n{{text}}"
-        case .accurate:
-            "Translate the following text into {{targetLanguage}} as accurately as possible:\n\n{{text}}"
-        case .natural:
-            "Translate the following text into natural {{targetLanguage}} while preserving the original meaning:\n\n{{text}}"
-        case .academic:
-            "Translate the following text into publication-quality academic {{targetLanguage}}. Use formal journal/report style, keep terminology and named concepts consistent, preserve evidence, numbers, citations, headings, and paragraph structure, and do not add claims not present in the source:\n\n{{text}}"
-        case .technical:
-            "Translate the following technical text into {{targetLanguage}}. Preserve code, variables, Markdown, API names, commands, URLs, and identifiers:\n\n{{text}}"
-        case .ocrCleanup:
-            "Clean up likely OCR errors and restore paragraphs in the following text. Preserve the original language and meaning. Do not translate:\n\n{{text}}"
-        case .bilingual:
-            "Create a bilingual output for the following text. Include the original text and the {{targetLanguage}} translation:\n\n{{text}}"
-        case .polished:
-            "Translate the following text into {{targetLanguage}}, then polish the expression for clarity and readability:\n\n{{text}}"
-        }
-    }
-
-    func userPrompt(text: String, targetLanguage: String) -> String {
-        userPromptTemplate
-            .replacingOccurrences(of: "{{targetLanguage}}", with: targetLanguage)
-            .replacingOccurrences(of: "{{text}}", with: text)
     }
 }

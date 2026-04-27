@@ -13,6 +13,7 @@ TTS 专注于轻量化 AI 截图翻译，而不是传统词典式翻译。
 - `Option + S` 截图翻译
 - `Shift + Option + S` 截图 OCR
 - `Option + C` 静默截图 OCR，并直接复制识别文本
+- 图片文件 OCR（从菜单栏选择本地图片）
 - 不抢焦点的悬浮翻译窗口
 - 历史记录和收藏夹
 - 多翻译服务商配置和 fallback
@@ -165,6 +166,7 @@ TTS needs the following macOS permissions:
 
 - Accessibility: read selected text and use the protected clipboard fallback when needed
 - Screen Recording: perform screenshot OCR and screenshot translation; TTS does not record audio
+- Image file OCR does not require Screen Recording permission
 
 If permissions look enabled but TTS still reports missing permission, fully quit TTS and reopen `/Applications/TTS.app`. macOS tracks permissions by the concrete app bundle identity and path.
 

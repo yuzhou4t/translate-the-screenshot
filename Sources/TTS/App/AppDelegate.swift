@@ -44,6 +44,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             keyEquivalent: ""
         ))
         menu.addItem(NSMenuItem(
+            title: "截图翻译覆盖",
+            action: #selector(startScreenshotTranslateOverlay),
+            keyEquivalent: ""
+        ))
+        menu.addItem(NSMenuItem(
             title: "截图 OCR",
             action: #selector(startScreenshotOCR),
             keyEquivalent: ""
@@ -51,6 +56,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem(
             title: "静默截图 OCR",
             action: #selector(startSilentScreenshotOCR),
+            keyEquivalent: ""
+        ))
+        menu.addItem(NSMenuItem(
+            title: "图片文件 OCR...",
+            action: #selector(openImageFileOCR),
             keyEquivalent: ""
         ))
         menu.addItem(.separator())
@@ -97,12 +107,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         services.screenshotCaptureController.startCapture(mode: .translate)
     }
 
+    @objc private func startScreenshotTranslateOverlay() {
+        services.screenshotCaptureController.startCapture(mode: .translateOverlay)
+    }
+
     @objc private func startScreenshotOCR() {
         services.screenshotCaptureController.startCapture(mode: .ocr)
     }
 
     @objc private func startSilentScreenshotOCR() {
         services.screenshotCaptureController.startCapture(mode: .silentOCR)
+    }
+
+    @objc private func openImageFileOCR() {
+        services.screenshotCaptureController.openImageFileOCR()
     }
 
     @objc private func openSettings() {

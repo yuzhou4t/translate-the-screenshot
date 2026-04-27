@@ -241,6 +241,9 @@ struct FloatingTranslateView: View {
     @State private var selectedTranslationMode: TranslationMode = .accurate
     @State private var isRetranslating = false
     @State private var retranslateErrorMessage: String?
+    @State private var isPinHovered = false
+    @State private var isModeMenuPresented = false
+    @State private var hoveredTranslationMode: TranslationMode?
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -268,6 +271,14 @@ struct FloatingTranslateView: View {
 
     private var panelBackground: some ShapeStyle {
         .background
+    }
+
+    private var floatingSurfaceColor: Color {
+        Color(NSColor.windowBackgroundColor).opacity(0.96)
+    }
+
+    private var floatingControlColor: Color {
+        Color(NSColor.textBackgroundColor).opacity(0.94)
     }
 
     private var contentArea: some View {
@@ -318,7 +329,6 @@ struct FloatingTranslateView: View {
             }
 
             Spacer()
-
             if case .result(let item) = state {
                 Text(item.mode.displayName)
                     .font(.caption2.weight(.medium))
@@ -328,17 +338,38 @@ struct FloatingTranslateView: View {
                     .background(Color(NSColor.controlBackgroundColor), in: Capsule())
             }
 
+            if isPinHovered {
+                Text(isPinned ? "取消钉住" : "钉住窗口，点击空白处不关闭")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(floatingSurfaceColor, in: Capsule())
+                    .overlay(
+                        Capsule()
+                            .stroke(Color(NSColor.separatorColor).opacity(0.22), lineWidth: 1)
+                    )
+                    .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
+            }
+
             Button {
-                isPinned.toggle()
-                onPinnedChange(isPinned)
+                togglePinned()
             } label: {
                 Image(systemName: isPinned ? "pin.fill" : "pin")
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(isPinned ? Color.accentColor : Color.secondary)
                     .frame(width: 26, height: 26)
                     .background(Color(NSColor.controlBackgroundColor), in: Circle())
+                    .scaleEffect(isPinned ? 1.08 : 1)
+                    .rotationEffect(.degrees(isPinned ? -18 : 0))
+                    .animation(.spring(response: 0.28, dampingFraction: 0.68), value: isPinned)
             }
             .buttonStyle(.plain)
+            .onHover { hovering in
+                withAnimation(.easeOut(duration: 0.18)) {
+                    isPinHovered = hovering
+                }
+            }
             .help(isPinned ? "取消钉住" : "钉住窗口，点击空白处不关闭")
         }
     }
@@ -435,7 +466,7 @@ struct FloatingTranslateView: View {
         case .result:
             isRetranslating
                 ? "正在按 \(selectedTranslationMode.displayName) 重新翻译"
-                : "已完成 · \(resultItem?.translationMode.displayName ?? "AI 模式")"
+                : "已完成 / \(resultItem?.translationMode.displayName ?? "AI 模式")"
         case .error:
             "需要处理"
         }
@@ -445,27 +476,63 @@ struct FloatingTranslateView: View {
     private var aiModeControl: some View {
         if let item = resultItem, item.providerID.supportsTranslationModePrompts {
             HStack(spacing: 8) {
-                Label("AI 模式", systemImage: "sparkles")
+                HStack(spacing: 5) {
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 11, weight: .semibold))
+                    Text("AI模式")
+                        .lineLimit(1)
+                }
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: true, vertical: false)
 
-                Picker("", selection: $selectedTranslationMode) {
-                    ForEach(TranslationMode.allCases) { mode in
-                        Text(mode.displayName)
-                            .tag(mode)
+                Button {
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isModeMenuPresented.toggle()
+                        if !isModeMenuPresented {
+                            hoveredTranslationMode = nil
+                        }
                     }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: selectedTranslationMode.systemImage)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(Color.accentColor)
+
+                        Text(selectedTranslationMode.displayName)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.primary)
+
+                        Spacer(minLength: 0)
+
+                        Image(systemName: "chevron.down")
+                            .font(.system(size: 10, weight: .semibold))
+                            .foregroundStyle(.secondary)
+                            .rotationEffect(.degrees(isModeMenuPresented ? 180 : 0))
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .frame(width: 172, alignment: .leading)
+                    .background(
+                        floatingControlColor,
+                        in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 8, style: .continuous)
+                            .stroke(Color(NSColor.separatorColor).opacity(0.24), lineWidth: 1)
+                    )
                 }
-                .labelsHidden()
-                .frame(width: 180)
+                .buttonStyle(.plain)
                 .disabled(isRetranslating)
-                .onChange(of: selectedTranslationMode) { nextMode in
-                    guard let item = resultItem, nextMode != item.translationMode else {
-                        return
-                    }
-                    Task {
-                        await retranslate(item, using: nextMode)
+                .overlay(alignment: .topLeading) {
+                    if isModeMenuPresented {
+                        aiModeMenu(item: item)
+                            .offset(y: 38)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
+                .frame(width: 172, alignment: .leading)
+                .zIndex(2)
 
                 if isRetranslating {
                     ProgressView()
@@ -474,14 +541,20 @@ struct FloatingTranslateView: View {
 
                 Spacer()
 
-                Text(selectedTranslationMode.description)
+                Text(previewedTranslationMode.description)
                     .font(.system(size: 12))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+                    .multilineTextAlignment(.trailing)
+                    .frame(minWidth: 170, idealWidth: 210, maxWidth: 230, alignment: .trailing)
+                    .id(previewedTranslationMode)
+                    .transition(.opacity.combined(with: .move(edge: .trailing)))
+                    .animation(.easeInOut(duration: 0.18), value: previewedTranslationMode)
             }
             .padding(.horizontal, 10)
             .padding(.vertical, 5)
-            .background(Color(NSColor.controlBackgroundColor).opacity(0.75), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(floatingSurfaceColor.opacity(0.92), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .zIndex(1)
         } else if resultItem != nil {
             Text("当前服务商不支持 AI 模式重译")
                 .font(.system(size: 12))
@@ -489,8 +562,84 @@ struct FloatingTranslateView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 5)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color(NSColor.controlBackgroundColor).opacity(0.75), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .background(floatingSurfaceColor.opacity(0.92), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
         }
+    }
+
+    private var previewedTranslationMode: TranslationMode {
+        hoveredTranslationMode ?? selectedTranslationMode
+    }
+
+    private func togglePinned() {
+        isPinned.toggle()
+        onPinnedChange(isPinned)
+    }
+
+    private func aiModeMenu(item: TranslationHistoryItem) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            ForEach(TranslationMode.allCases) { mode in
+                Button {
+                    guard !isRetranslating else {
+                        return
+                    }
+
+                    hoveredTranslationMode = nil
+                    withAnimation(.easeInOut(duration: 0.16)) {
+                        isModeMenuPresented = false
+                    }
+
+                    guard mode != item.translationMode else {
+                        selectedTranslationMode = mode
+                        return
+                    }
+
+                    selectedTranslationMode = mode
+                    Task {
+                        await retranslate(item, using: mode)
+                    }
+                } label: {
+                    HStack(spacing: 8) {
+                        Image(systemName: mode.systemImage)
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(mode == item.translationMode ? Color.accentColor : Color.secondary)
+                            .frame(width: 14)
+
+                        Text(mode.displayName)
+                            .font(.system(size: 13))
+                            .foregroundStyle(.primary)
+
+                        Spacer(minLength: 8)
+
+                        if mode == item.translationMode {
+                            Image(systemName: "checkmark")
+                                .font(.system(size: 11, weight: .semibold))
+                                .foregroundStyle(Color.accentColor)
+                        }
+                    }
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .frame(width: 220, alignment: .leading)
+                    .background(menuRowBackground(for: mode), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .onHover { hovering in
+                    withAnimation(.easeInOut(duration: 0.12)) {
+                        hoveredTranslationMode = hovering ? mode : (hoveredTranslationMode == mode ? nil : hoveredTranslationMode)
+                    }
+                }
+            }
+        }
+        .padding(6)
+        .background(floatingSurfaceColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(Color(NSColor.separatorColor).opacity(0.24), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 6)
+    }
+
+    private func menuRowBackground(for mode: TranslationMode) -> Color {
+        hoveredTranslationMode == mode ? Color.accentColor.opacity(0.12) : .clear
     }
 
     private func sourceSection(text: String?, placeholder: String) -> some View {
@@ -809,6 +958,9 @@ struct FloatingTranslateView: View {
             isRetranslating = false
             isComparisonVisible = false
             isPinned = false
+            isModeMenuPresented = false
+            hoveredTranslationMode = nil
+            isPinHovered = false
             onComparisonLayoutChange(false)
             onPinnedChange(false)
             selectedTranslationMode = .accurate
@@ -820,6 +972,8 @@ struct FloatingTranslateView: View {
         retranslateErrorMessage = nil
         isRetranslating = false
         isComparisonVisible = false
+        isModeMenuPresented = false
+        hoveredTranslationMode = nil
         onComparisonLayoutChange(false)
         selectedTranslationMode = item.translationMode
     }
@@ -840,11 +994,13 @@ struct FloatingTranslateView: View {
             previousItem = item
             currentItem = updatedItem
             selectedTranslationMode = updatedItem.translationMode
+            hoveredTranslationMode = nil
             favoriteErrorMessage = nil
             setComparisonVisible(true)
         } catch {
             retranslateErrorMessage = error.localizedDescription
             selectedTranslationMode = item.translationMode
+            hoveredTranslationMode = nil
         }
     }
 

@@ -46,6 +46,18 @@ final class ProviderConfigStore: ObservableObject {
         configuration.defaultProviderID
     }
 
+    var fallbackEnabled: Bool {
+        configuration.fallbackEnabled
+    }
+
+    var fallbackProviderID: TranslationProviderID? {
+        configuration.fallbackProviderID
+    }
+
+    var fallbackModel: String? {
+        configuration.fallbackModel
+    }
+
     var targetLanguage: String {
         configuration.translationDirection.targetLanguage ?? configuration.targetLanguage
     }
@@ -85,7 +97,30 @@ final class ProviderConfigStore: ObservableObject {
         update { configuration in
             configuration.defaultProviderID = id
             configuration.providerID = id
+            if configuration.fallbackProviderID == id {
+                configuration.fallbackProviderID = nil
+                configuration.fallbackModel = nil
+            }
             if let index = configuration.providerConfigs.firstIndex(where: { $0.id == id }) {
+                configuration.providerConfigs[index].isEnabled = true
+            }
+        }
+    }
+
+    func setFallbackConfiguration(
+        enabled: Bool,
+        providerID: TranslationProviderID?,
+        model: String?
+    ) {
+        update { configuration in
+            configuration.fallbackEnabled = enabled
+            configuration.fallbackProviderID = providerID == configuration.defaultProviderID ? nil : providerID
+            configuration.fallbackModel = model?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+                ? model?.trimmingCharacters(in: .whitespacesAndNewlines)
+                : nil
+
+            if let providerID = configuration.fallbackProviderID,
+               let index = configuration.providerConfigs.firstIndex(where: { $0.id == providerID }) {
                 configuration.providerConfigs[index].isEnabled = true
             }
         }
@@ -122,6 +157,14 @@ final class ProviderConfigStore: ObservableObject {
 
             if let index = configuration.providerConfigs.firstIndex(where: { $0.id == configuration.defaultProviderID }) {
                 configuration.providerConfigs[index].isEnabled = true
+            }
+
+            if configuration.fallbackProviderID == configuration.defaultProviderID ||
+                configuration.fallbackProviderID.map({ id in
+                    !configuration.providerConfigs.contains(where: { $0.id == id })
+                }) == true {
+                configuration.fallbackProviderID = nil
+                configuration.fallbackModel = nil
             }
         }
     }

@@ -26,11 +26,6 @@ struct SettingsView: View {
                     Label("AI 模式", systemImage: "sparkles")
                 }
 
-            modelConfigurationSettings
-                .tabItem {
-                    Label("模型配置", systemImage: "slider.horizontal.3")
-                }
-
             permissionPrivacySettings
                 .tabItem {
                     Label("权限与隐私", systemImage: "lock.shield")
@@ -46,11 +41,6 @@ struct SettingsView: View {
     private var generalSettings: some View {
         Form {
             Section("基础设置") {
-                LabeledContent("产品定位") {
-                    Text("轻量化 AI 截图翻译")
-                        .foregroundStyle(.secondary)
-                }
-
                 LabeledContent("默认翻译服务") {
                     Text(viewModel.defaultProviderID.displayName)
                         .foregroundStyle(.secondary)
@@ -94,7 +84,7 @@ struct SettingsView: View {
                 )
                 SettingsInfoRow(
                     title: "服务 fallback",
-                    message: "已启用的服务会按默认服务和优先级进行尝试。",
+                    message: "当前服务失败时，可按设置尝试一个备用服务，不做复杂路由。",
                     systemImage: "arrow.triangle.branch"
                 )
             }
@@ -192,9 +182,6 @@ struct SettingsView: View {
             },
             onSetDefault: {
                 viewModel.setDefaultProvider(config.id)
-            },
-            onPriorityChange: { priority in
-                viewModel.setPriority(priority, for: config.id)
             }
         )
         .tag(config.id)
@@ -205,54 +192,91 @@ struct SettingsView: View {
     private var providerDetails: some View {
         if let config = viewModel.selectedProviderConfig {
             Form {
-                Text(config.displayName)
-                    .font(.headline)
+                Section("Fallback") {
+                    Toggle("自动 fallback", isOn: $viewModel.fallbackEnabled)
 
-                LabeledContent("类型") {
-                    Text(config.type.displayName)
-                }
+                    Picker("备用服务商", selection: $viewModel.fallbackProviderID) {
+                        Text("不使用备用服务")
+                            .tag(Optional<TranslationProviderID>.none)
 
-                LabeledContent("接入状态") {
-                    Text(viewModel.isImplemented(config.id) ? "已接入" : "待接入")
-                        .foregroundStyle(viewModel.isImplemented(config.id) ? Color.green : Color.secondary)
-                }
+                        ForEach(viewModel.availableFallbackProviderConfigs) { fallbackConfig in
+                            Text(fallbackConfig.displayName)
+                                .tag(Optional(fallbackConfig.id))
+                        }
+                    }
+                    .disabled(!viewModel.fallbackEnabled)
 
-                TextField("Endpoint", text: $viewModel.endpoint)
-                    .textFieldStyle(.roundedBorder)
+                    if let fallbackProviderID = viewModel.fallbackProviderID {
+                        TextField("备用模型", text: $viewModel.fallbackModel)
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(!viewModel.fallbackEnabled)
 
-                TextField("模型 / 区域", text: $viewModel.model)
-                    .textFieldStyle(.roundedBorder)
+                        ModelSuggestionPicker(
+                            title: "备用模型建议",
+                            providerID: fallbackProviderID,
+                            modelName: $viewModel.fallbackModel
+                        )
+                    }
 
-                ModelSuggestionPicker(
-                    title: "常用模型",
-                    providerID: config.id,
-                    modelName: $viewModel.model
-                )
+                    Button("保存 fallback 设置") {
+                        viewModel.saveFallbackSettings()
+                    }
+                    .disabled(!viewModel.fallbackEnabled && viewModel.fallbackProviderID == nil && viewModel.fallbackModel.isEmpty)
 
-                TextField("App ID / SecretId / AccessKeyId", text: $viewModel.appID)
-                    .textFieldStyle(.roundedBorder)
-
-                SecureField("API Key", text: $viewModel.apiKey)
-                    .textFieldStyle(.roundedBorder)
-
-                SecureField("Secret Key", text: $viewModel.secretKey)
-                    .textFieldStyle(.roundedBorder)
-
-                HStack {
-                    Text("超时")
-                    TextField("秒", value: $viewModel.timeout, format: .number)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 80)
-                    Text("秒")
+                    Text("默认先使用当前服务和模型；请求失败后最多重试 3 次，其中超时可重试一次，再尝试备用服务。")
+                        .font(.caption)
                         .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
-                Toggle("认证失败时继续切换备用服务", isOn: $viewModel.shouldFallbackOnAuthFailure)
+                Section("当前服务商") {
+                    Text(config.displayName)
+                        .font(.headline)
 
-                Button("保存当前服务商配置") {
-                    viewModel.saveSelectedProvider()
+                    LabeledContent("类型") {
+                        Text(config.type.displayName)
+                    }
+
+                    LabeledContent("接入状态") {
+                        Text(viewModel.isImplemented(config.id) ? "已接入" : "待接入")
+                            .foregroundStyle(viewModel.isImplemented(config.id) ? Color.green : Color.secondary)
+                    }
+
+                    TextField("Endpoint", text: $viewModel.endpoint)
+                        .textFieldStyle(.roundedBorder)
+
+                    TextField("模型 / 区域", text: $viewModel.model)
+                        .textFieldStyle(.roundedBorder)
+
+                    ModelSuggestionPicker(
+                        title: "常用模型",
+                        providerID: config.id,
+                        modelName: $viewModel.model
+                    )
+
+                    TextField("App ID / SecretId / AccessKeyId", text: $viewModel.appID)
+                        .textFieldStyle(.roundedBorder)
+
+                    SecureField("API Key", text: $viewModel.apiKey)
+                        .textFieldStyle(.roundedBorder)
+
+                    SecureField("Secret Key", text: $viewModel.secretKey)
+                        .textFieldStyle(.roundedBorder)
+
+                    HStack {
+                        Text("超时")
+                        TextField("秒", value: $viewModel.timeout, format: .number)
+                            .textFieldStyle(.roundedBorder)
+                            .frame(width: 80)
+                        Text("秒")
+                            .foregroundStyle(.secondary)
+                    }
+
+                    Button("保存当前服务商配置") {
+                        viewModel.saveSelectedProvider()
+                    }
+                    .keyboardShortcut(.defaultAction)
                 }
-                .keyboardShortcut(.defaultAction)
             }
             .formStyle(.grouped)
         } else {
@@ -267,6 +291,7 @@ struct SettingsView: View {
                 KeyboardShortcuts.Recorder("划词翻译", name: .translateSelection)
                 KeyboardShortcuts.Recorder("输入翻译", name: .inputTranslate)
                 KeyboardShortcuts.Recorder("截图翻译", name: .screenshotTranslate)
+                KeyboardShortcuts.Recorder("截图翻译覆盖", name: .screenshotTranslateOverlay)
                 KeyboardShortcuts.Recorder("截图 OCR", name: .screenshotOCR)
                 KeyboardShortcuts.Recorder("静默截图 OCR", name: .silentScreenshotOCR)
             }
@@ -279,8 +304,13 @@ struct SettingsView: View {
                 )
                 SettingsInfoRow(
                     title: "截图相关快捷键",
-                    message: "截图翻译会先 OCR 再翻译；截图 OCR 只显示识别文本；静默截图 OCR 会直接复制识别结果。",
+                    message: "截图翻译会先 OCR 再翻译；截图翻译覆盖会生成覆盖预览图；截图 OCR 只显示识别文本；静默截图 OCR 会直接复制识别结果。",
                     systemImage: "viewfinder"
+                )
+                SettingsInfoRow(
+                    title: "图片文件 OCR",
+                    message: "可从菜单栏选择本地图片文件做 OCR，结果同样支持复制、AI 修复和继续翻译。",
+                    systemImage: "photo"
                 )
             }
         }
@@ -329,63 +359,6 @@ struct SettingsView: View {
         .padding()
     }
 
-    private var modelConfigurationSettings: some View {
-        Form {
-            Section("当前服务商模型") {
-                if let config = viewModel.selectedProviderConfig {
-                    LabeledContent("服务商") {
-                        Text(config.displayName)
-                            .foregroundStyle(.secondary)
-                    }
-
-                    TextField("Endpoint", text: $viewModel.endpoint)
-                        .textFieldStyle(.roundedBorder)
-
-                    TextField("模型 / 区域", text: $viewModel.model)
-                        .textFieldStyle(.roundedBorder)
-
-                    ModelSuggestionPicker(
-                        title: "常用模型",
-                        providerID: config.id,
-                        modelName: $viewModel.model
-                    )
-
-                    HStack {
-                        Text("超时")
-                        TextField("秒", value: $viewModel.timeout, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-                        Text("秒")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    Button("保存模型配置") {
-                        viewModel.saveSelectedProvider()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                } else {
-                    Text("请先在翻译服务中选择一个服务商。")
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            Section("后续预留") {
-                SettingsInfoRow(
-                    title: "模型路由",
-                    message: "预留：按场景选择不同模型，例如截图翻译、长文本翻译和快速翻译。",
-                    systemImage: "point.3.connected.trianglepath.dotted"
-                )
-                SettingsInfoRow(
-                    title: "OCR 后处理",
-                    message: "预留：管理段落恢复、换行清理和中英混排策略。",
-                    systemImage: "text.viewfinder"
-                )
-            }
-        }
-        .formStyle(.grouped)
-        .padding()
-    }
-
     private var permissionPrivacySettings: some View {
         Form {
             Section("权限状态") {
@@ -419,6 +392,11 @@ struct SettingsView: View {
                     title: "截图 OCR",
                     message: "截图内容用于本机 Apple Vision OCR；截图翻译会把识别后的文本交给你启用的翻译服务。",
                     systemImage: "viewfinder"
+                )
+                SettingsInfoRow(
+                    title: "图片文件 OCR",
+                    message: "从本地图片文件读取内容做 OCR，不需要屏幕录制权限。",
+                    systemImage: "photo"
                 )
                 SettingsInfoRow(
                     title: "API Key",
@@ -473,8 +451,8 @@ private struct ModelSuggestionPicker: View {
     var providerID: TranslationProviderID
     @Binding var modelName: String
 
-    private var suggestions: [String] {
-        providerID.suggestedModelNames
+    private var suggestions: [ModelSuggestion] {
+        providerID.suggestedModels
     }
 
     var body: some View {
@@ -485,9 +463,9 @@ private struct ModelSuggestionPicker: View {
                         .tag(modelName)
                 }
 
-                ForEach(suggestions, id: \.self) { model in
-                    Text(model)
-                        .tag(model)
+                ForEach(suggestions) { model in
+                    Text(model.label)
+                        .tag(model.value)
                 }
             }
             .pickerStyle(.menu)
@@ -497,10 +475,10 @@ private struct ModelSuggestionPicker: View {
     private var selection: Binding<String> {
         Binding(
             get: {
-                if suggestions.contains(modelName) {
+                if suggestions.contains(where: { $0.value == modelName }) {
                     return modelName
                 }
-                return modelName.isEmpty ? suggestions[0] : modelName
+                return modelName.isEmpty ? suggestions[0].value : modelName
             },
             set: { nextModel in
                 modelName = nextModel
@@ -509,7 +487,7 @@ private struct ModelSuggestionPicker: View {
     }
 
     private var isCustomModel: Bool {
-        !modelName.isEmpty && !suggestions.contains(modelName)
+        !modelName.isEmpty && !suggestions.contains(where: { $0.value == modelName })
     }
 }
 
@@ -520,7 +498,6 @@ private struct ProviderConfigRow: View {
     var onSelect: () -> Void
     var onToggleEnabled: (Bool) -> Void
     var onSetDefault: () -> Void
-    var onPriorityChange: (Int) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 9) {
@@ -554,17 +531,12 @@ private struct ProviderConfigRow: View {
             .disabled(isDefault)
 
             HStack {
-                Stepper("优先级 \(config.priority)", value: Binding(
-                    get: { config.priority },
-                    set: { onPriorityChange($0) }
-                ), in: 1...999)
-
-                Spacer()
-
                 Button("设为默认") {
                     onSetDefault()
                 }
                 .disabled(isDefault)
+
+                Spacer()
             }
             .controlSize(.small)
         }
@@ -606,7 +578,9 @@ final class SettingsViewModel: ObservableObject {
     @Published var apiKey = ""
     @Published var secretKey = ""
     @Published var timeout: Double = 30
-    @Published var shouldFallbackOnAuthFailure = true
+    @Published var fallbackEnabled = false
+    @Published var fallbackProviderID: TranslationProviderID?
+    @Published var fallbackModel = ""
     @Published var targetLanguage: String
     @Published var translationDirection: TranslationDirection
     @Published var defaultTranslationMode: TranslationMode
@@ -654,6 +628,14 @@ final class SettingsViewModel: ObservableObject {
         providerConfigs.filter(\.isEnabled).count
     }
 
+    var availableFallbackProviderConfigs: [ProviderConfig] {
+        providerConfigs.filter {
+            $0.id != defaultProviderID &&
+            $0.id.isTranslationProvider &&
+            isImplemented($0.id)
+        }
+    }
+
     var aiProviderConfigs: [ProviderConfig] {
         providerConfigs.filter { aiProviderIDs.contains($0.id) }
     }
@@ -673,9 +655,16 @@ final class SettingsViewModel: ObservableObject {
     func reload() {
         providerConfigs = configurationStore.providerConfigs
         defaultProviderID = configurationStore.defaultProviderID
+        fallbackEnabled = configurationStore.fallbackEnabled
+        fallbackProviderID = configurationStore.fallbackProviderID
+        fallbackModel = configurationStore.fallbackModel ?? ""
         targetLanguage = configurationStore.targetLanguage
         translationDirection = configurationStore.translationDirection
         defaultTranslationMode = configurationStore.defaultTranslationMode
+
+        if fallbackProviderID == defaultProviderID {
+            fallbackProviderID = nil
+        }
 
         if selectedProviderID == nil || selectedProviderConfig == nil {
             selectedProviderID = defaultProviderID
@@ -708,15 +697,6 @@ final class SettingsViewModel: ObservableObject {
         status("默认服务商已更新。", isError: false)
     }
 
-    func setPriority(_ priority: Int, for id: TranslationProviderID) {
-        guard var config = providerConfigs.first(where: { $0.id == id }) else {
-            return
-        }
-        config.priority = priority
-        configurationStore.updateProviderConfig(config)
-        reload()
-    }
-
     func saveTranslationDirection() {
         configurationStore.setTranslationDirection(translationDirection)
         reload()
@@ -727,6 +707,17 @@ final class SettingsViewModel: ObservableObject {
         configurationStore.setDefaultTranslationMode(defaultTranslationMode)
         reload()
         status("默认 AI 模式已保存。", isError: false)
+    }
+
+    func saveFallbackSettings() {
+        let providerID = fallbackEnabled ? fallbackProviderID : nil
+        configurationStore.setFallbackConfiguration(
+            enabled: fallbackEnabled,
+            providerID: providerID,
+            model: fallbackEnabled ? fallbackModel : nil
+        )
+        reload()
+        status("fallback 设置已保存。", isError: false)
     }
 
     func saveSelectedProvider() {
@@ -745,7 +736,6 @@ final class SettingsViewModel: ObservableObject {
             : appID.trimmingCharacters(in: .whitespacesAndNewlines)
         config.secretKey = nil
         config.timeout = timeout
-        config.shouldFallbackOnAuthFailure = shouldFallbackOnAuthFailure
 
         do {
             if let apiKeyRef = config.apiKeyRef {
@@ -806,7 +796,6 @@ final class SettingsViewModel: ObservableObject {
             apiKey = ""
             secretKey = ""
             timeout = 30
-            shouldFallbackOnAuthFailure = true
             return
         }
 
@@ -816,7 +805,6 @@ final class SettingsViewModel: ObservableObject {
         let secretKeyAccount = "\(config.id.rawValue).secretKey"
         secretKey = (try? keychainService.loadAPIKey(account: secretKeyAccount)) ?? config.secretKey ?? ""
         timeout = config.timeout
-        shouldFallbackOnAuthFailure = config.shouldFallbackOnAuthFailure
 
         if let apiKeyRef = config.apiKeyRef {
             apiKey = (try? keychainService.loadAPIKey(account: apiKeyRef)) ?? ""

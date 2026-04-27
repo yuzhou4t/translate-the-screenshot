@@ -34,20 +34,22 @@ struct OpenAICompatibleProvider: TranslationProvider {
         urlRequest.timeoutInterval = timeout
         urlRequest.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        let prompt = PromptBuilder.build(
+            mode: request.translationMode,
+            sourceText: request.text,
+            targetLanguage: request.targetLanguage
+        )
 
         let body = ChatCompletionRequest(
             model: model,
             messages: [
                 .init(
                     role: "system",
-                    content: request.translationMode.systemPrompt
+                    content: prompt.system
                 ),
                 .init(
                     role: "user",
-                    content: request.translationMode.userPrompt(
-                        text: request.text,
-                        targetLanguage: request.targetLanguage
-                    )
+                    content: prompt.user
                 )
             ],
             temperature: 0.2

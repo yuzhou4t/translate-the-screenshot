@@ -1,3 +1,4 @@
+import AppKit
 import CoreGraphics
 import CoreImage
 import Foundation
@@ -26,60 +27,101 @@ struct OCRTextBlock: Identifiable, Equatable {
 }
 
 struct OCRResult: Equatable {
-    var plainText: String
+    var rawText: String
+    var processedText: String
     var textBlocks: [OCRTextBlock]
     var confidence: Float
+    var processingMode: OCRTextProcessingMode
+
+    var plainText: String {
+        processedText
+    }
 }
 
 final class OCRService: Sendable {
+    private let postProcessor: OCRTextPostProcessor
+    private let textBlockGrouper: OCRTextBlockGrouper
+
+    init(
+        postProcessor: OCRTextPostProcessor = OCRTextPostProcessor(),
+        textBlockGrouper: OCRTextBlockGrouper = OCRTextBlockGrouper()
+    ) {
+        self.postProcessor = postProcessor
+        self.textBlockGrouper = textBlockGrouper
+    }
+
     func recognizeText(
         from imageURL: URL,
         mode: OCRRecognitionMode = .accurate
     ) async throws -> OCRResult {
-        try await Task.detached(priority: .userInitiated) {
-            let request = VNRecognizeTextRequest()
-            request.revision = VNRecognizeTextRequestRevision3
-            request.recognitionLevel = mode.visionRecognitionLevel
-            request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
-            request.automaticallyDetectsLanguage = true
-            request.usesLanguageCorrection = true
-            request.minimumTextHeight = mode == .accurate ? 0.006 : 0.012
+        let postProcessor = self.postProcessor
+        let textBlockGrouper = self.textBlockGrouper
 
+        return try await Task.detached(priority: .userInitiated) {
             let image = try Self.loadEnhancedImage(from: imageURL, mode: mode)
-            let handler = VNImageRequestHandler(cgImage: image, options: [:])
-            try handler.perform([request])
+            let rawBlocks = try Self.recognizeRawTextBlocks(
+                in: image.recognitionImage,
+                imageSize: image.originalSize,
+                mode: mode
+            )
+            let groupedBlocks = textBlockGrouper.group(rawBlocks)
 
-            let observations = request.results ?? []
-            let blocks = observations.compactMap { observation -> OCRTextBlock? in
-                guard let candidate = observation.topCandidates(1).first else {
-                    return nil
-                }
-
-                return OCRTextBlock(
-                    text: candidate.string.trimmingCharacters(in: .whitespacesAndNewlines),
-                    boundingBox: observation.boundingBox,
-                    confidence: candidate.confidence
-                )
-            }
-            .filter { !$0.text.isEmpty }
+            let rawText = Self.recoverParagraphs(from: rawBlocks)
+            let processed = postProcessor.process(rawText, mode: .auto)
 
             return OCRResult(
-                plainText: Self.recoverParagraphs(from: blocks),
-                textBlocks: blocks,
-                confidence: Self.averageConfidence(from: blocks)
+                rawText: rawText,
+                processedText: processed.text,
+                textBlocks: groupedBlocks,
+                confidence: Self.averageConfidence(from: groupedBlocks),
+                processingMode: processed.mode
             )
         }.value
     }
 
-    private static func loadEnhancedImage(from imageURL: URL, mode: OCRRecognitionMode) throws -> CGImage {
+    func recognizeTextBlocks(
+        from image: NSImage,
+        mode: OCRRecognitionMode = .accurate
+    ) async throws -> [OCRTextBlock] {
+        let textBlockGrouper = self.textBlockGrouper
+
+        return try await Task.detached(priority: .userInitiated) {
+            let loadedImage = try Self.loadEnhancedImage(from: image, mode: mode)
+            let rawBlocks = try Self.recognizeRawTextBlocks(
+                in: loadedImage.recognitionImage,
+                imageSize: loadedImage.originalSize,
+                mode: mode
+            )
+            return textBlockGrouper.group(rawBlocks)
+        }.value
+    }
+
+    private struct PreparedImage {
+        var recognitionImage: CGImage
+        var originalSize: CGSize
+    }
+
+    private static func loadEnhancedImage(from imageURL: URL, mode: OCRRecognitionMode) throws -> PreparedImage {
         guard let source = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             throw OCRServiceError.imageLoadFailed
         }
 
+        return try prepareImage(cgImage, mode: mode)
+    }
+
+    private static func loadEnhancedImage(from image: NSImage, mode: OCRRecognitionMode) throws -> PreparedImage {
+        guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
+            throw OCRServiceError.imageLoadFailed
+        }
+
+        return try prepareImage(cgImage, mode: mode)
+    }
+
+    private static func prepareImage(_ cgImage: CGImage, mode: OCRRecognitionMode) throws -> PreparedImage {
         let ciImage = CIImage(cgImage: cgImage)
         let longEdge = max(cgImage.width, cgImage.height)
-        let targetLongEdge = mode == .accurate ? 2200 : 1400
+        let targetLongEdge = mode == .accurate ? 2400 : 1400
         let scale = longEdge < targetLongEdge
             ? min(3.0, CGFloat(targetLongEdge) / CGFloat(max(longEdge, 1)))
             : 1.0
@@ -111,7 +153,57 @@ final class OCRService: Sendable {
             throw OCRServiceError.imageLoadFailed
         }
 
-        return enhanced
+        return PreparedImage(
+            recognitionImage: enhanced,
+            originalSize: CGSize(width: cgImage.width, height: cgImage.height)
+        )
+    }
+
+    private static func recognizeRawTextBlocks(
+        in image: CGImage,
+        imageSize: CGSize,
+        mode: OCRRecognitionMode
+    ) throws -> [OCRTextBlock] {
+        let request = VNRecognizeTextRequest()
+        request.revision = VNRecognizeTextRequestRevision3
+        request.recognitionLevel = mode.visionRecognitionLevel
+        request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+        request.automaticallyDetectsLanguage = true
+        request.usesLanguageCorrection = true
+        request.minimumTextHeight = mode == .accurate ? 0.0045 : 0.012
+
+        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        try handler.perform([request])
+
+        return (request.results ?? [])
+            .compactMap { observation -> OCRTextBlock? in
+                guard let candidate = observation.topCandidates(1).first else {
+                    return nil
+                }
+
+                let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !text.isEmpty else {
+                    return nil
+                }
+
+                return OCRTextBlock(
+                    text: text,
+                    boundingBox: imageBoundingBox(
+                        from: observation.boundingBox,
+                        imageSize: imageSize
+                    ),
+                    confidence: candidate.confidence
+                )
+            }
+    }
+
+    private static func imageBoundingBox(from normalizedRect: CGRect, imageSize: CGSize) -> CGRect {
+        let width = normalizedRect.width * imageSize.width
+        let height = normalizedRect.height * imageSize.height
+        let x = normalizedRect.minX * imageSize.width
+        let y = (1 - normalizedRect.maxY) * imageSize.height
+
+        return CGRect(x: x, y: y, width: width, height: height)
     }
 
     private static func averageConfidence(from blocks: [OCRTextBlock]) -> Float {
@@ -125,8 +217,9 @@ final class OCRService: Sendable {
 
     private static func recoverParagraphs(from blocks: [OCRTextBlock]) -> String {
         let sortedBlocks = blocks.sorted { lhs, rhs in
-            if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) > 0.015 {
-                return lhs.boundingBox.midY > rhs.boundingBox.midY
+            let rowThreshold = max(lhs.boundingBox.height, rhs.boundingBox.height) * 0.4
+            if abs(lhs.boundingBox.midY - rhs.boundingBox.midY) > rowThreshold {
+                return lhs.boundingBox.midY < rhs.boundingBox.midY
             }
             return lhs.boundingBox.minX < rhs.boundingBox.minX
         }
@@ -171,11 +264,11 @@ final class OCRService: Sendable {
             let currentLine = lines[index]
             let previousText = lineTexts[index - 1]
             let currentText = lineTexts[index]
-            let previousY = previousLine.map(\.boundingBox.minY).min() ?? 0
-            let currentY = currentLine.map(\.boundingBox.maxY).max() ?? 0
+            let previousBottom = previousLine.map(\.boundingBox.maxY).max() ?? 0
+            let currentTop = currentLine.map(\.boundingBox.minY).min() ?? 0
             let previousHeight = previousLine.map(\.boundingBox.height).max() ?? 0
             let currentHeight = currentLine.map(\.boundingBox.height).max() ?? 0
-            let gap = previousY - currentY
+            let gap = currentTop - previousBottom
             let paragraphThreshold = max(previousHeight, currentHeight) * 1.35
 
             if gap > paragraphThreshold {

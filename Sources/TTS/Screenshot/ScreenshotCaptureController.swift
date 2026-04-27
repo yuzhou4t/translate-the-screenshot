@@ -5,6 +5,7 @@ import UniformTypeIdentifiers
 
 enum ScreenshotCaptureMode {
     case translate
+    case translateOverlay
     case ocr
     case silentOCR
 }
@@ -13,11 +14,13 @@ enum ScreenshotCaptureMode {
 final class ScreenshotCaptureController {
     private let permissionManager: PermissionManager
     private let ocrService: OCRService
+    private let ocrTextBlockGrouper: OCRTextBlockGrouper
     private let ocrResultPanel: OCRResultPanel
     private let translationService: TranslationService
     private let historyStore: HistoryStore
     private let floatingPanel: FloatingTranslatePanel
     private let toastPanel: ToastPanel
+    private let translatedImagePreviewWindowController: TranslatedImagePreviewWindowController
     private var overlayWindows: [ScreenshotOverlayWindow] = []
     private var isCapturing = false
     private var didHideSystemCursor = false
@@ -26,19 +29,23 @@ final class ScreenshotCaptureController {
     init(
         permissionManager: PermissionManager,
         ocrService: OCRService,
+        ocrTextBlockGrouper: OCRTextBlockGrouper,
         ocrResultPanel: OCRResultPanel,
         translationService: TranslationService,
         historyStore: HistoryStore,
         floatingPanel: FloatingTranslatePanel,
-        toastPanel: ToastPanel
+        toastPanel: ToastPanel,
+        translatedImagePreviewWindowController: TranslatedImagePreviewWindowController
     ) {
         self.permissionManager = permissionManager
         self.ocrService = ocrService
+        self.ocrTextBlockGrouper = ocrTextBlockGrouper
         self.ocrResultPanel = ocrResultPanel
         self.translationService = translationService
         self.historyStore = historyStore
         self.floatingPanel = floatingPanel
         self.toastPanel = toastPanel
+        self.translatedImagePreviewWindowController = translatedImagePreviewWindowController
     }
 
     func startCapture(mode: ScreenshotCaptureMode) {
@@ -71,6 +78,60 @@ final class ScreenshotCaptureController {
         overlayWindows.forEach { $0.orderFrontRegardless() }
         overlayWindows.forEach { $0.updateCrosshair(globalPoint: NSEvent.mouseLocation) }
         overlayWindows.first?.makeKey()
+    }
+
+    func openImageFileOCR() {
+        let panel = NSOpenPanel()
+        panel.title = "选择图片文件"
+        panel.message = "选择一张图片进行 OCR 识别"
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [
+            .png,
+            .jpeg,
+            UTType(filenameExtension: "jpg") ?? .jpeg,
+            UTType(filenameExtension: "webp") ?? .image,
+            UTType(filenameExtension: "heic") ?? .heic
+        ]
+
+        NSApp.activate(ignoringOtherApps: true)
+
+        guard panel.runModal() == .OK, let imageURL = panel.url else {
+            return
+        }
+
+        let anchorPoint = NSEvent.mouseLocation
+        ocrResultPanel.showLoading(near: anchorPoint)
+
+        Task { [ocrService, ocrResultPanel, historyStore] in
+            do {
+                let result = try await ocrService.recognizeText(from: imageURL, mode: .accurate)
+                let plainText = result.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !plainText.isEmpty else {
+                    throw ScreenshotCaptureError.noRecognizedText
+                }
+
+                let item = TranslationHistoryItem(
+                    sourceText: plainText,
+                    translatedText: plainText,
+                    providerID: .localOCR,
+                    sourceLanguage: nil,
+                    targetLanguage: "",
+                    createdAt: Date(),
+                    mode: .ocr
+                )
+                try await historyStore.add(item)
+
+                await MainActor.run {
+                    ocrResultPanel.showResult(result, imageURL: imageURL, near: anchorPoint)
+                }
+            } catch {
+                await MainActor.run {
+                    ocrResultPanel.showError(error.localizedDescription, near: anchorPoint)
+                }
+            }
+        }
     }
 
     private func finishCapture(selectionRect: CGRect) {
@@ -133,6 +194,9 @@ final class ScreenshotCaptureController {
         switch mode {
         case .translate:
             presentationID = floatingPanel.showLoading(sourceText: "正在识别截图文字...", near: point)
+        case .translateOverlay:
+            presentationID = nil
+            toastPanel.showLoading("正在生成截图翻译覆盖，可能需要一点时间...", near: point)
         case .ocr:
             presentationID = nil
             ocrResultPanel.showLoading(near: point)
@@ -141,8 +205,64 @@ final class ScreenshotCaptureController {
             break
         }
 
-        Task { [ocrService, ocrResultPanel, translationService, historyStore, floatingPanel, toastPanel] in
+        Task { [ocrService, ocrTextBlockGrouper, ocrResultPanel, translationService, historyStore, floatingPanel, toastPanel, translatedImagePreviewWindowController] in
             do {
+                if mode == .translateOverlay {
+                    let originalImage = try Self.loadImage(from: imageURL)
+                    let recognizedBlocks = try await ocrService.recognizeTextBlocks(from: originalImage, mode: .accurate)
+                    let groupedBlocks = ocrTextBlockGrouper.group(recognizedBlocks)
+                        .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+                    guard !groupedBlocks.isEmpty else {
+                        throw ScreenshotCaptureError.noRecognizedText
+                    }
+
+                    var translatedBlocks: [String] = []
+                    translatedBlocks.reserveCapacity(groupedBlocks.count)
+                    var successCount = 0
+
+                    for block in groupedBlocks {
+                        do {
+                            let response = try await translationService.translateTextOnly(
+                                block.text,
+                                translationMode: .imageOverlay
+                            )
+                            let translatedText = response.translatedText
+                                .trimmingCharacters(in: .whitespacesAndNewlines)
+
+                            if translatedText.isEmpty {
+                                translatedBlocks.append(block.text)
+                            } else {
+                                translatedBlocks.append(translatedText)
+                                if translatedText != block.text {
+                                    successCount += 1
+                                }
+                            }
+                        } catch {
+                            translatedBlocks.append(block.text)
+                            print("overlay block translation failed: \(error.localizedDescription)")
+                        }
+                    }
+
+                    guard successCount > 0 else {
+                        throw ScreenshotCaptureError.overlayTranslationFailed
+                    }
+
+                    try await MainActor.run {
+                        toastPanel.hide()
+                        try translatedImagePreviewWindowController.show(
+                            originalImage: originalImage,
+                            blocks: groupedBlocks,
+                            translations: translatedBlocks,
+                            initialStyle: .solid
+                        )
+                        if successCount < groupedBlocks.count {
+                            toastPanel.show("部分文本块翻译失败，已保留原文", near: point)
+                        }
+                    }
+                    return
+                }
+
                 let result = try await ocrService.recognizeText(from: imageURL, mode: .accurate)
                 let plainText = result.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !plainText.isEmpty else {
@@ -159,6 +279,8 @@ final class ScreenshotCaptureController {
                                 presentationID: presentationID
                             )
                         }
+                    case .translateOverlay:
+                        break
                     case .ocr:
                         ocrResultPanel.showResult(result, imageURL: imageURL, near: point)
                     case .silentOCR:
@@ -182,6 +304,8 @@ final class ScreenshotCaptureController {
                             )
                         }
                     }
+                case .translateOverlay:
+                    break
                 case .ocr:
                     let item = TranslationHistoryItem(
                         sourceText: plainText,
@@ -204,6 +328,9 @@ final class ScreenshotCaptureController {
                         if let presentationID {
                             floatingPanel.showError(message, near: point, presentationID: presentationID)
                         }
+                    case .translateOverlay:
+                        toastPanel.hide()
+                        toastPanel.show(message, near: point)
                     case .ocr:
                         ocrResultPanel.showError(message, near: point)
                     case .silentOCR:
@@ -249,6 +376,13 @@ final class ScreenshotCaptureController {
         return fileURL
     }
 
+    private static func loadImage(from imageURL: URL) throws -> NSImage {
+        guard let image = NSImage(contentsOf: imageURL) else {
+            throw ScreenshotCaptureError.captureFailed
+        }
+        return image
+    }
+
     private func convertToDisplayRect(_ rect: CGRect) -> CGRect {
         guard let primaryScreen = NSScreen.screens.first else {
             return rect
@@ -268,6 +402,7 @@ private enum ScreenshotCaptureError: LocalizedError {
     case captureFailed
     case writeFailed
     case noRecognizedText
+    case overlayTranslationFailed
 
     var errorDescription: String? {
         switch self {
@@ -277,6 +412,8 @@ private enum ScreenshotCaptureError: LocalizedError {
             "无法写入截图文件。"
         case .noRecognizedText:
             "没有识别到文字，请重新选择包含文字的区域。"
+        case .overlayTranslationFailed:
+            "截图翻译覆盖失败，请检查翻译服务配置或网络连接。"
         }
     }
 }
