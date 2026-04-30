@@ -1,5 +1,6 @@
 import AppKit
 import CoreGraphics
+import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
@@ -14,44 +15,47 @@ enum ScreenshotCaptureMode {
 final class ScreenshotCaptureController {
     private let permissionManager: PermissionManager
     private let ocrService: OCRService
-    private let ocrTextBlockGrouper: OCRTextBlockGrouper
     private let ocrResultPanel: OCRResultPanel
     private let translationService: TranslationService
     private let historyStore: HistoryStore
     private let floatingPanel: FloatingTranslatePanel
     private let toastPanel: ToastPanel
-    private let translatedImagePreviewWindowController: TranslatedImagePreviewWindowController
+    private let imageOverlayTranslationWindowController: ImageOverlayTranslationWindowController
     private var overlayWindows: [ScreenshotOverlayWindow] = []
     private var isCapturing = false
     private var didHideSystemCursor = false
     private var activeMode: ScreenshotCaptureMode = .translate
+    private var activeProcessingTask: Task<Void, Never>?
+    private var activeProcessingToken: UUID?
+    private var activeProcessingMode: ScreenshotCaptureMode?
+    private var activeProcessingAnchorPoint: NSPoint?
 
     init(
         permissionManager: PermissionManager,
         ocrService: OCRService,
-        ocrTextBlockGrouper: OCRTextBlockGrouper,
         ocrResultPanel: OCRResultPanel,
         translationService: TranslationService,
         historyStore: HistoryStore,
         floatingPanel: FloatingTranslatePanel,
         toastPanel: ToastPanel,
-        translatedImagePreviewWindowController: TranslatedImagePreviewWindowController
+        imageOverlayTranslationWindowController: ImageOverlayTranslationWindowController
     ) {
         self.permissionManager = permissionManager
         self.ocrService = ocrService
-        self.ocrTextBlockGrouper = ocrTextBlockGrouper
         self.ocrResultPanel = ocrResultPanel
         self.translationService = translationService
         self.historyStore = historyStore
         self.floatingPanel = floatingPanel
         self.toastPanel = toastPanel
-        self.translatedImagePreviewWindowController = translatedImagePreviewWindowController
+        self.imageOverlayTranslationWindowController = imageOverlayTranslationWindowController
     }
 
     func startCapture(mode: ScreenshotCaptureMode) {
         guard !isCapturing else {
             return
         }
+
+        cancelActiveProcessing(showFeedback: false)
 
         guard permissionManager.isScreenRecordingTrusted else {
             permissionManager.requestScreenRecordingIfNeeded()
@@ -81,6 +85,8 @@ final class ScreenshotCaptureController {
     }
 
     func openImageFileOCR() {
+        cancelActiveProcessing(showFeedback: false)
+
         let panel = NSOpenPanel()
         panel.title = "选择图片文件"
         panel.message = "选择一张图片进行 OCR 识别"
@@ -102,11 +108,23 @@ final class ScreenshotCaptureController {
         }
 
         let anchorPoint = NSEvent.mouseLocation
-        ocrResultPanel.showLoading(near: anchorPoint)
+        ocrResultPanel.showLoading(
+            near: anchorPoint,
+            onCancel: { [weak self] in
+                self?.cancelActiveWork()
+            }
+        )
 
-        Task { [ocrService, ocrResultPanel, historyStore] in
+        let taskToken = UUID()
+        let task = Task { [ocrService, ocrResultPanel, historyStore] in
+            defer {
+                Task { @MainActor [weak self] in
+                    self?.finishActiveProcessingTask(ifMatches: taskToken)
+                }
+            }
             do {
                 let result = try await ocrService.recognizeText(from: imageURL, mode: .accurate)
+                try Task.checkCancellation()
                 let plainText = result.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !plainText.isEmpty else {
                     throw ScreenshotCaptureError.noRecognizedText
@@ -126,11 +144,34 @@ final class ScreenshotCaptureController {
                 await MainActor.run {
                     ocrResultPanel.showResult(result, imageURL: imageURL, near: anchorPoint)
                 }
+            } catch is CancellationError {
+                await MainActor.run {
+                    ocrResultPanel.hide()
+                }
             } catch {
                 await MainActor.run {
                     ocrResultPanel.showError(error.localizedDescription, near: anchorPoint)
                 }
             }
+        }
+        beginActiveProcessingTask(
+            task,
+            token: taskToken,
+            mode: .ocr,
+            anchorPoint: anchorPoint
+        )
+    }
+
+    func cancelActiveWork() {
+        if isCapturing {
+            cancelCapture()
+            toastPanel.show("已取消截图选择", near: activeProcessingAnchorPoint)
+            return
+        }
+
+        let didCancel = cancelActiveProcessing(showFeedback: true)
+        if !didCancel {
+            toastPanel.show("当前没有正在运行的截图任务")
         }
     }
 
@@ -149,7 +190,12 @@ final class ScreenshotCaptureController {
         do {
             let fileURL = try saveScreenshot(selectionRect: selectionRect)
             print("screenshot saved: \(fileURL.path)")
-            handleScreenshot(imageURL: fileURL, near: NSPoint(x: selectionRect.maxX, y: selectionRect.maxY), mode: activeMode)
+            handleScreenshot(
+                imageURL: fileURL,
+                near: NSPoint(x: selectionRect.maxX, y: selectionRect.maxY),
+                mode: activeMode,
+                captureDisplaySize: selectionRect.size
+            )
         } catch {
             print("screenshot failed: \(error.localizedDescription)")
         }
@@ -189,64 +235,98 @@ final class ScreenshotCaptureController {
         didHideSystemCursor = false
     }
 
-    private func handleScreenshot(imageURL: URL, near point: NSPoint, mode: ScreenshotCaptureMode) {
+    private func handleScreenshot(
+        imageURL: URL,
+        near point: NSPoint,
+        mode: ScreenshotCaptureMode,
+        captureDisplaySize: CGSize? = nil
+    ) {
         let presentationID: UUID?
         switch mode {
         case .translate:
-            presentationID = floatingPanel.showLoading(sourceText: "正在识别截图文字...", near: point)
+            presentationID = floatingPanel.showLoading(
+                sourceText: "正在识别截图文字...",
+                near: point,
+                onCancel: { [weak self] in
+                    self?.cancelActiveWork()
+                }
+            )
         case .translateOverlay:
             presentationID = nil
-            toastPanel.showLoading("正在生成截图翻译覆盖，可能需要一点时间...", near: point)
+            toastPanel.showLoading(
+                "正在识别截图文字...",
+                near: point,
+                onCancel: { [weak self] in
+                    self?.cancelActiveWork()
+                }
+            )
         case .ocr:
             presentationID = nil
-            ocrResultPanel.showLoading(near: point)
+            ocrResultPanel.showLoading(
+                near: point,
+                onCancel: { [weak self] in
+                    self?.cancelActiveWork()
+                }
+            )
         case .silentOCR:
             presentationID = nil
             break
         }
 
-        Task { [ocrService, ocrTextBlockGrouper, ocrResultPanel, translationService, historyStore, floatingPanel, toastPanel, translatedImagePreviewWindowController] in
+        let taskToken = UUID()
+        let task = Task { [ocrService, ocrResultPanel, translationService, historyStore, floatingPanel, toastPanel, imageOverlayTranslationWindowController] in
+            defer {
+                Task { @MainActor [weak self] in
+                    self?.finishActiveProcessingTask(ifMatches: taskToken)
+                }
+            }
             do {
+                let startedAt = Date()
                 if mode == .translateOverlay {
                     let originalImage = try Self.loadImage(from: imageURL)
-                    let recognizedBlocks = try await ocrService.recognizeTextBlocks(from: originalImage, mode: .accurate)
-                    let groupedBlocks = ocrTextBlockGrouper.group(recognizedBlocks)
-                        .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                    await MainActor.run {
+                        toastPanel.hide()
+                        imageOverlayTranslationWindowController.showProgress(
+                            originalImage: originalImage,
+                            message: "正在 OCR 版式识别..."
+                        )
+                    }
+                    let snapshot = try await ocrService.recognizeOverlaySnapshot(
+                        from: originalImage,
+                        displayPointSize: captureDisplaySize,
+                        mode: .accurate
+                    )
+                    let segmentation = snapshot.layoutSnapshot?.segmentation ??
+                        OverlaySegmentationSnapshot(textLines: [], overlaySegments: [])
+                    let segments = segmentation.overlaySegments
+                        .filter { !$0.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                    print(
+                        "screenshot overlay stage: layout ocr elapsed=\(Self.elapsedSeconds(since: startedAt))s, observations=\(snapshot.ocrObservationCount), lines=\(segmentation.textLines.count), segments=\(segments.count)"
+                    )
+                    try Task.checkCancellation()
 
-                    guard !groupedBlocks.isEmpty else {
+                    guard !segments.isEmpty else {
                         throw ScreenshotCaptureError.noRecognizedText
                     }
 
-                    let translationResults = try await translationService.translateImageOverlayBlocks(groupedBlocks)
-                    let translatedBlocks = translationResults.map(\.translatedText)
-                    let summary = translationResults.imageOverlaySummary
-                    let translatedCount = summary.successCount + summary.fallbackCount
-
-                    guard translatedCount > 0 else {
-                        throw ScreenshotCaptureError.overlayTranslationFailed
-                    }
-
-                    try await MainActor.run {
-                        toastPanel.hide()
-                        try translatedImagePreviewWindowController.show(
+                    await MainActor.run {
+                        imageOverlayTranslationWindowController.show(
                             originalImage: originalImage,
-                            blocks: groupedBlocks,
-                            translations: translatedBlocks,
-                            summary: summary,
-                            initialStyle: .solid
+                            ocrSnapshot: snapshot,
+                            segmentation: OverlaySegmentationSnapshot(
+                                textLines: segmentation.textLines,
+                                overlaySegments: segments
+                            ),
+                            stage: .accurate,
+                            autoStart: true
                         )
-                        if summary.fallbackCount > 0 && summary.originalKeptCount > 0 {
-                            toastPanel.show("部分文本块使用备用服务完成翻译。部分文本块翻译失败，已保留原文。", near: point)
-                        } else if summary.fallbackCount > 0 {
-                            toastPanel.show("部分文本块使用备用服务完成翻译。", near: point)
-                        } else if summary.originalKeptCount > 0 {
-                            toastPanel.show("部分文本块翻译失败，已保留原文。", near: point)
-                        }
                     }
                     return
                 }
 
                 let result = try await ocrService.recognizeText(from: imageURL, mode: .accurate)
+                print("screenshot stage: ocr elapsed=\(Self.elapsedSeconds(since: startedAt))s, chars=\(result.plainText.count)")
+                try Task.checkCancellation()
                 let plainText = result.plainText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !plainText.isEmpty else {
                     throw ScreenshotCaptureError.noRecognizedText
@@ -279,6 +359,8 @@ final class ScreenshotCaptureController {
                         scenario: .screenshot,
                         mode: .ocrTranslate
                     )
+                    print("screenshot stage: translation elapsed=\(Self.elapsedSeconds(since: startedAt))s")
+                    try Task.checkCancellation()
                     await MainActor.run {
                         if let presentationID {
                             floatingPanel.showResult(
@@ -304,6 +386,19 @@ final class ScreenshotCaptureController {
                 case .silentOCR:
                     break
                 }
+            } catch is CancellationError {
+                await MainActor.run {
+                    switch mode {
+                    case .translate:
+                        floatingPanel.hide()
+                    case .translateOverlay:
+                        toastPanel.hide()
+                    case .ocr:
+                        ocrResultPanel.hide()
+                    case .silentOCR:
+                        toastPanel.hide()
+                    }
+                }
             } catch {
                 await MainActor.run {
                     let message = error.localizedDescription
@@ -323,6 +418,66 @@ final class ScreenshotCaptureController {
                 }
             }
         }
+        beginActiveProcessingTask(
+            task,
+            token: taskToken,
+            mode: mode,
+            anchorPoint: point
+        )
+    }
+
+    @discardableResult
+    private func cancelActiveProcessing(showFeedback: Bool) -> Bool {
+        let hadActiveTask = activeProcessingTask != nil
+        activeProcessingTask?.cancel()
+        activeProcessingTask = nil
+        activeProcessingToken = nil
+
+        if let mode = activeProcessingMode {
+            switch mode {
+            case .translate:
+                floatingPanel.hide()
+            case .translateOverlay:
+                toastPanel.hide()
+            case .ocr:
+                ocrResultPanel.hide()
+            case .silentOCR:
+                toastPanel.hide()
+            }
+        }
+
+        let anchorPoint = activeProcessingAnchorPoint
+        activeProcessingMode = nil
+        activeProcessingAnchorPoint = nil
+
+        if showFeedback, hadActiveTask {
+            toastPanel.show("已停止当前截图任务", near: anchorPoint)
+        }
+
+        return hadActiveTask
+    }
+
+    private func beginActiveProcessingTask(
+        _ task: Task<Void, Never>,
+        token: UUID,
+        mode: ScreenshotCaptureMode,
+        anchorPoint: NSPoint
+    ) {
+        activeProcessingTask = task
+        activeProcessingToken = token
+        activeProcessingMode = mode
+        activeProcessingAnchorPoint = anchorPoint
+    }
+
+    private func finishActiveProcessingTask(ifMatches token: UUID) {
+        guard activeProcessingToken == token else {
+            return
+        }
+
+        activeProcessingTask = nil
+        activeProcessingToken = nil
+        activeProcessingMode = nil
+        activeProcessingAnchorPoint = nil
     }
 
     private func saveScreenshot(selectionRect: CGRect) throws -> URL {
@@ -365,6 +520,10 @@ final class ScreenshotCaptureController {
             throw ScreenshotCaptureError.captureFailed
         }
         return image
+    }
+
+    private static func elapsedSeconds(since startDate: Date) -> String {
+        String(format: "%.2f", Date().timeIntervalSince(startDate))
     }
 
     private func convertToDisplayRect(_ rect: CGRect) -> CGRect {

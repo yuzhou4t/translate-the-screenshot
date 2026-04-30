@@ -32,6 +32,11 @@ let package = Package(
                 .linkedFramework("SwiftUI"),
                 .linkedFramework("Vision")
             ]
+        ),
+        .testTarget(
+            name: "TTSTests",
+            dependencies: ["TTS"],
+            path: "Tests/TTSTests"
         )
     ]
 )

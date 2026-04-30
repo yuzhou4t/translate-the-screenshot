@@ -11,6 +11,7 @@ final class OCRResultPanel {
     private var localMouseDownMonitor: Any?
     private var globalMouseDownMonitor: Any?
     private let panelSize = NSSize(width: 480, height: 360)
+    private var currentCancelAction: (() -> Void)?
 
     init(
         translationService: TranslationService,
@@ -22,19 +23,23 @@ final class OCRResultPanel {
         self.floatingPanel = floatingPanel
     }
 
-    func showLoading(near point: NSPoint) {
+    func showLoading(near point: NSPoint, onCancel: (() -> Void)? = nil) {
+        currentCancelAction = onCancel
         show(state: .loading, near: point)
     }
 
     func showResult(_ result: OCRResult, imageURL: URL, near point: NSPoint) {
+        currentCancelAction = nil
         show(state: .result(result, imageURL: imageURL), near: point)
     }
 
     func showError(_ message: String, near point: NSPoint) {
+        currentCancelAction = nil
         show(state: .error(message), near: point)
     }
 
     func hide() {
+        currentCancelAction = nil
         panel?.orderOut(nil)
         removeDismissMonitors()
     }
@@ -46,6 +51,7 @@ final class OCRResultPanel {
             onAICleanup: performAICleanup(text:),
             onTranslate: translateText(_:),
             supportsAICleanup: true,
+            onCancelLoading: currentCancelAction,
             onClose: hide
         )
 
@@ -190,6 +196,7 @@ private struct OCRResultView: View {
     var onAICleanup: (String) async throws -> String
     var onTranslate: (String) async throws -> Void
     var supportsAICleanup: Bool
+    var onCancelLoading: (() -> Void)?
     var onClose: () -> Void
     @State private var displayedTextMode: OCRDisplayTextMode = .processed
     @State private var aiCleanedText: String?
@@ -251,6 +258,15 @@ private struct OCRResultView: View {
                 .controlSize(.small)
             Text("正在识别截图文字...")
                 .foregroundStyle(.secondary)
+
+            if let onCancelLoading {
+                Button {
+                    onCancelLoading()
+                } label: {
+                    Label("停止任务", systemImage: "stop.fill")
+                }
+                .controlSize(.small)
+            }
         }
     }
 

@@ -11,11 +11,12 @@ final class AppServices {
     let historyStore = HistoryStore()
     let favoriteStore = FavoriteStore()
     let ocrService = OCRService()
-    let ocrTextBlockGrouper = OCRTextBlockGrouper()
     let toastPanel = ToastPanel()
     let screenshotOverlayRenderer = ScreenshotTranslationOverlayRenderer()
-    lazy var translatedImagePreviewWindowController = TranslatedImagePreviewWindowController(
-        renderer: screenshotOverlayRenderer
+    lazy var imageOverlayTranslationWindowController = ImageOverlayTranslationWindowController(
+        renderer: screenshotOverlayRenderer,
+        translationService: translationService,
+        debugWriter: OverlayPipelineDebugWriter()
     )
 
     lazy var floatingPanel = FloatingTranslatePanel(
@@ -72,13 +73,12 @@ final class AppServices {
     lazy var screenshotCaptureController = ScreenshotCaptureController(
         permissionManager: permissionManager,
         ocrService: ocrService,
-        ocrTextBlockGrouper: ocrTextBlockGrouper,
         ocrResultPanel: ocrResultPanel,
         translationService: translationService,
         historyStore: historyStore,
         floatingPanel: floatingPanel,
         toastPanel: toastPanel,
-        translatedImagePreviewWindowController: translatedImagePreviewWindowController
+        imageOverlayTranslationWindowController: imageOverlayTranslationWindowController
     )
 
     lazy var translationController = SelectionTranslationController(

@@ -8,13 +8,21 @@ enum ImageOverlayTranslationStatus: String, Codable, Equatable {
 }
 
 struct ImageOverlayTranslationResult: Identifiable, Equatable {
-    var blockID: String
+    var segmentID: String
     var sourceText: String
     var translatedText: String
+    var lineTranslations: [SegmentLineTranslation]
     var status: ImageOverlayTranslationStatus
     var errorMessage: String?
 
-    var id: String { blockID }
+    var id: String { segmentID }
+}
+
+struct SegmentLineTranslation: Identifiable, Codable, Equatable {
+    var lineIndex: Int
+    var translation: String
+
+    var id: Int { lineIndex }
 }
 
 struct ImageOverlayTranslationSummary: Equatable {
@@ -25,36 +33,42 @@ struct ImageOverlayTranslationSummary: Equatable {
     var failedCount: Int
 }
 
+struct ImageOverlayTranslationBatchEvent: Equatable {
+    var batchIndex: Int
+    var batchCount: Int
+    var results: [ImageOverlayTranslationResult]
+}
+
 struct ImageOverlayBatchTranslator: Sendable {
-    private let maximumBlocksPerBatch: Int
+    private let maximumSegmentsPerBatch: Int
     private let cache: ImageOverlayTranslationCache
 
     init(
-        maximumBlocksPerBatch: Int = 20,
+        maximumSegmentsPerBatch: Int = 20,
         cache: ImageOverlayTranslationCache
     ) {
-        self.maximumBlocksPerBatch = max(1, maximumBlocksPerBatch)
+        self.maximumSegmentsPerBatch = max(1, maximumSegmentsPerBatch)
         self.cache = cache
     }
 
     func translate(
-        blocks: [OCRTextBlock],
+        segments: [OverlaySegment],
         targetLanguage: String,
         provider: any TranslationProvider,
         modelName: String,
         translationMode: TranslationMode = .imageOverlay,
         fallbackUsed: Bool = false
     ) async -> [ImageOverlayTranslationResult] {
-        guard !blocks.isEmpty else {
+        guard !segments.isEmpty else {
             return []
         }
 
         let normalizedModel = normalizedModelName(modelName)
-        let contexts = blocks.map { block in
-            CachedBlockContext(
-                block: block,
+        let contexts = segments.map { segment in
+            CachedSegmentContext(
+                segment: segment,
                 cacheKey: .init(
-                    sourceText: normalizedSourceText(block.text),
+                    sourceText: normalizedSourceText(segment.sourceText),
                     targetLanguage: targetLanguage,
                     providerID: provider.id.rawValue,
                     modelName: normalizedModel,
@@ -64,18 +78,30 @@ struct ImageOverlayBatchTranslator: Sendable {
         }
         let cachedEntries = await cache.values(for: contexts.map(\.cacheKey))
 
-        var resultsByBlockID: [String: ImageOverlayTranslationResult] = [:]
-        var uniqueMissesByKey: [ImageOverlayTranslationCache.Key: CachedBlockContext] = [:]
+        var resultsBySegmentID: [String: ImageOverlayTranslationResult] = [:]
+        var uniqueMissesByKey: [ImageOverlayTranslationCache.Key: CachedSegmentContext] = [:]
         var hitCount = 0
         var missCount = 0
 
         for context in contexts {
-            let blockID = context.block.id.uuidString
+            let segmentID = context.segment.id
+            if !context.segment.shouldTranslate {
+                hitCount += 1
+                resultsBySegmentID[segmentID] = successResult(
+                    for: context.segment,
+                    translatedText: context.segment.sourceText,
+                    lineTranslations: sourceLineTranslations(for: context.segment),
+                    fallbackUsed: fallbackUsed
+                )
+                continue
+            }
+
             if let cached = cachedEntries[context.cacheKey] {
                 hitCount += 1
-                resultsByBlockID[blockID] = successResult(
-                    for: context.block,
+                resultsBySegmentID[segmentID] = successResult(
+                    for: context.segment,
                     translatedText: cached.translatedText,
+                    lineTranslations: cached.lineTranslations,
                     fallbackUsed: fallbackUsed
                 )
             } else {
@@ -92,15 +118,15 @@ struct ImageOverlayBatchTranslator: Sendable {
 
         let missedContexts = Array(uniqueMissesByKey.values)
         guard !missedContexts.isEmpty else {
-            return blocks.compactMap { resultsByBlockID[$0.id.uuidString] }
+            return segments.compactMap { resultsBySegmentID[$0.id] }
         }
 
         let translatedMisses: [ImageOverlayTranslationResult]
         if let promptProvider = provider as? any PromptCompletionProvider {
             translatedMisses = await translateInBatches(
-                blocks: missedContexts.map(\.block),
+                segments: missedContexts.map(\.segment),
                 targetLanguage: targetLanguage,
-                provider: promptProvider,
+                promptProvider: promptProvider,
                 providerLabel: provider.displayName,
                 modelName: normalizedModel,
                 translationMode: translationMode,
@@ -108,7 +134,7 @@ struct ImageOverlayBatchTranslator: Sendable {
             )
         } else {
             translatedMisses = await translateSequentially(
-                blocks: missedContexts.map(\.block),
+                segments: missedContexts.map(\.segment),
                 targetLanguage: targetLanguage,
                 provider: provider,
                 translationMode: translationMode,
@@ -117,81 +143,108 @@ struct ImageOverlayBatchTranslator: Sendable {
         }
 
         var translatedByKey: [ImageOverlayTranslationCache.Key: ImageOverlayTranslationResult] = [:]
-        let missedContextByBlockID = Dictionary(
-            uniqueKeysWithValues: missedContexts.map { ($0.block.id.uuidString, $0) }
+        let missedContextBySegmentID = Dictionary(
+            uniqueKeysWithValues: missedContexts.map { ($0.segment.id, $0) }
         )
 
         for result in translatedMisses {
-            guard let context = missedContextByBlockID[result.blockID] else {
+            guard let context = missedContextBySegmentID[result.segmentID] else {
                 continue
             }
 
             translatedByKey[context.cacheKey] = result
             if result.status == .success || result.status == .fallbackUsed {
-                await cache.insert(result.translatedText, for: context.cacheKey)
+                await cache.insert(
+                    translatedText: result.translatedText,
+                    lineTranslations: result.lineTranslations,
+                    for: context.cacheKey
+                )
             }
         }
 
-        for context in contexts where resultsByBlockID[context.block.id.uuidString] == nil {
+        for context in contexts where resultsBySegmentID[context.segment.id] == nil {
             if let sharedResult = translatedByKey[context.cacheKey] {
-                resultsByBlockID[context.block.id.uuidString] = ImageOverlayTranslationResult(
-                    blockID: context.block.id.uuidString,
-                    sourceText: context.block.text,
+                resultsBySegmentID[context.segment.id] = ImageOverlayTranslationResult(
+                    segmentID: context.segment.id,
+                    sourceText: context.segment.sourceText,
                     translatedText: sharedResult.translatedText,
+                    lineTranslations: sharedResult.lineTranslations,
                     status: sharedResult.status,
                     errorMessage: sharedResult.errorMessage
                 )
             } else {
-                resultsByBlockID[context.block.id.uuidString] = failureResult(
-                    for: context.block,
-                    errorMessage: "未获得该文本块的批量翻译结果。"
+                resultsBySegmentID[context.segment.id] = failureResult(
+                    for: context.segment,
+                    errorMessage: "未获得该语义段的批量翻译结果。"
                 )
             }
         }
 
-        return blocks.compactMap { resultsByBlockID[$0.id.uuidString] }
+        return segments.compactMap { resultsBySegmentID[$0.id] }
     }
 
     private func translateInBatches(
-        blocks: [OCRTextBlock],
+        segments: [OverlaySegment],
         targetLanguage: String,
-        provider: any PromptCompletionProvider,
+        promptProvider: any PromptCompletionProvider,
         providerLabel: String,
         modelName: String,
         translationMode: TranslationMode,
         fallbackUsed: Bool
     ) async -> [ImageOverlayTranslationResult] {
-        let batches = makeBatches(from: blocks)
+        let batches = makeBatches(from: segments)
         print(
-            "image overlay batch translate: provider=\(providerLabel), model=\(modelName.isEmpty ? "-" : modelName), blocks=\(blocks.count), batches=\(batches.count)"
+            "image overlay batch translate: provider=\(providerLabel), model=\(modelName.isEmpty ? "-" : modelName), segments=\(segments.count), batches=\(batches.count)"
         )
 
         var output: [ImageOverlayTranslationResult] = []
-        output.reserveCapacity(blocks.count)
+        output.reserveCapacity(segments.count)
+        var shouldAbortRemainingBatches = false
 
         for (index, batch) in batches.enumerated() {
+            if shouldAbortRemainingBatches {
+                output.append(contentsOf: failureResults(
+                    for: batch,
+                    errorMessage: "前一批次请求已超时或失败，已停止当前服务的后续批量翻译。"
+                ))
+                continue
+            }
+
             let prompt = buildPrompt(
-                blocks: batch,
+                segments: batch,
                 targetLanguage: targetLanguage,
                 translationMode: translationMode
             )
 
             do {
-                let rawResponse = try await provider.complete(
+                let rawResponse = try await promptProvider.complete(
                     systemPrompt: prompt.system,
                     userPrompt: prompt.user,
                     temperature: 0.1
                 )
-                let results = parseBatchResponse(
+                let parseOutcome = parseBatchResponse(
                     rawResponse,
-                    expectedBlocks: batch,
+                    expectedSegments: batch,
                     fallbackUsed: fallbackUsed
                 )
-                output.append(contentsOf: results)
+                switch parseOutcome {
+                case .success(let results):
+                    output.append(contentsOf: results)
+                case .parseFailure(let message):
+                    print(
+                        "image overlay batch parse fallback: provider=\(providerLabel), model=\(modelName.isEmpty ? "-" : modelName), batch=\(index + 1), size=\(batch.count), reason=\(message)"
+                    )
+                    shouldAbortRemainingBatches = shouldAbortAfterBatchFailure(message)
+                    output.append(contentsOf: failureResults(
+                        for: batch,
+                        errorMessage: message
+                    ))
+                }
             } catch {
                 print(
                     "image overlay batch failed: provider=\(providerLabel), model=\(modelName.isEmpty ? "-" : modelName), batch=\(index + 1), size=\(batch.count), reason=\(error.localizedDescription)"
                 )
+                shouldAbortRemainingBatches = shouldAbortAfterBatchFailure(error.localizedDescription)
                 output.append(contentsOf: failureResults(
                     for: batch,
                     errorMessage: error.localizedDescription
@@ -202,19 +255,32 @@ struct ImageOverlayBatchTranslator: Sendable {
         return output
     }
 
+    private func shouldAbortAfterBatchFailure(_ message: String) -> Bool {
+        let normalized = message.lowercased()
+        return normalized.contains("超时") ||
+            normalized.contains("timeout") ||
+            normalized.contains("429") ||
+            normalized.contains("限流") ||
+            normalized.contains("额度") ||
+            normalized.contains("503") ||
+            normalized.contains("high demand") ||
+            normalized.contains("network") ||
+            normalized.contains("网络")
+    }
+
     private func translateSequentially(
-        blocks: [OCRTextBlock],
+        segments: [OverlaySegment],
         targetLanguage: String,
         provider: any TranslationProvider,
         translationMode: TranslationMode,
         fallbackUsed: Bool
     ) async -> [ImageOverlayTranslationResult] {
         var output: [ImageOverlayTranslationResult] = []
-        output.reserveCapacity(blocks.count)
+        output.reserveCapacity(segments.count)
 
-        for block in blocks {
+        for segment in segments {
             let request = TranslationRequest(
-                text: block.text,
+                text: segment.sourceText,
                 sourceLanguage: nil,
                 targetLanguage: targetLanguage,
                 translationMode: translationMode
@@ -224,17 +290,18 @@ struct ImageOverlayBatchTranslator: Sendable {
                 let response = try await provider.translate(request)
                 let translatedText = response.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
                 guard !translatedText.isEmpty else {
-                    output.append(failureResult(for: block, errorMessage: "翻译结果为空。"))
+                    output.append(failureResult(for: segment, errorMessage: "翻译结果为空。"))
                     continue
                 }
 
                 output.append(successResult(
-                    for: block,
+                    for: segment,
                     translatedText: translatedText,
+                    lineTranslations: splitTranslationByLineSkeleton(translatedText, for: segment),
                     fallbackUsed: fallbackUsed
                 ))
             } catch {
-                output.append(failureResult(for: block, errorMessage: error.localizedDescription))
+                output.append(failureResult(for: segment, errorMessage: error.localizedDescription))
             }
         }
 
@@ -242,25 +309,33 @@ struct ImageOverlayBatchTranslator: Sendable {
     }
 
     private func buildPrompt(
-        blocks: [OCRTextBlock],
+        segments: [OverlaySegment],
         targetLanguage: String,
         translationMode: TranslationMode
     ) -> PromptBuilder.Prompt {
         switch translationMode {
         case .imageOverlay:
-            let inputItems = blocks.map {
-                PromptBuilder.ImageOverlayBatchBlock(
-                    id: $0.id.uuidString,
-                    text: $0.text
+            let inputItems = segments.map {
+                PromptBuilder.ImageOverlayBatchSegment(
+                    id: $0.id,
+                    role: $0.role.rawValue,
+                    sourceText: $0.sourceText,
+                    lines: $0.lines.enumerated().map { lineIndex, line in
+                        PromptBuilder.ImageOverlayBatchLine(
+                            lineIndex: lineIndex,
+                            text: line.text
+                        )
+                    },
+                    readingOrder: $0.readingOrder
                 )
             }
             return PromptBuilder.buildImageOverlayBatchPrompt(
-                blocks: inputItems,
+                segments: inputItems,
                 targetLanguage: targetLanguage
             )
         default:
-            let combinedText = blocks
-                .map(\.text)
+            let combinedText = segments
+                .map(\.sourceText)
                 .joined(separator: "\n")
             return PromptBuilder.build(
                 mode: translationMode,
@@ -272,33 +347,72 @@ struct ImageOverlayBatchTranslator: Sendable {
 
     private func parseBatchResponse(
         _ rawResponse: String,
-        expectedBlocks: [OCRTextBlock],
+        expectedSegments: [OverlaySegment],
         fallbackUsed: Bool
-    ) -> [ImageOverlayTranslationResult] {
+    ) -> BatchParseOutcome {
         let parsedItems = decodeResponseItems(from: rawResponse)
-        var translationsByID: [String: String] = [:]
+        guard !parsedItems.isEmpty else {
+            return .parseFailure("模型未返回可解析的 segment JSON。")
+        }
+
+        let expectedSegmentIDs = Set(expectedSegments.map(\.id))
+        var translationsByID: [String: BatchOutputItem] = [:]
 
         for item in parsedItems {
             let id = item.id.trimmingCharacters(in: .whitespacesAndNewlines)
             let translation = item.translation.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !id.isEmpty, !translation.isEmpty, translationsByID[id] == nil else {
+            guard !id.isEmpty,
+                  expectedSegmentIDs.contains(id),
+                  translationsByID[id] == nil else {
                 continue
             }
-            translationsByID[id] = translation
+            translationsByID[id] = BatchOutputItem(
+                id: id,
+                translation: translation,
+                lineTranslations: item.lineTranslations
+            )
         }
 
-        return expectedBlocks.map { block in
-            let blockID = block.id.uuidString
-            guard let translatedText = translationsByID[blockID] else {
-                return failureResult(for: block, errorMessage: "模型未返回该文本块的有效 JSON 译文。")
+        let results = expectedSegments.map { segment in
+            guard let item = translationsByID[segment.id] else {
+                return originalKeptResult(
+                    for: segment,
+                    errorMessage: "模型未返回该语义段的译文，已保留原文。"
+                )
+            }
+
+            let cleanedTranslation = item.translation.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !cleanedTranslation.isEmpty else {
+                return originalKeptResult(
+                    for: segment,
+                    errorMessage: "模型返回了空译文，已保留原文。"
+                )
+            }
+
+            if translationShouldStayUnchanged(for: segment, candidate: cleanedTranslation) {
+                return successResult(
+                    for: segment,
+                    translatedText: segment.sourceText,
+                    lineTranslations: sourceLineTranslations(for: segment),
+                    fallbackUsed: fallbackUsed
+                )
             }
 
             return successResult(
-                for: block,
-                translatedText: translatedText,
+                for: segment,
+                translatedText: cleanedTranslation,
+                lineTranslations: validatedLineTranslations(
+                    item.lineTranslations,
+                    for: segment
+                ) ?? splitTranslationByLineSkeleton(
+                    cleanedTranslation,
+                    for: segment
+                ),
                 fallbackUsed: fallbackUsed
             )
         }
+
+        return .success(results)
     }
 
     private func decodeResponseItems(from rawResponse: String) -> [BatchOutputItem] {
@@ -306,6 +420,12 @@ struct ImageOverlayBatchTranslator: Sendable {
 
         for candidate in candidates {
             if let items = decodeBatchItems(candidate), !items.isEmpty {
+                return items
+            }
+
+            if let repaired = repairedJSONCandidate(from: candidate),
+               let items = decodeBatchItems(repaired),
+               !items.isEmpty {
                 return items
             }
         }
@@ -329,11 +449,15 @@ struct ImageOverlayBatchTranslator: Sendable {
             candidates.append(fenced)
         }
 
+        if let objectPayload = extractJSONObject(from: rawResponse) {
+            candidates.append(objectPayload)
+        }
+
         if let arrayPayload = extractJSONArray(from: rawResponse) {
             candidates.append(arrayPayload)
         }
 
-        return candidates
+        return Array(NSOrderedSet(array: candidates)) as? [String] ?? candidates
     }
 
     private func decodeBatchItems(_ candidate: String) -> [BatchOutputItem]? {
@@ -343,16 +467,16 @@ struct ImageOverlayBatchTranslator: Sendable {
 
         let decoder = JSONDecoder()
 
-        if let item = try? decoder.decode(BatchOutputItem.self, from: data) {
-            return [item]
+        if let wrapped = try? decoder.decode(BatchOutputWrapper.self, from: data) {
+            return wrapped.translations ?? wrapped.results ?? wrapped.items
         }
 
         if let items = try? decoder.decode([BatchOutputItem].self, from: data) {
             return items
         }
 
-        if let wrapped = try? decoder.decode(BatchOutputWrapper.self, from: data) {
-            return wrapped.translations ?? wrapped.results ?? wrapped.items
+        if let item = try? decoder.decode(BatchOutputItem.self, from: data) {
+            return [item]
         }
 
         return nil
@@ -374,6 +498,16 @@ struct ImageOverlayBatchTranslator: Sendable {
         return String(rawResponse[contentRange]).trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
+    private func extractJSONObject(from rawResponse: String) -> String? {
+        guard let start = rawResponse.firstIndex(of: "{"),
+              let end = rawResponse.lastIndex(of: "}"),
+              start <= end else {
+            return nil
+        }
+
+        return String(rawResponse[start...end]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     private func extractJSONArray(from rawResponse: String) -> String? {
         guard let start = rawResponse.firstIndex(of: "["),
               let end = rawResponse.lastIndex(of: "]"),
@@ -382,6 +516,31 @@ struct ImageOverlayBatchTranslator: Sendable {
         }
 
         return String(rawResponse[start...end]).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    private func repairedJSONCandidate(from candidate: String) -> String? {
+        let trimmed = candidate.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return nil
+        }
+
+        var repaired = trimmed
+            .replacingOccurrences(of: "“", with: "\"")
+            .replacingOccurrences(of: "”", with: "\"")
+            .replacingOccurrences(of: "‘", with: "\"")
+            .replacingOccurrences(of: "’", with: "\"")
+
+        repaired = repaired.replacingOccurrences(
+            of: #",(\s*[\]}])"#,
+            with: "$1",
+            options: .regularExpression
+        )
+
+        if repaired.first == "[" {
+            repaired = #"{"translations": \#(repaired)}"#
+        }
+
+        return repaired == trimmed ? nil : repaired
     }
 
     private func recoverObjectItems(from rawResponse: String) -> [BatchOutputItem] {
@@ -408,44 +567,255 @@ struct ImageOverlayBatchTranslator: Sendable {
         return items
     }
 
-    private func makeBatches(from blocks: [OCRTextBlock]) -> [[OCRTextBlock]] {
-        stride(from: 0, to: blocks.count, by: maximumBlocksPerBatch).map { start in
-            Array(blocks[start..<min(start + maximumBlocksPerBatch, blocks.count)])
+    private func makeBatches(from segments: [OverlaySegment]) -> [[OverlaySegment]] {
+        stride(from: 0, to: segments.count, by: maximumSegmentsPerBatch).map { start in
+            Array(segments[start..<min(start + maximumSegmentsPerBatch, segments.count)])
         }
     }
 
     private func successResult(
-        for block: OCRTextBlock,
+        for segment: OverlaySegment,
         translatedText: String,
+        lineTranslations: [SegmentLineTranslation]? = nil,
         fallbackUsed: Bool
     ) -> ImageOverlayTranslationResult {
         ImageOverlayTranslationResult(
-            blockID: block.id.uuidString,
-            sourceText: block.text,
+            segmentID: segment.id,
+            sourceText: segment.sourceText,
             translatedText: translatedText,
+            lineTranslations: lineTranslations ?? splitTranslationByLineSkeleton(translatedText, for: segment),
             status: fallbackUsed ? .fallbackUsed : .success,
             errorMessage: nil
         )
     }
 
     private func failureResults(
-        for blocks: [OCRTextBlock],
+        for segments: [OverlaySegment],
         errorMessage: String
     ) -> [ImageOverlayTranslationResult] {
-        blocks.map { failureResult(for: $0, errorMessage: errorMessage) }
+        segments.map { failureResult(for: $0, errorMessage: errorMessage) }
     }
 
     private func failureResult(
-        for block: OCRTextBlock,
+        for segment: OverlaySegment,
         errorMessage: String
     ) -> ImageOverlayTranslationResult {
         ImageOverlayTranslationResult(
-            blockID: block.id.uuidString,
-            sourceText: block.text,
-            translatedText: block.text,
+            segmentID: segment.id,
+            sourceText: segment.sourceText,
+            translatedText: segment.sourceText,
+            lineTranslations: sourceLineTranslations(for: segment),
             status: .failed,
             errorMessage: errorMessage
         )
+    }
+
+    private func originalKeptResult(
+        for segment: OverlaySegment,
+        errorMessage: String
+    ) -> ImageOverlayTranslationResult {
+        ImageOverlayTranslationResult(
+            segmentID: segment.id,
+            sourceText: segment.sourceText,
+            translatedText: segment.sourceText,
+            lineTranslations: sourceLineTranslations(for: segment),
+            status: .originalKept,
+            errorMessage: errorMessage
+        )
+    }
+
+    private func validatedLineTranslations(
+        _ candidate: [BatchOutputLineItem]?,
+        for segment: OverlaySegment
+    ) -> [SegmentLineTranslation]? {
+        guard let candidate, !candidate.isEmpty else {
+            return nil
+        }
+
+        let expectedCount = max(segment.lines.count, 1)
+        var seen = Set<Int>()
+        var output: [SegmentLineTranslation] = []
+
+        for item in candidate {
+            let cleaned = item.translation.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard item.lineIndex >= 0,
+                  item.lineIndex < expectedCount,
+                  !cleaned.isEmpty,
+                  !seen.contains(item.lineIndex) else {
+                return nil
+            }
+
+            seen.insert(item.lineIndex)
+            output.append(
+                SegmentLineTranslation(
+                    lineIndex: item.lineIndex,
+                    translation: cleaned
+                )
+            )
+        }
+
+        guard output.count == expectedCount else {
+            return nil
+        }
+
+        return output.sorted { $0.lineIndex < $1.lineIndex }
+    }
+
+    private func sourceLineTranslations(
+        for segment: OverlaySegment
+    ) -> [SegmentLineTranslation] {
+        segment.lines.enumerated().map { index, line in
+            SegmentLineTranslation(
+                lineIndex: index,
+                translation: line.text
+            )
+        }
+    }
+
+    private func splitTranslationByLineSkeleton(
+        _ translation: String,
+        for segment: OverlaySegment
+    ) -> [SegmentLineTranslation] {
+        let cleaned = translation.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !cleaned.isEmpty else {
+            return sourceLineTranslations(for: segment)
+        }
+
+        let expectedLineCount = max(segment.lines.count, 1)
+        guard expectedLineCount > 1 else {
+            return [SegmentLineTranslation(lineIndex: 0, translation: cleaned)]
+        }
+
+        let explicitLines = cleaned
+            .split(whereSeparator: \.isNewline)
+            .map { String($0).trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        if explicitLines.count == expectedLineCount {
+            return explicitLines.enumerated().map { index, value in
+                SegmentLineTranslation(lineIndex: index, translation: value)
+            }
+        }
+
+        if explicitLines.count > expectedLineCount {
+            var merged: [SegmentLineTranslation] = []
+            for index in 0..<expectedLineCount {
+                let value: String
+                if index < expectedLineCount - 1 {
+                    value = explicitLines[index]
+                } else {
+                    value = explicitLines[index...].joined(separator: " ")
+                }
+                merged.append(SegmentLineTranslation(lineIndex: index, translation: value))
+            }
+            return merged
+        }
+
+        if containsCJK(cleaned) {
+            return proportionalCharacterSplit(cleaned, segment: segment)
+        }
+
+        return proportionalWordSplit(cleaned, segment: segment)
+    }
+
+    private func proportionalWordSplit(
+        _ translation: String,
+        segment: OverlaySegment
+    ) -> [SegmentLineTranslation] {
+        let words = translation
+            .split(whereSeparator: \.isWhitespace)
+            .map(String.init)
+        guard !words.isEmpty else {
+            return sourceLineTranslations(for: segment)
+        }
+
+        let weights = segment.lines.map { max(compactLength($0.text), 1) }
+        let ranges = proportionalRanges(total: words.count, weights: weights)
+
+        return ranges.enumerated().map { index, range in
+            let value = range.isEmpty
+                ? words[min(index, words.count - 1)]
+                : words[range].joined(separator: " ")
+            return SegmentLineTranslation(lineIndex: index, translation: value)
+        }
+    }
+
+    private func proportionalCharacterSplit(
+        _ translation: String,
+        segment: OverlaySegment
+    ) -> [SegmentLineTranslation] {
+        let characters = Array(translation)
+        guard !characters.isEmpty else {
+            return sourceLineTranslations(for: segment)
+        }
+
+        let weights = segment.lines.map { max(compactLength($0.text), 1) }
+        let ranges = proportionalRanges(total: characters.count, weights: weights)
+
+        return ranges.enumerated().map { index, range in
+            let value: String
+            if range.isEmpty {
+                value = String(characters[min(index, characters.count - 1)])
+            } else {
+                value = String(characters[range]).trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            return SegmentLineTranslation(
+                lineIndex: index,
+                translation: value.isEmpty ? translation : value
+            )
+        }
+    }
+
+    private func proportionalRanges(
+        total: Int,
+        weights: [Int]
+    ) -> [Range<Int>] {
+        guard total > 0, !weights.isEmpty else {
+            return []
+        }
+
+        let totalWeight = max(weights.reduce(0, +), 1)
+        var ranges: [Range<Int>] = []
+        var cursor = 0
+
+        for index in weights.indices {
+            let remainingLines = weights.count - index
+            if index == weights.count - 1 {
+                ranges.append(cursor..<total)
+                break
+            }
+
+            let proportional = Int(round(Double(total) * Double(weights[index]) / Double(totalWeight)))
+            let minimumRemaining = remainingLines - 1
+            let available = max(total - cursor - minimumRemaining, 1)
+            let count = max(1, min(proportional, available))
+            ranges.append(cursor..<(cursor + count))
+            cursor += count
+        }
+
+        if ranges.count < weights.count {
+            ranges.append(cursor..<total)
+        }
+
+        return ranges
+    }
+
+    private func compactLength(_ text: String) -> Int {
+        text.filter { !$0.isWhitespace }.count
+    }
+
+    private func containsCJK(_ text: String) -> Bool {
+        text.unicodeScalars.contains { scalar in
+            (0x4E00...0x9FFF).contains(Int(scalar.value)) ||
+                (0x3400...0x4DBF).contains(Int(scalar.value))
+        }
+    }
+
+    private func translationShouldStayUnchanged(
+        for segment: OverlaySegment,
+        candidate _: String
+    ) -> Bool {
+        return [.code, .url, .number].contains(segment.role)
     }
 
     private func normalizedSourceText(_ value: String) -> String {
@@ -460,6 +830,17 @@ struct ImageOverlayBatchTranslator: Sendable {
 private struct BatchOutputItem: Codable {
     var id: String
     var translation: String
+    var lineTranslations: [BatchOutputLineItem]?
+}
+
+private struct BatchOutputLineItem: Codable {
+    var lineIndex: Int
+    var translation: String
+}
+
+private enum BatchParseOutcome {
+    case success([ImageOverlayTranslationResult])
+    case parseFailure(String)
 }
 
 private struct BatchOutputWrapper: Codable {
@@ -468,8 +849,8 @@ private struct BatchOutputWrapper: Codable {
     var items: [BatchOutputItem]?
 }
 
-private struct CachedBlockContext {
-    var block: OCRTextBlock
+private struct CachedSegmentContext {
+    var segment: OverlaySegment
     var cacheKey: ImageOverlayTranslationCache.Key
 }
 

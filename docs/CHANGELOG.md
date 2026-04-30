@@ -2,6 +2,34 @@
 
 本文件用于记录 TTS 的产品、UI、配置和核心能力变更，方便后续回看设计取舍与开发进度。
 
+## 2026-04-30
+
+### Swift 版截图覆盖 OCR layout 重构
+
+- 截图覆盖翻译改为单次 Apple Vision accurate OCR + Swift 版 `AppleOCRLayoutEngine`，按 band、列、section 合并自然翻译区域。
+- 移除覆盖翻译中的 VisionKit / Live Text transcript 合并、远端视觉分块和词级 atom 主分块路径，避免一段话被拆成大量小块。
+- 覆盖窗口、增量翻译、复制图片、保存 PNG 和 debug 导出继续沿用会话式体验。
+- README 和 `docs/SCREENSHOT_TRANSLATION.md` 已更新为当前真实链路。
+
+## 2026-04-29
+
+### 截图覆盖翻译会话化重构
+
+- 截图覆盖翻译改为先快速 OCR 并立即打开覆盖翻译窗口，再由用户点击翻译后按批次回填译文。
+- 新增会话式覆盖窗口、实时 canvas 绘制、区域选中、单段排除 / 重试、复制 OCR 文本、复制图片、保存 PNG 和打开 debug 目录能力。
+- 翻译服务新增截图覆盖增量批次事件接口，旧的整图翻译接口继续保留为收集全部批次结果的兼容包装。
+- 新增 macOS VisionKit / Live Text 系统 OCR 接入，覆盖翻译窗口会使用 `ImageAnalyzer` transcript 合并过碎分段，并显示原生文字选择层。
+- Debug 输出补充 `ocr_fast_boxes.png`、`ocr_accurate_boxes.png`、`display_regions.png`、`erase_preview.png`、`translated_live.png` 和 `final_overlay.png`。
+- 当前阶段继续使用 Apple Vision OCR，不引入 RapidOCR / PaddleOCR / ONNX 模型依赖。
+
+### 截图翻译文档整理
+
+- 新增 `docs/SCREENSHOT_TRANSLATION.md`，集中说明普通截图翻译、截图 OCR 和截图覆盖翻译三条链路。
+- 文档按当前实现更新截图覆盖翻译数据流：`OCRService -> TextAtomExtractor -> TextLineBuilder -> OverlaySegmentBuilder -> ImageOverlayBatchTranslator -> ScreenshotTranslationOverlayRenderer`。
+- 明确截图覆盖翻译主链路使用本地 Apple Vision OCR 与本地分块算法，不再依赖 Gemini / OpenAI Vision 分块。
+- 补充 `TextAtom / TextLine / OverlaySegment / eraseBoxes / lineTranslations / nativeReplace` 的关系，方便后续定位“切得碎”“覆盖不准”“白块感明显”等问题。
+- 更新 README 的截图覆盖翻译说明和文档入口，避免继续引用旧的 OCR block 逐块覆盖叙述。
+
 ## 2026-04-27
 
 ### 翻译服务商与模型选择

@@ -15,6 +15,7 @@ final class FloatingTranslatePanel {
     private var dismissedPresentationID: UUID?
     private var currentSourceText: String?
     private var isPinned = false
+    private var currentCancelAction: (() -> Void)?
 
     init(favoriteStore: FavoriteStore, translationService: TranslationService) {
         self.favoriteStore = favoriteStore
@@ -22,12 +23,17 @@ final class FloatingTranslatePanel {
     }
 
     @discardableResult
-    func showLoading(sourceText: String?, near point: NSPoint) -> UUID {
+    func showLoading(
+        sourceText: String?,
+        near point: NSPoint,
+        onCancel: (() -> Void)? = nil
+    ) -> UUID {
         let presentationID = UUID()
         currentPresentationID = presentationID
         dismissedPresentationID = nil
         currentSourceText = sourceText
         isPinned = false
+        currentCancelAction = onCancel
         show(state: .loading(sourceText: sourceText), near: point, shouldReposition: true)
         return presentationID
     }
@@ -47,6 +53,7 @@ final class FloatingTranslatePanel {
         }
 
         currentSourceText = item.sourceText
+        currentCancelAction = nil
         show(state: .result(item), near: point, shouldReposition: false)
     }
 
@@ -55,6 +62,7 @@ final class FloatingTranslatePanel {
             return
         }
 
+        currentCancelAction = nil
         show(state: .error(message, sourceText: currentSourceText), near: point, shouldReposition: false)
     }
 
@@ -72,6 +80,7 @@ final class FloatingTranslatePanel {
             onComparisonLayoutChange: setComparisonExpanded(_:),
             onPinnedChange: setPinned(_:),
             onCopyText: copyToPasteboard(_:),
+            onCancelLoading: currentCancelAction,
             onClose: hide
         )
 
@@ -110,6 +119,7 @@ final class FloatingTranslatePanel {
 
     func hide() {
         dismissedPresentationID = currentPresentationID
+        currentCancelAction = nil
         panel?.orderOut(nil)
         removeDismissMonitors()
     }
@@ -244,6 +254,7 @@ struct FloatingTranslateView: View {
     var onComparisonLayoutChange: (Bool) -> Void
     var onPinnedChange: (Bool) -> Void
     var onCopyText: (String) -> Void
+    var onCancelLoading: (() -> Void)?
     var onClose: () -> Void
 
     @State private var isFavorite = false
@@ -869,6 +880,13 @@ struct FloatingTranslateView: View {
         text?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
     }
 
+    private var isLoadingState: Bool {
+        if case .loading = state {
+            return true
+        }
+        return false
+    }
+
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
             if let favoriteErrorMessage {
@@ -886,6 +904,14 @@ struct FloatingTranslateView: View {
             }
 
             HStack(spacing: 8) {
+                if isLoadingState, let onCancelLoading {
+                    Button {
+                        onCancelLoading()
+                    } label: {
+                        Label("停止任务", systemImage: "stop.fill")
+                    }
+                }
+
                 Button {
                     if let item = resultItem {
                         onCopyText(item.translatedText)

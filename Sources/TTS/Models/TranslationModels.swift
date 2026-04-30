@@ -333,7 +333,7 @@ struct ProviderConfig: Identifiable, Codable, Equatable {
             endpoint = URL(string: "https://api.deepseek.com/chat/completions")
             model = "deepseek-v4-flash"
         case .gemini:
-            endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions")
+            endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent")
             model = "gemini-2.5-flash"
         case .openAICompatible, .myMemory:
             endpoint = nil
@@ -465,6 +465,52 @@ struct FavoriteItem: Identifiable, Codable, Equatable {
     }
 }
 
+struct VisionSegmentationConfig: Codable, Equatable {
+    var providerID: TranslationProviderID
+    var endpoint: URL?
+    var model: String
+
+    static let `default` = defaultConfig(for: .gemini)
+
+    static func defaultConfig(for providerID: TranslationProviderID) -> VisionSegmentationConfig {
+        switch providerID {
+        case .openAICompatible:
+            return VisionSegmentationConfig(
+                providerID: .openAICompatible,
+                endpoint: URL(string: "https://api.openai.com/v1/chat/completions"),
+                model: "gpt-4o-mini"
+            )
+        case .gemini:
+            return VisionSegmentationConfig(
+                providerID: .gemini,
+                endpoint: URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
+                model: "gemini-2.5-flash"
+            )
+        default:
+            return defaultConfig(for: .gemini)
+        }
+    }
+
+    func normalized() -> VisionSegmentationConfig {
+        let supportedProviderID: TranslationProviderID
+        switch providerID {
+        case .openAICompatible, .gemini:
+            supportedProviderID = providerID
+        default:
+            supportedProviderID = VisionSegmentationConfig.default.providerID
+        }
+
+        let defaults = VisionSegmentationConfig.defaultConfig(for: supportedProviderID)
+        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        return VisionSegmentationConfig(
+            providerID: supportedProviderID,
+            endpoint: endpoint ?? defaults.endpoint,
+            model: trimmedModel.isEmpty ? defaults.model : trimmedModel
+        )
+    }
+}
+
 struct AppConfiguration: Codable, Equatable {
     var providerID: TranslationProviderID
     var openAICompatibleEndpoint: URL
@@ -477,6 +523,8 @@ struct AppConfiguration: Codable, Equatable {
     var fallbackProviderID: TranslationProviderID?
     var fallbackModel: String?
     var defaultTranslationMode: TranslationMode
+    var enableVisionSegmentation: Bool
+    var visionSegmentationConfig: VisionSegmentationConfig
     var scenarioTranslationConfigs: [SimpleScenarioTranslationConfig]
 
     static let `default` = AppConfiguration(
@@ -491,6 +539,8 @@ struct AppConfiguration: Codable, Equatable {
         fallbackProviderID: nil,
         fallbackModel: nil,
         defaultTranslationMode: .accurate,
+        enableVisionSegmentation: false,
+        visionSegmentationConfig: .default,
         scenarioTranslationConfigs: defaultScenarioConfigs(
             defaultProviderID: .myMemory,
             providerConfigs: [.openAICompatibleDefault, .myMemoryDefault],
@@ -510,6 +560,8 @@ struct AppConfiguration: Codable, Equatable {
         case fallbackProviderID
         case fallbackModel
         case defaultTranslationMode
+        case enableVisionSegmentation
+        case visionSegmentationConfig
         case scenarioTranslationConfigs
     }
 
@@ -525,6 +577,8 @@ struct AppConfiguration: Codable, Equatable {
         fallbackProviderID: TranslationProviderID?,
         fallbackModel: String?,
         defaultTranslationMode: TranslationMode,
+        enableVisionSegmentation: Bool,
+        visionSegmentationConfig: VisionSegmentationConfig,
         scenarioTranslationConfigs: [SimpleScenarioTranslationConfig]
     ) {
         self.providerID = providerID
@@ -538,6 +592,8 @@ struct AppConfiguration: Codable, Equatable {
         self.fallbackProviderID = fallbackProviderID
         self.fallbackModel = fallbackModel
         self.defaultTranslationMode = defaultTranslationMode
+        self.enableVisionSegmentation = enableVisionSegmentation
+        self.visionSegmentationConfig = visionSegmentationConfig.normalized()
         self.scenarioTranslationConfigs = scenarioTranslationConfigs
     }
 
@@ -554,6 +610,11 @@ struct AppConfiguration: Codable, Equatable {
         fallbackProviderID = try container.decodeIfPresent(TranslationProviderID.self, forKey: .fallbackProviderID)
         fallbackModel = try container.decodeIfPresent(String.self, forKey: .fallbackModel)
         defaultTranslationMode = try container.decodeIfPresent(TranslationMode.self, forKey: .defaultTranslationMode) ?? .accurate
+        enableVisionSegmentation = try container.decodeIfPresent(Bool.self, forKey: .enableVisionSegmentation) ?? false
+        visionSegmentationConfig = (try container.decodeIfPresent(
+            VisionSegmentationConfig.self,
+            forKey: .visionSegmentationConfig
+        ) ?? .default).normalized()
 
         let decodedConfigs = try container.decodeIfPresent([ProviderConfig].self, forKey: .providerConfigs) ?? []
         providerConfigs = AppConfiguration.normalizedConfigs(

@@ -11,6 +11,7 @@ actor ImageOverlayTranslationCache {
 
     struct Entry: Equatable {
         var translatedText: String
+        var lineTranslations: [SegmentLineTranslation]
         var timestamp: Date
     }
 
@@ -30,7 +31,11 @@ actor ImageOverlayTranslationCache {
         return output
     }
 
-    func insert(_ translatedText: String, for key: Key) {
+    func insert(
+        translatedText: String,
+        lineTranslations: [SegmentLineTranslation],
+        for key: Key
+    ) {
         let cleanedText = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !cleanedText.isEmpty else {
             return
@@ -38,6 +43,7 @@ actor ImageOverlayTranslationCache {
 
         storage[key] = Entry(
             translatedText: cleanedText,
+            lineTranslations: lineTranslations,
             timestamp: Date()
         )
     }

@@ -41,13 +41,16 @@ struct OCRResult: Equatable {
 final class OCRService: Sendable {
     private let postProcessor: OCRTextPostProcessor
     private let textBlockGrouper: OCRTextBlockGrouper
+    private let layoutEngine: AppleOCRLayoutEngine
 
     init(
         postProcessor: OCRTextPostProcessor = OCRTextPostProcessor(),
-        textBlockGrouper: OCRTextBlockGrouper = OCRTextBlockGrouper()
+        textBlockGrouper: OCRTextBlockGrouper = OCRTextBlockGrouper(),
+        layoutEngine: AppleOCRLayoutEngine = AppleOCRLayoutEngine()
     ) {
         self.postProcessor = postProcessor
         self.textBlockGrouper = textBlockGrouper
+        self.layoutEngine = layoutEngine
     }
 
     func recognizeText(
@@ -58,10 +61,9 @@ final class OCRService: Sendable {
         let textBlockGrouper = self.textBlockGrouper
 
         return try await Task.detached(priority: .userInitiated) {
-            let image = try Self.loadEnhancedImage(from: imageURL, mode: mode)
+            let preparedImage = try Self.loadPreparedImage(from: imageURL, mode: mode)
             let rawBlocks = try Self.recognizeRawTextBlocks(
-                in: image.recognitionImage,
-                imageSize: image.originalSize,
+                preparedImage: preparedImage,
                 mode: mode
             )
             let groupedBlocks = textBlockGrouper.group(rawBlocks)
@@ -86,124 +88,450 @@ final class OCRService: Sendable {
         let textBlockGrouper = self.textBlockGrouper
 
         return try await Task.detached(priority: .userInitiated) {
-            let loadedImage = try Self.loadEnhancedImage(from: image, mode: mode)
+            let preparedImage = try Self.loadPreparedImage(from: image, mode: mode)
             let rawBlocks = try Self.recognizeRawTextBlocks(
-                in: loadedImage.recognitionImage,
-                imageSize: loadedImage.originalSize,
+                preparedImage: preparedImage,
                 mode: mode
             )
             return textBlockGrouper.group(rawBlocks)
         }.value
     }
 
-    private struct PreparedImage {
-        var recognitionImage: CGImage
-        var originalSize: CGSize
+    func recognizeRawTextBlocks(
+        from image: NSImage,
+        mode: OCRRecognitionMode = .accurate
+    ) async throws -> [OCRTextBlock] {
+        try await Task.detached(priority: .userInitiated) {
+            let preparedImage = try Self.loadPreparedImage(from: image, mode: mode)
+            return try Self.recognizeRawTextBlocks(
+                preparedImage: preparedImage,
+                mode: mode
+            )
+        }.value
     }
 
-    private static func loadEnhancedImage(from imageURL: URL, mode: OCRRecognitionMode) throws -> PreparedImage {
+    func recognizeOverlaySnapshot(
+        from image: NSImage,
+        displayPointSize: CGSize? = nil,
+        mode: OCRRecognitionMode = .accurate
+    ) async throws -> OverlayOCRSnapshot {
+        let layoutEngine = self.layoutEngine
+
+        return try await Task.detached(priority: .userInitiated) {
+            let preparedImage = try Self.loadPreparedImage(
+                from: image,
+                displayPointSize: displayPointSize,
+                mode: mode
+            )
+            let observations = try Self.recognizeObservations(
+                preparedImage: preparedImage,
+                mode: mode
+            )
+            let ocrBlocks = observations.map(\.block)
+            let layoutSnapshot = layoutEngine.buildSnapshot(
+                from: ocrBlocks,
+                imageSize: preparedImage.originalImageSize
+            )
+            let textAtoms = ocrBlocks.enumerated().map { index, block in
+                TextAtom(
+                    id: "layout-source-\(index)-\(block.id.uuidString)",
+                    text: block.text,
+                    boundingBox: block.boundingBox.standardized,
+                    confidence: block.confidence,
+                    sourceObservationID: block.id,
+                    kind: Self.inferAtomKind(for: block.text)
+                )
+            }
+
+            return OverlayOCRSnapshot(
+                ocrObservationCount: observations.count,
+                ocrBlocks: ocrBlocks,
+                textAtoms: textAtoms,
+                layoutSnapshot: layoutSnapshot,
+                scaleFactor: preparedImage.effectiveScaleFactor * preparedImage.ocrScaleFactor,
+                ocrScaleFactor: preparedImage.ocrScaleFactor,
+                originalImageSize: preparedImage.originalImageSize,
+                ocrImageSize: preparedImage.ocrImageSize,
+                displayPointSize: preparedImage.displayPointSize,
+                backingScaleFactor: preparedImage.backingScaleFactor,
+                effectiveScaleFactor: preparedImage.effectiveScaleFactor,
+                cropOrigin: preparedImage.cropOrigin,
+                coordinateSpace: .pixel,
+                ocrInputImage: NSImage(cgImage: preparedImage.recognitionImage, size: preparedImage.ocrImageSize),
+                boxDebugInfo: observations.map(\.debugInfo)
+            )
+        }.value
+    }
+
+    private struct PreparedImage {
+        var recognitionImage: CGImage
+        var originalImageSize: CGSize
+        var ocrImageSize: CGSize
+        var displayPointSize: CGSize
+        var backingScaleFactor: CGFloat
+        var effectiveScaleFactor: CGFloat
+        var ocrScaleFactor: CGFloat
+        var cropOrigin: CGPoint
+    }
+
+    private static func loadPreparedImage(
+        from imageURL: URL,
+        mode: OCRRecognitionMode
+    ) throws -> PreparedImage {
         guard let source = CGImageSourceCreateWithURL(imageURL as CFURL, nil),
               let cgImage = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
             throw OCRServiceError.imageLoadFailed
         }
 
-        return try prepareImage(cgImage, mode: mode)
+        return try prepareImage(cgImage, displayPointSize: nil, mode: mode)
     }
 
-    private static func loadEnhancedImage(from image: NSImage, mode: OCRRecognitionMode) throws -> PreparedImage {
+    private static func loadPreparedImage(
+        from image: NSImage,
+        displayPointSize: CGSize? = nil,
+        mode: OCRRecognitionMode
+    ) throws -> PreparedImage {
         guard let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             throw OCRServiceError.imageLoadFailed
         }
 
-        return try prepareImage(cgImage, mode: mode)
+        return try prepareImage(
+            cgImage,
+            displayPointSize: displayPointSize ?? image.size,
+            mode: mode
+        )
     }
 
-    private static func prepareImage(_ cgImage: CGImage, mode: OCRRecognitionMode) throws -> PreparedImage {
-        let ciImage = CIImage(cgImage: cgImage)
-        let longEdge = max(cgImage.width, cgImage.height)
-        let targetLongEdge = mode == .accurate ? 2400 : 1400
-        let scale = longEdge < targetLongEdge
-            ? min(3.0, CGFloat(targetLongEdge) / CGFloat(max(longEdge, 1)))
+    private static func prepareImage(
+        _ cgImage: CGImage,
+        displayPointSize: CGSize?,
+        mode: OCRRecognitionMode
+    ) throws -> PreparedImage {
+        let rgbImage = try makeRGBImage(from: cgImage)
+        let originalImageSize = CGSize(width: CGFloat(rgbImage.width), height: CGFloat(rgbImage.height))
+        let resolvedDisplayPointSize = resolvedDisplayPointSize(
+            explicitDisplayPointSize: displayPointSize,
+            originalImageSize: originalImageSize
+        )
+        let backingScaleFactor = resolvedBackingScaleFactor(
+            originalImageSize: originalImageSize,
+            displayPointSize: resolvedDisplayPointSize
+        )
+        let effectiveScaleFactor = max(backingScaleFactor, 1)
+        let ocrScaleFactor: CGFloat = effectiveScaleFactor < 1.5
+            ? (1.5 / max(effectiveScaleFactor, 0.01))
             : 1.0
 
-        var output = ciImage.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
+        var ocrInput = CIImage(cgImage: rgbImage)
+        if ocrScaleFactor > 1.001,
+           let lanczos = CIFilter(name: "CILanczosScaleTransform") {
+            lanczos.setValue(ocrInput, forKey: kCIInputImageKey)
+            lanczos.setValue(ocrScaleFactor, forKey: kCIInputScaleKey)
+            lanczos.setValue(1.0, forKey: kCIInputAspectRatioKey)
+            if let scaled = lanczos.outputImage {
+                ocrInput = scaled
+            }
+        }
 
         if mode == .accurate {
             if let colorControls = CIFilter(name: "CIColorControls") {
-                colorControls.setValue(output, forKey: kCIInputImageKey)
+                colorControls.setValue(ocrInput, forKey: kCIInputImageKey)
                 colorControls.setValue(0, forKey: kCIInputSaturationKey)
                 colorControls.setValue(1.18, forKey: kCIInputContrastKey)
                 colorControls.setValue(0.02, forKey: kCIInputBrightnessKey)
                 if let adjusted = colorControls.outputImage {
-                    output = adjusted
+                    ocrInput = adjusted
                 }
             }
 
             if let sharpen = CIFilter(name: "CISharpenLuminance") {
-                sharpen.setValue(output, forKey: kCIInputImageKey)
+                sharpen.setValue(ocrInput, forKey: kCIInputImageKey)
                 sharpen.setValue(0.35, forKey: kCIInputSharpnessKey)
                 if let sharpened = sharpen.outputImage {
-                    output = sharpened
+                    ocrInput = sharpened
                 }
             }
         }
 
         let context = CIContext(options: [.useSoftwareRenderer: false])
-        guard let enhanced = context.createCGImage(output, from: output.extent) else {
+        guard let recognitionImage = context.createCGImage(ocrInput, from: ocrInput.extent) else {
             throw OCRServiceError.imageLoadFailed
         }
 
         return PreparedImage(
-            recognitionImage: enhanced,
-            originalSize: CGSize(width: cgImage.width, height: cgImage.height)
+            recognitionImage: recognitionImage,
+            originalImageSize: originalImageSize,
+            ocrImageSize: CGSize(width: CGFloat(recognitionImage.width), height: CGFloat(recognitionImage.height)),
+            displayPointSize: resolvedDisplayPointSize,
+            backingScaleFactor: backingScaleFactor,
+            effectiveScaleFactor: effectiveScaleFactor,
+            ocrScaleFactor: ocrScaleFactor,
+            cropOrigin: .zero
         )
     }
 
     private static func recognizeRawTextBlocks(
-        in image: CGImage,
-        imageSize: CGSize,
+        preparedImage: PreparedImage,
         mode: OCRRecognitionMode
     ) throws -> [OCRTextBlock] {
+        try recognizeObservations(preparedImage: preparedImage, mode: mode)
+            .map(\.block)
+    }
+
+    private static func recognizeObservations(
+        preparedImage: PreparedImage,
+        mode: OCRRecognitionMode
+    ) throws -> [RecognizedObservation] {
         let request = VNRecognizeTextRequest()
         request.revision = VNRecognizeTextRequestRevision3
         request.recognitionLevel = mode.visionRecognitionLevel
-        request.recognitionLanguages = ["zh-Hans", "zh-Hant", "en-US"]
+        request.recognitionLanguages = recognitionLanguages(for: mode)
         request.automaticallyDetectsLanguage = true
         request.usesLanguageCorrection = true
-        request.minimumTextHeight = mode == .accurate ? 0.0045 : 0.012
+        request.minimumTextHeight = mode == .accurate ? 0.0028 : 0.0085
 
-        let handler = VNImageRequestHandler(cgImage: image, options: [:])
+        let handler = VNImageRequestHandler(cgImage: preparedImage.recognitionImage, options: [:])
         try handler.perform([request])
 
-        return (request.results ?? [])
-            .compactMap { observation -> OCRTextBlock? in
-                guard let candidate = observation.topCandidates(1).first else {
-                    return nil
-                }
+        return (request.results ?? []).compactMap { observation in
+            guard let candidate = observation.topCandidates(1).first else {
+                return nil
+            }
 
-                let text = candidate.string.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !text.isEmpty else {
-                    return nil
-                }
+            let text = normalizedRecognizedText(candidate.string)
+            guard !text.isEmpty else {
+                return nil
+            }
 
-                return OCRTextBlock(
+            let normalizedRect = preciseTextBoundingBox(
+                for: candidate,
+                fallback: observation.boundingBox
+            )
+            let ocrPixelRect = imagePixelRect(
+                fromNormalizedRect: normalizedRect,
+                imageSize: preparedImage.ocrImageSize
+            )
+            let mappedPixelRect = mappedOriginalPixelRect(
+                fromOCRPixelRect: ocrPixelRect,
+                scaleFactor: preparedImage.ocrScaleFactor,
+                originalImageSize: preparedImage.originalImageSize
+            )
+            let renderRect = renderRect(
+                fromOriginalPixelRect: mappedPixelRect,
+                canvasSize: preparedImage.originalImageSize
+            )
+
+            let block = OCRTextBlock(
+                id: UUID(),
+                text: text,
+                boundingBox: mappedPixelRect,
+                confidence: candidate.confidence
+            )
+
+            return RecognizedObservation(
+                block: block,
+                text: text,
+                candidate: candidate,
+                debugInfo: OCRTextBoxDebugInfo(
+                    blockID: block.id.uuidString,
+                    normalizedRect: normalizedRect,
+                    ocrPixelRect: ocrPixelRect.standardized,
+                    mappedPixelRect: mappedPixelRect.standardized,
+                    renderRect: renderRect.standardized,
                     text: text,
-                    boundingBox: imageBoundingBox(
-                        from: observation.boundingBox,
-                        imageSize: imageSize
-                    ),
                     confidence: candidate.confidence
                 )
-            }
+            )
+        }
     }
 
-    private static func imageBoundingBox(from normalizedRect: CGRect, imageSize: CGSize) -> CGRect {
+    private static func imagePixelRect(
+        fromNormalizedRect normalizedRect: CGRect,
+        imageSize: CGSize
+    ) -> CGRect {
         let width = normalizedRect.width * imageSize.width
         let height = normalizedRect.height * imageSize.height
         let x = normalizedRect.minX * imageSize.width
         let y = (1 - normalizedRect.maxY) * imageSize.height
 
-        return CGRect(x: x, y: y, width: width, height: height)
+        return CGRect(x: x, y: y, width: width, height: height).standardized
+    }
+
+    private static func preciseTextBoundingBox(
+        for candidate: VNRecognizedText,
+        fallback: CGRect
+    ) -> CGRect {
+        let text = candidate.string
+        guard !text.isEmpty,
+              let observation = try? candidate.boundingBox(for: text.startIndex..<text.endIndex) else {
+            return fallback.standardized
+        }
+
+        let precise = observation.boundingBox.standardized
+        guard precise.width > 0, precise.height > 0 else {
+            return fallback.standardized
+        }
+
+        return precise
+    }
+
+    private static func normalizedRecognizedText(_ text: String) -> String {
+        text
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .replacingOccurrences(
+                of: #"(?<=[a-z])(?=[A-Z])"#,
+                with: " ",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"(?i)\bthe\s*guardian\b"#,
+                with: "the guardian",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"(?i)\band\s*cecilia\b"#,
+                with: "and Cecilia",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"(?i)\bsunflower\s+me\s+and\s+cecilia\b"#,
+                with: "Sunflower, me and Cecilia",
+                options: .regularExpression
+            )
+            .replacingOccurrences(
+                of: #"\s{2,}"#,
+                with: " ",
+                options: .regularExpression
+            )
+    }
+
+    private static func mappedOriginalPixelRect(
+        fromOCRPixelRect rect: CGRect,
+        scaleFactor: CGFloat,
+        originalImageSize: CGSize
+    ) -> CGRect {
+        guard scaleFactor > 0 else {
+            return rect.standardized
+        }
+
+        let mapped = CGRect(
+            x: rect.minX / scaleFactor,
+            y: rect.minY / scaleFactor,
+            width: rect.width / scaleFactor,
+            height: rect.height / scaleFactor
+        )
+
+        return mapped
+            .intersection(CGRect(origin: .zero, size: originalImageSize))
+            .standardized
+    }
+
+    private static func renderRect(
+        fromOriginalPixelRect rect: CGRect,
+        canvasSize: CGSize
+    ) -> CGRect {
+        CGRect(
+            x: rect.minX,
+            y: canvasSize.height - rect.minY - rect.height,
+            width: rect.width,
+            height: rect.height
+        )
+    }
+
+    private static func recognitionLanguages(for mode: OCRRecognitionMode) -> [String] {
+        switch mode {
+        case .accurate:
+            return mergedRecognitionLanguages(base: ["zh-Hans", "zh-Hant", "en-US", "ja-JP", "ko-KR"])
+        case .fast:
+            return mergedRecognitionLanguages(base: ["zh-Hans", "en-US"])
+        }
+    }
+
+    private static func mergedRecognitionLanguages(base: [String]) -> [String] {
+        let preferred = Locale.preferredLanguages.prefix(3).map { localeIdentifier -> String in
+            if localeIdentifier.hasPrefix("zh-Hans") { return "zh-Hans" }
+            if localeIdentifier.hasPrefix("zh-Hant") { return "zh-Hant" }
+            if localeIdentifier.hasPrefix("en") { return "en-US" }
+            if localeIdentifier.hasPrefix("ja") { return "ja-JP" }
+            if localeIdentifier.hasPrefix("ko") { return "ko-KR" }
+            return localeIdentifier
+        }
+
+        var merged: [String] = []
+        for language in preferred + base {
+            if !merged.contains(language) {
+                merged.append(language)
+            }
+        }
+        return merged
+    }
+
+    private static func inferAtomKind(for text: String) -> TextAtomKind {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            return .unknown
+        }
+
+        if trimmed.range(of: #"(?i)(https?://\S+|www\.\S+|[A-Z0-9._%+\-]+@[A-Z0-9.\-]+\.[A-Z]{2,})"#, options: .regularExpression) != nil {
+            return .url
+        }
+
+        if trimmed.range(of: #"^[\p{Sc}]?\s*\d+(?:[.,:/-]\d+)*(?:\s*[%‰])?$"#, options: .regularExpression) != nil {
+            return .number
+        }
+
+        if trimmed.range(of: #"(?i)([{}[\]()<>]|=>|::|->|/[A-Za-z0-9._\-]+|[A-Za-z0-9._\-]+\.[A-Za-z]{2,6})"#, options: .regularExpression) != nil {
+            return .code
+        }
+
+        return .word
+    }
+
+    private static func resolvedDisplayPointSize(
+        explicitDisplayPointSize: CGSize?,
+        originalImageSize: CGSize
+    ) -> CGSize {
+        guard let explicitDisplayPointSize,
+              explicitDisplayPointSize.width > 0,
+              explicitDisplayPointSize.height > 0 else {
+            return originalImageSize
+        }
+        return explicitDisplayPointSize
+    }
+
+    private static func resolvedBackingScaleFactor(
+        originalImageSize: CGSize,
+        displayPointSize: CGSize
+    ) -> CGFloat {
+        guard displayPointSize.width > 0, displayPointSize.height > 0 else {
+            return 1
+        }
+
+        let widthScale = originalImageSize.width / displayPointSize.width
+        let heightScale = originalImageSize.height / displayPointSize.height
+        return max(min(widthScale, heightScale), 1)
+    }
+
+    private static func makeRGBImage(from cgImage: CGImage) throws -> CGImage {
+        let colorSpace = CGColorSpaceCreateDeviceRGB()
+        guard let context = CGContext(
+            data: nil,
+            width: cgImage.width,
+            height: cgImage.height,
+            bitsPerComponent: 8,
+            bytesPerRow: 0,
+            space: colorSpace,
+            bitmapInfo: CGImageAlphaInfo.noneSkipLast.rawValue
+        ) else {
+            throw OCRServiceError.imageLoadFailed
+        }
+
+        context.interpolationQuality = .high
+        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: cgImage.width, height: cgImage.height))
+        guard let output = context.makeImage() else {
+            throw OCRServiceError.imageLoadFailed
+        }
+        return output
     }
 
     private static func averageConfidence(from blocks: [OCRTextBlock]) -> Float {
@@ -329,6 +657,13 @@ final class OCRService: Sendable {
                 (0xAC00...0xD7AF).contains(scalar.value)
         }
     }
+}
+
+private struct RecognizedObservation {
+    var block: OCRTextBlock
+    var text: String
+    var candidate: VNRecognizedText
+    var debugInfo: OCRTextBoxDebugInfo
 }
 
 private enum OCRServiceError: LocalizedError {

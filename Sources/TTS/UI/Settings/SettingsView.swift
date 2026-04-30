@@ -379,7 +379,7 @@ struct SettingsView: View {
                     .buttonStyle(.borderedProminent)
                 }
 
-                Text("为不同功能指定主要服务和可选备用服务。这里不会重复配置 API Key，服务商认证信息仍然在“翻译服务”页维护。")
+                Text("为不同功能指定主要翻译服务和可选备用服务。截图覆盖翻译使用本地 OCR 与本地语义分块，不依赖 Gemini 或 OpenAI 视觉分块。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -445,11 +445,11 @@ struct SettingsView: View {
                 )
                 SettingsInfoRow(
                     title: "API Key",
-                    message: "API Key 继续使用 Keychain 保存，不写入仓库、构建产物或本地明文配置。",
+                    message: "API Key 会保存到本机配置缓存，并在 Keychain 可用时同步；重新打包调试时不需要反复输入。",
                     systemImage: "key"
                 )
 
-                Text("如果已经授权但这里仍显示未授权，请完全退出并重新打开 /Applications/TTS.app。macOS 会按具体 app 路径记录权限。")
+                Text("如果已经授权但这里仍显示未授权，请完全退出并重新打开 /Applications/TTS.app。macOS 会按 app 路径、Bundle ID 和签名身份记录权限。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -781,6 +781,11 @@ final class SettingsViewModel: ObservableObject {
     @Published var targetLanguage: String
     @Published var translationDirection: TranslationDirection
     @Published var defaultTranslationMode: TranslationMode
+    @Published var enableVisionSegmentation = false
+    @Published var visionSegmentationProviderID: TranslationProviderID
+    @Published var visionSegmentationEndpoint = ""
+    @Published var visionSegmentationModel = ""
+    @Published var visionSegmentationAPIKey = ""
     @Published var scenarioTranslationConfigs: [SimpleScenarioTranslationConfig] = []
     @Published var statusMessage = ""
     @Published var statusIsError = false
@@ -811,6 +816,8 @@ final class SettingsViewModel: ObservableObject {
         targetLanguage = configurationStore.targetLanguage
         translationDirection = configurationStore.translationDirection
         defaultTranslationMode = configurationStore.defaultTranslationMode
+        enableVisionSegmentation = configurationStore.enableVisionSegmentation
+        visionSegmentationProviderID = configurationStore.visionSegmentationConfig.providerID
         reload()
         refreshPermissions()
     }
@@ -849,6 +856,10 @@ final class SettingsViewModel: ObservableObject {
         }
     }
 
+    var visionSegmentationProviderIDs: [TranslationProviderID] {
+        [.openAICompatible, .gemini]
+    }
+
     var accessibilityStatus: String {
         isAccessibilityTrusted ? "已授权" : "未授权"
     }
@@ -866,6 +877,12 @@ final class SettingsViewModel: ObservableObject {
         targetLanguage = configurationStore.targetLanguage
         translationDirection = configurationStore.translationDirection
         defaultTranslationMode = configurationStore.defaultTranslationMode
+        enableVisionSegmentation = configurationStore.enableVisionSegmentation
+        let visionConfig = configurationStore.visionSegmentationConfig
+        visionSegmentationProviderID = visionConfig.providerID
+        visionSegmentationEndpoint = visionConfig.endpoint?.absoluteString ?? ""
+        visionSegmentationModel = visionConfig.model
+        visionSegmentationAPIKey = loadVisionSegmentationAPIKey(for: visionConfig.providerID)
         scenarioTranslationConfigs = configurationStore.scenarioTranslationConfigs
 
         if fallbackProviderID == defaultProviderID {
@@ -927,6 +944,7 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func saveScenarioTranslationConfigs() {
+        configurationStore.setEnableVisionSegmentation(false)
         configurationStore.setScenarioTranslationConfigs(
             scenarioTranslationConfigs.map { config in
                 var next = config
@@ -942,7 +960,26 @@ final class SettingsViewModel: ObservableObject {
             }
         )
         reload()
-        status("场景翻译配置已保存。", isError: false)
+        status("场景配置已保存。", isError: false)
+    }
+
+    func selectVisionSegmentationProvider(_ id: TranslationProviderID) {
+        let currentDefaults = VisionSegmentationConfig.defaultConfig(for: visionSegmentationProviderID)
+        let nextDefaults = VisionSegmentationConfig.defaultConfig(for: id)
+        let currentEndpoint = visionSegmentationEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
+        let currentModel = visionSegmentationModel.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        visionSegmentationProviderID = id
+
+        if currentEndpoint.isEmpty || currentEndpoint == currentDefaults.endpoint?.absoluteString ?? "" {
+            visionSegmentationEndpoint = nextDefaults.endpoint?.absoluteString ?? ""
+        }
+
+        if currentModel.isEmpty || currentModel == currentDefaults.model {
+            visionSegmentationModel = nextDefaults.model
+        }
+
+        visionSegmentationAPIKey = loadVisionSegmentationAPIKey(for: id)
     }
 
     func saveSelectedProvider() {
@@ -1041,5 +1078,13 @@ final class SettingsViewModel: ObservableObject {
     private func status(_ message: String, isError: Bool) {
         statusMessage = message
         statusIsError = isError
+    }
+
+    private func visionSegmentationAPIKeyAccount(for id: TranslationProviderID) -> String {
+        "vision-segmentation.\(id.rawValue).apiKey"
+    }
+
+    private func loadVisionSegmentationAPIKey(for id: TranslationProviderID) -> String {
+        (try? keychainService.loadAPIKey(account: visionSegmentationAPIKeyAccount(for: id))) ?? ""
     }
 }

@@ -21,7 +21,14 @@ final class SelectionTranslationController {
     func translateSelection() {
         activeTask?.cancel()
         let mouseLocation = NSEvent.mouseLocation
-        let presentationID = floatingPanel.showLoading(sourceText: nil, near: mouseLocation)
+        let presentationID = floatingPanel.showLoading(
+            sourceText: nil,
+            near: mouseLocation,
+            onCancel: { [weak self] in
+                self?.activeTask?.cancel()
+                self?.floatingPanel.hide()
+            }
+        )
 
         activeTask = Task { [selectionReader, translationService, floatingPanel] in
             do {

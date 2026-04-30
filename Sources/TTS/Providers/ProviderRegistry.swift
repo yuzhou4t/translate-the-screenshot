@@ -292,18 +292,53 @@ final class ProviderRegistry {
                 throw TranslationProviderError.missingAPIKey
             }
 
-            guard let endpoint = config.endpoint else {
-                throw TranslationProviderError.invalidEndpoint
-            }
-
-            return OpenAICompatibleProvider(
+            return GeminiProvider(
                 id: .gemini,
                 displayName: config.displayName,
-                endpoint: endpoint,
+                endpoint: config.endpoint,
                 model: modelOverride ?? config.model ?? "gemini-2.5-flash",
                 apiKey: apiKey,
                 timeout: config.timeout
             )
+        }
+    }
+
+    func makeVisionSegmentationProvider(
+        config: VisionSegmentationConfig
+    ) throws -> any VisionSegmentationProvider {
+        let normalizedConfig = config.normalized()
+        let apiKeyAccount = visionSegmentationAPIKeyAccount(for: normalizedConfig.providerID)
+
+        guard let apiKey = try keychainService.loadAPIKey(account: apiKeyAccount),
+              !apiKey.isEmpty else {
+            throw TranslationProviderError.missingAPIKey
+        }
+
+        switch normalizedConfig.providerID {
+        case .openAICompatible:
+            guard let endpoint = normalizedConfig.endpoint else {
+                throw TranslationProviderError.invalidEndpoint
+            }
+
+            return OpenAICompatibleProvider(
+                id: .openAICompatible,
+                displayName: "OpenAI Vision 分块",
+                endpoint: endpoint,
+                model: normalizedConfig.model,
+                apiKey: apiKey,
+                timeout: 8
+            )
+        case .gemini:
+            return GeminiProvider(
+                id: .gemini,
+                displayName: "Gemini Vision 分块",
+                endpoint: normalizedConfig.endpoint,
+                model: normalizedConfig.model,
+                apiKey: apiKey,
+                timeout: 8
+            )
+        default:
+            throw TranslationProviderError.providerMessage("视觉智能分块目前仅支持 OpenAI-compatible 或 Gemini。")
         }
     }
 
@@ -334,5 +369,9 @@ final class ProviderRegistry {
 
     private func secretKeyAccount(for id: TranslationProviderID) -> String {
         "\(id.rawValue).secretKey"
+    }
+
+    private func visionSegmentationAPIKeyAccount(for id: TranslationProviderID) -> String {
+        "vision-segmentation.\(id.rawValue).apiKey"
     }
 }

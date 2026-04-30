@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 protocol TranslationProvider: Sendable {
@@ -11,6 +12,17 @@ protocol PromptCompletionProvider: TranslationProvider {
     func complete(
         systemPrompt: String,
         userPrompt: String,
+        temperature: Double
+    ) async throws -> String
+}
+
+protocol VisionSegmentationProvider: TranslationProvider {
+    var supportsVisionInput: Bool { get }
+
+    func completeVisionSegmentation(
+        systemPrompt: String,
+        userPrompt: String,
+        image: NSImage,
         temperature: Double
     ) async throws -> String
 }
@@ -92,6 +104,14 @@ final class TranslationProviderFactory {
         configurationStore.defaultProviderID.supportsTranslationModePrompts
     }
 
+    var enableVisionSegmentation: Bool {
+        configurationStore.enableVisionSegmentation
+    }
+
+    var visionSegmentationConfig: VisionSegmentationConfig {
+        configurationStore.visionSegmentationConfig
+    }
+
     var configurationStoreRef: AppConfigurationStore {
         configurationStore
     }
@@ -124,6 +144,12 @@ final class TranslationProviderFactory {
 
     func makeProvider(config: ProviderConfig, modelOverride: String? = nil) throws -> any TranslationProvider {
         try providerRegistry.makeProvider(config: config, modelOverride: modelOverride)
+    }
+
+    func makeVisionSegmentationProvider() throws -> any VisionSegmentationProvider {
+        try providerRegistry.makeVisionSegmentationProvider(
+            config: configurationStore.visionSegmentationConfig
+        )
     }
 
     func makeActiveProvider() throws -> any TranslationProvider {

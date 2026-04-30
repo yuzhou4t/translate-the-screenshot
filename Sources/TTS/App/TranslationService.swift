@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor
@@ -15,6 +16,7 @@ final class TranslationService {
         self.providerFactory = providerFactory
         self.historyStore = historyStore
         self.imageOverlayBatchTranslator = ImageOverlayBatchTranslator(
+            maximumSegmentsPerBatch: 6,
             cache: imageOverlayTranslationCache
         )
     }
@@ -93,12 +95,71 @@ final class TranslationService {
         return item
     }
 
-    func translateImageOverlayBlocks(
-        _ blocks: [OCRTextBlock],
+    func translateImageOverlaySegments(
+        _ segments: [OverlaySegment],
         targetLanguage: String? = nil
     ) async throws -> [ImageOverlayTranslationResult] {
-        let validBlocks = blocks.filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
-        guard !validBlocks.isEmpty else {
+        var output: [ImageOverlayTranslationResult] = []
+        for try await event in translateImageOverlaySegmentsIncrementally(
+            segments,
+            targetLanguage: targetLanguage,
+            batchSize: 6
+        ) {
+            output.append(contentsOf: event.results)
+        }
+        return output
+    }
+
+    func translateImageOverlaySegmentsIncrementally(
+        _ segments: [OverlaySegment],
+        targetLanguage: String? = nil,
+        batchSize: Int = 6
+    ) -> AsyncThrowingStream<ImageOverlayTranslationBatchEvent, Error> {
+        AsyncThrowingStream { continuation in
+            let task = Task { @MainActor in
+                do {
+                    let validSegments = segments.filter { !$0.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                    guard !validSegments.isEmpty else {
+                        continuation.finish()
+                        return
+                    }
+
+                    let batches = makeImageOverlayIncrementalBatches(
+                        from: validSegments,
+                        batchSize: batchSize
+                    )
+                    for (index, batch) in batches.enumerated() {
+                        try Task.checkCancellation()
+                        let results = try await translateImageOverlaySegmentBatch(
+                            batch,
+                            targetLanguage: targetLanguage
+                        )
+                        continuation.yield(
+                            ImageOverlayTranslationBatchEvent(
+                                batchIndex: index,
+                                batchCount: batches.count,
+                                results: results
+                            )
+                        )
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+
+            continuation.onTermination = { _ in
+                task.cancel()
+            }
+        }
+    }
+
+    private func translateImageOverlaySegmentBatch(
+        _ segments: [OverlaySegment],
+        targetLanguage: String? = nil
+    ) async throws -> [ImageOverlayTranslationResult] {
+        let validSegments = segments.filter { !$0.sourceText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        guard !validSegments.isEmpty else {
             return []
         }
 
@@ -113,7 +174,7 @@ final class TranslationService {
         )
 
         let primaryResults = await translateImageOverlayBatch(
-            validBlocks,
+            validSegments,
             targetLanguage: finalTargetLanguage,
             config: providerPlan.primaryConfig,
             modelOverride: providerPlan.primaryModelOverride,
@@ -122,15 +183,15 @@ final class TranslationService {
             attemptLabel: "primary"
         )
 
-        let failedBlockIDs = Set(
+        let failedSegmentIDs = Set(
             primaryResults
                 .filter { $0.status == .failed }
-                .map(\.blockID)
+                .map(\.segmentID)
         )
-        let failedBlocks = validBlocks.filter { failedBlockIDs.contains($0.id.uuidString) }
+        let failedSegments = validSegments.filter { failedSegmentIDs.contains($0.id) }
 
         guard let fallbackPlan = providerPlan.fallback,
-              !failedBlocks.isEmpty,
+              !failedSegments.isEmpty,
               !sameProviderAndModel(
                 lhsProvider: providerPlan.primaryConfig.id,
                 lhsModel: providerPlan.primaryModelOverride ?? providerPlan.primaryConfig.model,
@@ -140,7 +201,7 @@ final class TranslationService {
             let finalized = primaryResults.map(finalizeImageOverlayResult)
             logImageOverlaySummary(
                 scenario: .imageOverlay,
-                batchCount: imageOverlayBatchCount(for: validBlocks.count),
+                batchCount: imageOverlayBatchCount(for: validSegments.count),
                 results: finalized
             )
             return finalized
@@ -154,7 +215,7 @@ final class TranslationService {
         )
 
         let fallbackResults = await translateImageOverlayBatch(
-            failedBlocks,
+            failedSegments,
             targetLanguage: finalTargetLanguage,
             config: fallbackPlan.config,
             modelOverride: fallbackPlan.modelOverride,
@@ -163,10 +224,10 @@ final class TranslationService {
             attemptLabel: "fallback"
         )
 
-        let fallbackByID = Dictionary(uniqueKeysWithValues: fallbackResults.map { ($0.blockID, $0) })
+        let fallbackByID = Dictionary(uniqueKeysWithValues: fallbackResults.map { ($0.segmentID, $0) })
         let finalized = primaryResults.map { result in
             guard result.status == .failed,
-                  let fallbackResult = fallbackByID[result.blockID] else {
+                  let fallbackResult = fallbackByID[result.segmentID] else {
                 return finalizeImageOverlayResult(result)
             }
 
@@ -174,7 +235,7 @@ final class TranslationService {
         }
         logImageOverlaySummary(
             scenario: .imageOverlay,
-            batchCount: imageOverlayBatchCount(for: validBlocks.count),
+            batchCount: imageOverlayBatchCount(for: validSegments.count),
             results: finalized
         )
         return finalized
@@ -198,7 +259,8 @@ final class TranslationService {
                 config: providerPlan.primaryConfig,
                 modelOverride: providerPlan.primaryModelOverride,
                 attemptNumber: 1,
-                note: "primary"
+                note: "primary",
+                scenario: scenario
             )
         } catch {
             let firstKind = classify(error)
@@ -221,7 +283,8 @@ final class TranslationService {
                         config: fallbackPlan.config,
                         modelOverride: fallbackPlan.modelOverride?.isEmpty == false ? fallbackPlan.modelOverride : nil,
                         attemptNumber: 2,
-                        note: "fallback"
+                        note: "fallback",
+                        scenario: scenario
                     )
                 } catch {
                     failureKinds.append(classify(error))
@@ -242,13 +305,15 @@ final class TranslationService {
         config: ProviderConfig,
         modelOverride: String?,
         attemptNumber: Int,
-        note: String
+        note: String,
+        scenario: TranslationScenario
     ) async throws -> TranslationResponse {
-        let providerLabel = config.displayName
-        let modelLabel = modelOverride ?? config.model ?? "-"
+        let adjustedConfig = tunedProviderConfig(config, for: scenario)
+        let providerLabel = adjustedConfig.displayName
+        let modelLabel = modelOverride ?? adjustedConfig.model ?? "-"
         print("translation provider attempt[\(attemptNumber)] \(note): provider=\(providerLabel), model=\(modelLabel)")
 
-        let provider = try providerFactory.makeProvider(config: config, modelOverride: modelOverride)
+        let provider = try providerFactory.makeProvider(config: adjustedConfig, modelOverride: modelOverride)
         do {
             let response = try await provider.translate(request)
             print("translation provider success[\(attemptNumber)]: provider=\(providerLabel)")
@@ -326,7 +391,7 @@ final class TranslationService {
     }
 
     private func translateImageOverlayBatch(
-        _ blocks: [OCRTextBlock],
+        _ segments: [OverlaySegment],
         targetLanguage: String,
         config: ProviderConfig,
         modelOverride: String?,
@@ -336,13 +401,16 @@ final class TranslationService {
     ) async -> [ImageOverlayTranslationResult] {
         let modelLabel = modelOverride ?? config.model ?? "-"
         print(
-            "translation imageOverlay attempt: scenario=\(scenario.rawValue), provider=\(config.displayName), model=\(modelLabel), blocks=\(blocks.count), note=\(attemptLabel)"
+            "translation imageOverlay attempt: scenario=\(scenario.rawValue), provider=\(config.displayName), model=\(modelLabel), segments=\(segments.count), note=\(attemptLabel)"
         )
 
         do {
-            let provider = try providerFactory.makeProvider(config: config, modelOverride: modelOverride)
+            let provider = try providerFactory.makeProvider(
+                config: tunedProviderConfig(config, for: scenario),
+                modelOverride: modelOverride
+            )
             return await imageOverlayBatchTranslator.translate(
-                blocks: blocks,
+                segments: segments,
                 targetLanguage: targetLanguage,
                 provider: provider,
                 modelName: modelLabel,
@@ -354,16 +422,37 @@ final class TranslationService {
             print(
                 "translation imageOverlay setup failed: scenario=\(scenario.rawValue), provider=\(config.displayName), model=\(modelLabel), kind=\(kind.rawValue), reason=\(error.localizedDescription)"
             )
-            return blocks.map { block in
+            return segments.map { segment in
                 ImageOverlayTranslationResult(
-                    blockID: block.id.uuidString,
-                    sourceText: block.text,
-                    translatedText: block.text,
+                    segmentID: segment.id,
+                    sourceText: segment.sourceText,
+                    translatedText: segment.sourceText,
+                    lineTranslations: segment.lines.enumerated().map { index, line in
+                        SegmentLineTranslation(lineIndex: index, translation: line.text)
+                    },
                     status: .failed,
                     errorMessage: error.localizedDescription
                 )
             }
         }
+    }
+
+    private func tunedProviderConfig(
+        _ config: ProviderConfig,
+        for scenario: TranslationScenario
+    ) -> ProviderConfig {
+        var next = config
+
+        switch scenario {
+        case .imageOverlay:
+            next.timeout = min(next.timeout, 12)
+        case .screenshot:
+            next.timeout = min(next.timeout, 15)
+        case .selection, .input, .ocrCleanup:
+            break
+        }
+
+        return next
     }
 
     private func finalFailureMessage(
@@ -468,12 +557,22 @@ final class TranslationService {
         return next
     }
 
-    private func imageOverlayBatchCount(for totalBlocks: Int) -> Int {
-        guard totalBlocks > 0 else {
+    private func imageOverlayBatchCount(for totalSegments: Int) -> Int {
+        guard totalSegments > 0 else {
             return 0
         }
 
-        return Int(ceil(Double(totalBlocks) / 20.0))
+        return Int(ceil(Double(totalSegments) / 6.0))
+    }
+
+    private func makeImageOverlayIncrementalBatches(
+        from segments: [OverlaySegment],
+        batchSize: Int
+    ) -> [[OverlaySegment]] {
+        let resolvedBatchSize = max(batchSize, 1)
+        return stride(from: 0, to: segments.count, by: resolvedBatchSize).map { start in
+            Array(segments[start..<min(start + resolvedBatchSize, segments.count)])
+        }
     }
 
     private func logImageOverlaySummary(
@@ -499,6 +598,7 @@ final class TranslationService {
             "translation imageOverlay summary: scenario=\(scenario.rawValue), batchCount=\(batchCount), successCount=\(summary.successCount), failedCount=\(summary.failedCount), fallbackCount=\(summary.fallbackCount), originalKeptCount=\(summary.originalKeptCount), errorType=\(errorTypes.isEmpty ? "-" : errorTypes)"
         )
     }
+
 }
 
 private struct ResolvedScenarioProviderPlan {

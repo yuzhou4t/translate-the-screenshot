@@ -23,6 +23,8 @@ final class ProviderConfigStore: ObservableObject {
     func update(_ mutate: (inout AppConfiguration) -> Void) {
         var next = configuration
         mutate(&next)
+        next.enableVisionSegmentation = false
+        next.visionSegmentationConfig = next.visionSegmentationConfig.normalized()
         next.providerConfigs = AppConfiguration.normalizedConfigs(
             next.providerConfigs,
             providerID: next.defaultProviderID,
@@ -80,6 +82,14 @@ final class ProviderConfigStore: ObservableObject {
         configuration.defaultTranslationMode
     }
 
+    var enableVisionSegmentation: Bool {
+        configuration.enableVisionSegmentation
+    }
+
+    var visionSegmentationConfig: VisionSegmentationConfig {
+        configuration.visionSegmentationConfig
+    }
+
     var scenarioTranslationConfigs: [SimpleScenarioTranslationConfig] {
         configuration.scenarioTranslationConfigs
     }
@@ -100,6 +110,18 @@ final class ProviderConfigStore: ObservableObject {
     func setDefaultTranslationMode(_ mode: TranslationMode) {
         update { configuration in
             configuration.defaultTranslationMode = mode
+        }
+    }
+
+    func setEnableVisionSegmentation(_ isEnabled: Bool) {
+        update { configuration in
+            configuration.enableVisionSegmentation = isEnabled
+        }
+    }
+
+    func setVisionSegmentationConfig(_ config: VisionSegmentationConfig) {
+        update { configuration in
+            configuration.visionSegmentationConfig = config.normalized()
         }
     }
 
@@ -159,6 +181,8 @@ final class ProviderConfigStore: ObservableObject {
 
     private func repairDefaultProviderState() {
         update { configuration in
+            configuration.enableVisionSegmentation = false
+            configuration.visionSegmentationConfig = configuration.visionSegmentationConfig.normalized()
             configuration.providerConfigs = AppConfiguration.normalizedConfigs(
                 configuration.providerConfigs,
                 providerID: configuration.defaultProviderID,

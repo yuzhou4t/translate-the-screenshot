@@ -7,11 +7,12 @@ final class ToastPanel {
     private var hostingController: NSHostingController<ToastView>?
     private var dismissTask: Task<Void, Never>?
     private let panelSize = NSSize(width: 220, height: 56)
+    private let cancelablePanelSize = NSSize(width: 260, height: 86)
 
     func show(_ message: String, near point: NSPoint? = nil) {
         dismissTask?.cancel()
 
-        let view = ToastView(message: message, isLoading: false)
+        let view = ToastView(message: message, isLoading: false, onCancel: nil)
         present(view: view, near: point)
 
         dismissTask = Task { [weak self] in
@@ -22,10 +23,15 @@ final class ToastPanel {
         }
     }
 
-    func showLoading(_ message: String, near point: NSPoint? = nil) {
+    func showLoading(
+        _ message: String,
+        near point: NSPoint? = nil,
+        onCancel: (() -> Void)? = nil
+    ) {
         dismissTask?.cancel()
-        let view = ToastView(message: message, isLoading: true)
-        present(view: view, near: point)
+        let view = ToastView(message: message, isLoading: true, onCancel: onCancel)
+        let size = onCancel == nil ? panelSize : cancelablePanelSize
+        present(view: view, near: point, size: size)
     }
 
     func hide() {
@@ -33,7 +39,8 @@ final class ToastPanel {
         panel?.orderOut(nil)
     }
 
-    private func present(view: ToastView, near point: NSPoint?) {
+    private func present(view: ToastView, near point: NSPoint?, size: NSSize? = nil) {
+        let panelSize = size ?? self.panelSize
         if panel == nil {
             let newPanel = NSPanel(
                 contentRect: NSRect(origin: .zero, size: panelSize),
@@ -58,11 +65,11 @@ final class ToastPanel {
             panel?.contentViewController = controller
         }
 
-        panel?.setFrame(NSRect(origin: origin(near: point), size: panelSize), display: true)
+        panel?.setFrame(NSRect(origin: origin(near: point, panelSize: panelSize), size: panelSize), display: true)
         panel?.orderFrontRegardless()
     }
 
-    private func origin(near point: NSPoint?) -> NSPoint {
+    private func origin(near point: NSPoint?, panelSize: NSSize) -> NSPoint {
         let screen = point.flatMap { point in
             NSScreen.screens.first { $0.frame.contains(point) }
         } ?? NSScreen.main
@@ -88,21 +95,35 @@ final class ToastPanel {
 private struct ToastView: View {
     var message: String
     var isLoading: Bool
+    var onCancel: (() -> Void)?
 
     var body: some View {
-        HStack(spacing: 10) {
-            if isLoading {
-                ProgressView()
-                    .controlSize(.small)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 10) {
+                if isLoading {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+
+                Text(message)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .multilineTextAlignment(.leading)
+                    .lineLimit(onCancel == nil ? 2 : 3)
             }
 
-            Text(message)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(.primary)
-                .multilineTextAlignment(.leading)
-                .lineLimit(2)
+            if let onCancel {
+                Button {
+                    onCancel()
+                } label: {
+                    Label("停止任务", systemImage: "stop.fill")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+            }
         }
-            .frame(width: 220, height: 56)
+            .frame(width: onCancel == nil ? 220 : 260, height: onCancel == nil ? 56 : 86, alignment: .leading)
             .background(.regularMaterial)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
             .overlay(
