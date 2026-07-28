@@ -8,6 +8,24 @@ protocol TranslationProvider: Sendable {
     func translate(_ request: TranslationRequest) async throws -> TranslationResponse
 }
 
+struct IdentifiedTranslationText: Sendable, Equatable {
+    var id: String
+    var text: String
+}
+
+struct IdentifiedTranslationTextResult: Sendable, Equatable {
+    var id: String
+    var translatedText: String
+}
+
+protocol IdentifiedBatchTranslationProvider: TranslationProvider {
+    func translateBatch(
+        _ items: [IdentifiedTranslationText],
+        sourceLanguage: String?,
+        targetLanguage: String
+    ) async throws -> [IdentifiedTranslationTextResult]
+}
+
 protocol PromptCompletionProvider: TranslationProvider {
     func complete(
         systemPrompt: String,

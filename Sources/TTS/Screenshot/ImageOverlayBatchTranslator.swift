@@ -80,6 +80,7 @@ struct ImageOverlayBatchTranslator: Sendable {
 
         var resultsBySegmentID: [String: ImageOverlayTranslationResult] = [:]
         var uniqueMissesByKey: [ImageOverlayTranslationCache.Key: CachedSegmentContext] = [:]
+        var uniqueMissKeysInOrder: [ImageOverlayTranslationCache.Key] = []
         var hitCount = 0
         var missCount = 0
 
@@ -108,6 +109,7 @@ struct ImageOverlayBatchTranslator: Sendable {
                 missCount += 1
                 if uniqueMissesByKey[context.cacheKey] == nil {
                     uniqueMissesByKey[context.cacheKey] = context
+                    uniqueMissKeysInOrder.append(context.cacheKey)
                 }
             }
         }
@@ -116,13 +118,21 @@ struct ImageOverlayBatchTranslator: Sendable {
             "image overlay cache: provider=\(provider.displayName), model=\(normalizedModel.isEmpty ? "-" : normalizedModel), hitCount=\(hitCount), missCount=\(missCount)"
         )
 
-        let missedContexts = Array(uniqueMissesByKey.values)
+        let missedContexts = uniqueMissKeysInOrder.compactMap { uniqueMissesByKey[$0] }
         guard !missedContexts.isEmpty else {
             return segments.compactMap { resultsBySegmentID[$0.id] }
         }
 
         let translatedMisses: [ImageOverlayTranslationResult]
-        if let promptProvider = provider as? any PromptCompletionProvider {
+        if let batchProvider = provider as? any IdentifiedBatchTranslationProvider {
+            translatedMisses = await translateWithIdentifiedBatchProvider(
+                segments: missedContexts.map(\.segment),
+                targetLanguage: targetLanguage,
+                batchProvider: batchProvider,
+                translationMode: translationMode,
+                fallbackUsed: fallbackUsed
+            )
+        } else if let promptProvider = provider as? any PromptCompletionProvider {
             translatedMisses = await translateInBatches(
                 segments: missedContexts.map(\.segment),
                 targetLanguage: targetLanguage,
@@ -181,6 +191,87 @@ struct ImageOverlayBatchTranslator: Sendable {
         }
 
         return segments.compactMap { resultsBySegmentID[$0.id] }
+    }
+
+    private func translateWithIdentifiedBatchProvider(
+        segments: [OverlaySegment],
+        targetLanguage: String,
+        batchProvider: any IdentifiedBatchTranslationProvider,
+        translationMode: TranslationMode,
+        fallbackUsed: Bool
+    ) async -> [ImageOverlayTranslationResult] {
+        let items = segments.map {
+            IdentifiedTranslationText(id: $0.id, text: $0.sourceText)
+        }
+
+        let batchResults: [IdentifiedTranslationTextResult]
+        do {
+            batchResults = try await batchProvider.translateBatch(
+                items,
+                sourceLanguage: nil,
+                targetLanguage: targetLanguage
+            )
+        } catch {
+            print(
+                "image overlay identified batch failed: provider=\(batchProvider.displayName), segments=\(segments.count), reason=\(error.localizedDescription)"
+            )
+            return failureResults(
+                for: segments,
+                errorMessage: error.localizedDescription
+            )
+        }
+
+        let expectedIDs = Set(segments.map(\.id))
+        var translationsByID: [String: String] = [:]
+        var duplicateIDs = Set<String>()
+
+        for result in batchResults {
+            let id = result.id.trimmingCharacters(in: .whitespacesAndNewlines)
+            let translatedText = result.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard expectedIDs.contains(id),
+                  !translatedText.isEmpty,
+                  !duplicateIDs.contains(id) else {
+                continue
+            }
+
+            if translationsByID[id] != nil {
+                translationsByID.removeValue(forKey: id)
+                duplicateIDs.insert(id)
+                continue
+            }
+            translationsByID[id] = translatedText
+        }
+
+        var resultsByID: [String: ImageOverlayTranslationResult] = [:]
+        for segment in segments {
+            guard let translatedText = translationsByID[segment.id] else {
+                continue
+            }
+            resultsByID[segment.id] = successResult(
+                for: segment,
+                translatedText: translatedText,
+                fallbackUsed: fallbackUsed
+            )
+        }
+
+        let missingSegments = segments.filter { resultsByID[$0.id] == nil }
+        if !missingSegments.isEmpty {
+            print(
+                "image overlay identified batch partial fallback: provider=\(batchProvider.displayName), missing=\(missingSegments.count), total=\(segments.count)"
+            )
+            let fallbackResults = await translateSequentially(
+                segments: missingSegments,
+                targetLanguage: targetLanguage,
+                provider: batchProvider,
+                translationMode: translationMode,
+                fallbackUsed: fallbackUsed
+            )
+            for result in fallbackResults {
+                resultsByID[result.segmentID] = result
+            }
+        }
+
+        return segments.compactMap { resultsByID[$0.id] }
     }
 
     private func translateInBatches(

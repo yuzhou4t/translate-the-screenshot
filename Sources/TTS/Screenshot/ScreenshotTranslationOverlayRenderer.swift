@@ -27,7 +27,7 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
     private let minimumBlockWidth: CGFloat = 44
     private let minimumBlockHeight: CGFloat = 24
     private let minimumFontSize: CGFloat = 11
-    private let maximumFontSize: CGFloat = 30
+    private let maximumFontSize: CGFloat = 72
     private let nativeReplaceMinimumFontSize: CGFloat = 10
     private let nativeReplaceFallbackMinimumWidth: CGFloat = 26
     private let nativeReplaceFallbackMinimumHeight: CGFloat = 16
@@ -80,14 +80,21 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
             throw ScreenshotTranslationOverlayRendererError.imageLoadFailed
         }
 
-        let outputImage = NSImage(size: imageSize)
-        outputImage.lockFocus()
-        defer { outputImage.unlockFocus() }
-
         let imageRect = CGRect(origin: .zero, size: imageSize)
-        let bitmap = NSBitmapImageRep(cgImage: sourceCGImage)
+        let outputBitmap = NSBitmapImageRep(cgImage: sourceCGImage)
+        guard let outputContext = NSGraphicsContext(bitmapImageRep: outputBitmap) else {
+            throw ScreenshotTranslationOverlayRendererError.imageLoadFailed
+        }
+        let outputImage = NSImage(size: imageSize)
+
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = outputContext
         NSGraphicsContext.current?.imageInterpolation = .high
-        NSImage(cgImage: sourceCGImage, size: imageSize).draw(in: imageRect)
+        let bitmap = outputBitmap
+        defer {
+            outputContext.flushGraphics()
+            NSGraphicsContext.restoreGraphicsState()
+        }
 
         if style == .nativeReplace {
             var nativePlans: [NativeReplaceRenderPlan] = []
@@ -145,6 +152,8 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
                 )
             }
 
+            outputContext.flushGraphics()
+            outputImage.addRepresentation(outputBitmap)
             return outputImage
         }
 
@@ -169,6 +178,8 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
             )
         }
 
+        outputContext.flushGraphics()
+        outputImage.addRepresentation(outputBitmap)
         return outputImage
     }
 
@@ -213,6 +224,7 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
             return nil
         }
 
+        let hasPreparedEraseBoxes = segment.reflowPreferred || !segment.eraseBoxes.isEmpty
         let sourceEraseBoxes = segment.reflowPreferred
             ? [reflowSourceRect(for: segment)]
             : (!segment.eraseBoxes.isEmpty
@@ -227,7 +239,11 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
         }
 
         let eraseRects = drawingLineBoxes
-            .map { precisionEraseRect($0, imageSize: imageSize) }
+            .map {
+                hasPreparedEraseBoxes
+                    ? clampedEraseRect($0, imageSize: imageSize)
+                    : precisionEraseRect($0, imageSize: imageSize)
+            }
             .filter { $0.width >= 4 && $0.height >= 4 }
 
         guard !eraseRects.isEmpty else {
@@ -581,6 +597,16 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
             .integral
     }
 
+    private func clampedEraseRect(
+        _ rect: CGRect,
+        imageSize: CGSize
+    ) -> CGRect {
+        CGRect(origin: .zero, size: imageSize)
+            .insetBy(dx: edgeInset, dy: edgeInset)
+            .intersection(rect.standardized)
+            .integral
+    }
+
     private func reflowSourceRect(for segment: OverlaySegment) -> CGRect {
         let box = segment.boundingBox.standardized
         let height = max(box.height, segment.lineBoxes.map(\.height).max() ?? box.height)
@@ -604,19 +630,7 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
             return nil
         }
 
-        let rgbaColors = colors.compactMap(rgbaComponents)
-        guard !rgbaColors.isEmpty else {
-            return nil
-        }
-
-        let dominant = dominantColorComponents(from: rgbaColors)
-
-        return NSColor(
-            calibratedRed: dominant.red,
-            green: dominant.green,
-            blue: dominant.blue,
-            alpha: 1
-        )
+        return dominantSourceColor(from: colors)
     }
 
     private func averageBackgroundColor(
@@ -629,14 +643,7 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
             return nil
         }
 
-        let rgbaColors = colors.compactMap(rgbaComponents)
-        guard !rgbaColors.isEmpty else {
-            return nil
-        }
-
-        let dominant = dominantColorComponents(from: rgbaColors)
-
-        return NSColor(calibratedRed: dominant.red, green: dominant.green, blue: dominant.blue, alpha: 1)
+        return dominantSourceColor(from: colors)
     }
 
     private func estimateTextColor(for background: NSColor) -> NSColor {
@@ -1233,35 +1240,85 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
         imageSize: CGSize
     ) -> [NSColor] {
         let bounds = CGRect(origin: .zero, size: imageSize).insetBy(dx: edgeInset, dy: edgeInset)
-        let offsets: [CGFloat] = [
-            1.5,
-            min(max(rect.height * 0.18, 3), 8),
-            min(max(rect.height * 0.32, 5), 14)
-        ]
-        var points: [CGPoint] = []
-
-        for offset in offsets {
-            for ratio in stride(from: 0.12, through: 0.88, by: 0.19) {
-                points.append(CGPoint(x: rect.minX + rect.width * ratio, y: rect.maxY + offset))
-                points.append(CGPoint(x: rect.minX + rect.width * ratio, y: rect.minY - offset))
-                points.append(CGPoint(x: rect.minX - offset, y: rect.minY + rect.height * ratio))
-                points.append(CGPoint(x: rect.maxX + offset, y: rect.minY + rect.height * ratio))
+        let innerInset = min(max(min(rect.width, rect.height) * 0.04, 1), 2)
+        let innerRect = rect.insetBy(dx: innerInset, dy: innerInset)
+        let bitmapColorSpace = bitmap.cgImage?.colorSpace.flatMap(NSColorSpace.init(cgColorSpace:))
+        let innerPoints = perimeterSamplePoints(for: innerRect)
+        let innerColors = innerPoints
+            .filter { bounds.contains($0) }
+            .compactMap {
+                color(
+                    atDrawingPoint: $0,
+                    in: bitmap,
+                    imageSize: imageSize,
+                    bitmapColorSpace: bitmapColorSpace
+                )
             }
-            points.append(CGPoint(x: rect.minX - offset, y: rect.minY - offset))
-            points.append(CGPoint(x: rect.maxX + offset, y: rect.minY - offset))
-            points.append(CGPoint(x: rect.minX - offset, y: rect.maxY + offset))
-            points.append(CGPoint(x: rect.maxX + offset, y: rect.maxY + offset))
+
+        if hasStableSurfaceColor(innerColors) {
+            return innerColors
         }
 
-        return points
+        let nearestOuterRect = rect.insetBy(dx: -1.5, dy: -1.5)
+        let outerColors = perimeterSamplePoints(for: nearestOuterRect)
             .filter { bounds.contains($0) }
-            .compactMap { color(atDrawingPoint: $0, in: bitmap, imageSize: imageSize) }
+            .compactMap {
+                color(
+                    atDrawingPoint: $0,
+                    in: bitmap,
+                    imageSize: imageSize,
+                    bitmapColorSpace: bitmapColorSpace
+                )
+            }
+        return innerColors + outerColors
+    }
+
+    private func perimeterSamplePoints(
+        for rect: CGRect
+    ) -> [CGPoint] {
+        guard rect.width > 1, rect.height > 1 else {
+            return []
+        }
+
+        var points: [CGPoint] = []
+        for ratio in stride(from: 0.1, through: 0.9, by: 0.16) {
+            points.append(CGPoint(x: rect.minX + rect.width * ratio, y: rect.minY))
+            points.append(CGPoint(x: rect.minX + rect.width * ratio, y: rect.maxY))
+            points.append(CGPoint(x: rect.minX, y: rect.minY + rect.height * ratio))
+            points.append(CGPoint(x: rect.maxX, y: rect.minY + rect.height * ratio))
+        }
+        return points
+    }
+
+    private func hasStableSurfaceColor(
+        _ colors: [NSColor]
+    ) -> Bool {
+        let components = colors.compactMap(rgbaComponents)
+        guard components.count >= 8 else {
+            return false
+        }
+
+        var bucketCounts: [String: Int] = [:]
+        for color in components {
+            let key = [
+                Int((color.red * 10).rounded()),
+                Int((color.green * 10).rounded()),
+                Int((color.blue * 10).rounded())
+            ]
+            .map(String.init)
+            .joined(separator: "-")
+            bucketCounts[key, default: 0] += 1
+        }
+
+        let dominantCount = bucketCounts.values.max() ?? 0
+        return dominantCount >= max(Int(ceil(Double(components.count) * 0.4)), 4)
     }
 
     private func color(
         atDrawingPoint point: CGPoint,
         in bitmap: NSBitmapImageRep,
-        imageSize: CGSize
+        imageSize: CGSize,
+        bitmapColorSpace: NSColorSpace?
     ) -> NSColor? {
         guard imageSize.width > 0, imageSize.height > 0 else {
             return nil
@@ -1271,13 +1328,28 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
         let normalizedY = min(max((imageSize.height - point.y) / imageSize.height, 0), 0.999_999)
         let pixelX = min(max(Int(normalizedX * CGFloat(bitmap.pixelsWide)), 0), max(bitmap.pixelsWide - 1, 0))
         let pixelY = min(max(Int(normalizedY * CGFloat(bitmap.pixelsHigh)), 0), max(bitmap.pixelsHigh - 1, 0))
-        return bitmap.colorAt(x: pixelX, y: pixelY)
+        guard let sampledColor = bitmap.colorAt(x: pixelX, y: pixelY),
+              let bitmapColorSpace,
+              bitmapColorSpace.numberOfColorComponents == 3 else {
+            return bitmap.colorAt(x: pixelX, y: pixelY)
+        }
+
+        return NSColor(
+            colorSpace: bitmapColorSpace,
+            components: [
+                sampledColor.redComponent,
+                sampledColor.greenComponent,
+                sampledColor.blueComponent,
+                sampledColor.alphaComponent
+            ],
+            count: 4
+        )
     }
 
     private func rgbaComponents(
         _ color: NSColor
     ) -> (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)? {
-        guard let rgbColor = color.usingColorSpace(.deviceRGB) else {
+        guard let rgbColor = color.usingColorSpace(.sRGB) else {
             return nil
         }
 
@@ -1289,59 +1361,40 @@ struct ScreenshotTranslationOverlayRenderer: Sendable {
         )
     }
 
-    private func dominantColorComponents(
-        from components: [(red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)]
-    ) -> (red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat) {
-        guard !components.isEmpty else {
-            return (1, 1, 1, 1)
+    private func dominantSourceColor(
+        from colors: [NSColor]
+    ) -> NSColor? {
+        let samples = colors.compactMap { color -> (color: NSColor, red: CGFloat, green: CGFloat, blue: CGFloat)? in
+            guard let components = rgbaComponents(color) else {
+                return nil
+            }
+            return (color, components.red, components.green, components.blue)
+        }
+        guard !samples.isEmpty else {
+            return nil
         }
 
-        var buckets: [String: [(red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)]] = [:]
-        for color in components {
+        var buckets: [String: [(color: NSColor, red: CGFloat, green: CGFloat, blue: CGFloat)]] = [:]
+        for sample in samples {
             let key = [
-                Int((color.red * 10).rounded()),
-                Int((color.green * 10).rounded()),
-                Int((color.blue * 10).rounded())
+                Int((sample.red * 10).rounded()),
+                Int((sample.green * 10).rounded()),
+                Int((sample.blue * 10).rounded())
             ]
             .map(String.init)
             .joined(separator: "-")
-            buckets[key, default: []].append(color)
+            buckets[key, default: []].append(sample)
         }
 
-        let dominantBucket = buckets.values.max { $0.count < $1.count } ?? components
-        let selected = dominantBucket.count >= max(components.count / 3, 3)
+        let dominantBucket = buckets.values.max { $0.count < $1.count } ?? samples
+        let selected = dominantBucket.count >= max(samples.count / 3, 3)
             ? dominantBucket
-            : trimmedAroundMedianLuminance(components)
-
-        return (
-            red: median(selected.map(\.red)),
-            green: median(selected.map(\.green)),
-            blue: median(selected.map(\.blue)),
-            alpha: 1
-        )
-    }
-
-    private func trimmedAroundMedianLuminance(
-        _ components: [(red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)]
-    ) -> [(red: CGFloat, green: CGFloat, blue: CGFloat, alpha: CGFloat)] {
-        guard components.count > 4 else {
-            return components
+            : samples
+        let sorted = selected.sorted {
+            ((0.2126 * $0.red) + (0.7152 * $0.green) + (0.0722 * $0.blue)) <
+                ((0.2126 * $1.red) + (0.7152 * $1.green) + (0.0722 * $1.blue))
         }
-
-        let medianLuminance = median(components.map { (0.2126 * $0.red) + (0.7152 * $0.green) + (0.0722 * $0.blue) })
-        let sorted = components.sorted {
-            abs(((0.2126 * $0.red) + (0.7152 * $0.green) + (0.0722 * $0.blue)) - medianLuminance) <
-                abs(((0.2126 * $1.red) + (0.7152 * $1.green) + (0.0722 * $1.blue)) - medianLuminance)
-        }
-        return Array(sorted.prefix(max(sorted.count * 2 / 3, 3)))
-    }
-
-    private func median(_ values: [CGFloat]) -> CGFloat {
-        guard !values.isEmpty else {
-            return 0
-        }
-        let sorted = values.sorted()
-        return sorted[sorted.count / 2]
+        return sorted[sorted.count / 2].color
     }
 }
 
