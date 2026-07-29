@@ -1,13 +1,13 @@
 import Foundation
 
-enum ImageOverlayTranslationStatus: String, Codable, Equatable {
+enum ImageOverlayTranslationStatus: String, Codable, Equatable, Sendable {
     case success
     case failed
     case fallbackUsed
     case originalKept
 }
 
-struct ImageOverlayTranslationResult: Identifiable, Equatable {
+struct ImageOverlayTranslationResult: Identifiable, Equatable, Sendable {
     var segmentID: String
     var sourceText: String
     var translatedText: String
@@ -18,7 +18,7 @@ struct ImageOverlayTranslationResult: Identifiable, Equatable {
     var id: String { segmentID }
 }
 
-struct SegmentLineTranslation: Identifiable, Codable, Equatable {
+struct SegmentLineTranslation: Identifiable, Codable, Equatable, Sendable {
     var lineIndex: Int
     var translation: String
 
@@ -33,7 +33,7 @@ struct ImageOverlayTranslationSummary: Equatable {
     var failedCount: Int
 }
 
-struct ImageOverlayTranslationBatchEvent: Equatable {
+struct ImageOverlayTranslationBatchEvent: Equatable, Sendable {
     var batchIndex: Int
     var batchCount: Int
     var results: [ImageOverlayTranslationResult]
@@ -677,6 +677,26 @@ struct ImageOverlayBatchTranslator: Sendable {
             lineTranslations: lineTranslations ?? splitTranslationByLineSkeleton(translatedText, for: segment),
             status: fallbackUsed ? .fallbackUsed : .success,
             errorMessage: nil
+        )
+    }
+
+    func localSuccessResult(
+        for segment: OverlaySegment,
+        translatedText: String
+    ) -> ImageOverlayTranslationResult {
+        successResult(
+            for: segment,
+            translatedText: translatedText,
+            fallbackUsed: false
+        )
+    }
+
+    func localOriginalKeptResult(
+        for segment: OverlaySegment
+    ) -> ImageOverlayTranslationResult {
+        originalKeptResult(
+            for: segment,
+            errorMessage: "该区域不需要翻译。"
         )
     }
 

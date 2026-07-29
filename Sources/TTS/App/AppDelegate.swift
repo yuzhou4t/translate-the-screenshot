@@ -44,8 +44,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             keyEquivalent: ""
         ))
         menu.addItem(NSMenuItem(
-            title: "截图翻译覆盖",
-            action: #selector(startScreenshotTranslateOverlay),
+            title: "截图文字翻译",
+            action: #selector(startScreenshotTextTranslate),
             keyEquivalent: ""
         ))
         menu.addItem(NSMenuItem(
@@ -104,11 +104,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func startScreenshotTranslate() {
-        services.screenshotCaptureController.startCapture(mode: .translate)
+        services.screenshotCaptureController.startCapture(mode: .translateOverlay)
     }
 
-    @objc private func startScreenshotTranslateOverlay() {
-        services.screenshotCaptureController.startCapture(mode: .translateOverlay)
+    @objc private func startScreenshotTextTranslate() {
+        services.screenshotCaptureController.startCapture(mode: .translate)
     }
 
     @objc private func startScreenshotOCR() {

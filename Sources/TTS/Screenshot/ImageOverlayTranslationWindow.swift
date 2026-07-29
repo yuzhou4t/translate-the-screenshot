@@ -3,9 +3,10 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 @MainActor
-final class ImageOverlayTranslationWindowController {
+final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate {
     private let viewModel: ImageOverlayTranslationViewModel
     private var window: NSWindow?
+    private var cancelProcessingAction: (() -> Void)?
 
     init(
         renderer: ScreenshotTranslationOverlayRenderer,
@@ -17,6 +18,7 @@ final class ImageOverlayTranslationWindowController {
             translationService: translationService,
             debugWriter: debugWriter
         )
+        super.init()
     }
 
     func show(
@@ -27,6 +29,7 @@ final class ImageOverlayTranslationWindowController {
         title: String = "截图覆盖翻译",
         autoStart: Bool = false
     ) {
+        cancelProcessingAction = nil
         ensureWindow(title: title)
 
         viewModel.configure(
@@ -46,12 +49,19 @@ final class ImageOverlayTranslationWindowController {
     func showProgress(
         originalImage: NSImage,
         message: String,
-        title: String = "截图覆盖翻译"
+        title: String = "截图覆盖翻译",
+        onCancel: (() -> Void)? = nil
     ) {
+        cancelProcessingAction = onCancel
         ensureWindow(title: title)
         viewModel.configureProgress(originalImage: originalImage, message: message)
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
+    }
+
+    func showError(_ message: String) {
+        cancelProcessingAction = nil
+        viewModel.showProcessingError(message)
     }
 
     private func ensureWindow(title: String) {
@@ -59,8 +69,7 @@ final class ImageOverlayTranslationWindowController {
             let rootView = ImageOverlayTranslationView(
                 viewModel: viewModel,
                 onClose: { [weak self] in
-                    self?.viewModel.cancelTranslation()
-                    self?.window?.performClose(nil)
+                    self?.closeWindow()
                 }
             )
             let controller = NSHostingController(rootView: rootView)
@@ -73,10 +82,29 @@ final class ImageOverlayTranslationWindowController {
             newWindow.minSize = NSSize(width: 860, height: 580)
             newWindow.center()
             newWindow.isReleasedWhenClosed = false
+            newWindow.delegate = self
             window = newWindow
         } else {
             window?.title = title
         }
+    }
+
+    private func closeWindow() {
+        cancelCurrentWorkIfNeeded()
+        window?.performClose(nil)
+    }
+
+    private func cancelCurrentWorkIfNeeded() {
+        let action = cancelProcessingAction
+        cancelProcessingAction = nil
+        action?()
+        if viewModel.isTranslating {
+            viewModel.cancelTranslation()
+        }
+    }
+
+    func windowWillClose(_ notification: Notification) {
+        cancelCurrentWorkIfNeeded()
     }
 }
 
@@ -95,6 +123,9 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     private let translationService: TranslationService
     private let debugWriter: OverlayPipelineDebugWriter
     private var translationTask: Task<Void, Never>?
+    #if canImport(Translation)
+    private var appleTranslationCoordinatorStorage: AnyObject?
+    #endif
 
     init(
         renderer: ScreenshotTranslationOverlayRenderer,
@@ -104,7 +135,19 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         self.renderer = renderer
         self.translationService = translationService
         self.debugWriter = debugWriter
+        #if canImport(Translation)
+        if #available(macOS 15.0, *) {
+            appleTranslationCoordinatorStorage = AppleOverlayTranslationCoordinator()
+        }
+        #endif
     }
+
+    #if canImport(Translation)
+    @available(macOS 15.0, *)
+    var appleTranslationCoordinator: AppleOverlayTranslationCoordinator? {
+        appleTranslationCoordinatorStorage as? AppleOverlayTranslationCoordinator
+    }
+    #endif
 
     var imagePixelSize: CGSize {
         guard let image = session?.originalImage,
@@ -119,7 +162,7 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     }
 
     var previewImage: NSImage {
-        exportImage()
+        session?.originalImage ?? NSImage(size: .zero)
     }
 
     var selectedState: ImageOverlaySegmentState? {
@@ -154,6 +197,14 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
 
     var shouldShowResultImage: Bool {
         hasGeneratedResult && !isTranslating
+    }
+
+    var shouldShowPreview: Bool {
+        session != nil && imagePixelSize.width > 0 && imagePixelSize.height > 0
+    }
+
+    var isProcessing: Bool {
+        progressStage == "OCR" || isTranslating
     }
 
     var canExportImage: Bool {
@@ -234,6 +285,13 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         status(message, isError: false)
     }
 
+    func showProcessingError(_ message: String) {
+        isTranslating = false
+        translationTask = nil
+        progressStage = "失败"
+        status(message, isError: true)
+    }
+
     func startTranslation() {
         guard let session else {
             return
@@ -262,6 +320,11 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     func cancelTranslation() {
         translationTask?.cancel()
         translationTask = nil
+        #if canImport(Translation)
+        if #available(macOS 15.0, *) {
+            appleTranslationCoordinator?.cancel()
+        }
+        #endif
         isTranslating = false
         markTranslatingSegmentsAsRecognized()
         status("已取消翻译。", isError: false)
@@ -403,23 +466,15 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
             completedTranslationCount = 0
             totalTranslationCount = segments.count
         }
-        status("正在翻译 \(segments.count) 个区域...", isError: false)
-        progressStage = "翻译"
+        status("正在使用 Apple 本地翻译；首次使用时 macOS 会提示下载离线语言包。", isError: false)
+        progressStage = "本地翻译"
 
         translationTask = Task { [weak self] in
             guard let self else {
                 return
             }
             do {
-                for try await event in translationService.translateImageOverlaySegmentsIncrementally(
-                    segments,
-                    batchSize: 6
-                ) {
-                    try Task.checkCancellation()
-                    apply(results: event.results)
-                    completedTranslationCount += event.results.count
-                    status("翻译进度 \(completedTranslationCount)/\(totalTranslationCount)", isError: false)
-                }
+                try await translateLocallyOrUseLegacyCloud(segments)
                 isTranslating = false
                 translationTask = nil
                 progressStage = "已生成"
@@ -438,6 +493,39 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
                 status(error.localizedDescription, isError: true)
             }
         }
+    }
+
+    private func translateLocallyOrUseLegacyCloud(
+        _ segments: [OverlaySegment]
+    ) async throws {
+        #if canImport(Translation)
+        if #available(macOS 15.0, *),
+           let appleTranslationCoordinator {
+            for try await event in appleTranslationCoordinator.translate(
+                segments: segments,
+                targetLanguage: translationService.defaultTargetLanguage
+            ) {
+                try Task.checkCancellation()
+                apply(event: event)
+            }
+            return
+        }
+        #endif
+
+        progressStage = "云端兼容"
+        for try await event in translationService.translateImageOverlaySegmentsIncrementally(
+            segments,
+            batchSize: 6
+        ) {
+            try Task.checkCancellation()
+            apply(event: event)
+        }
+    }
+
+    private func apply(event: ImageOverlayTranslationBatchEvent) {
+        apply(results: event.results)
+        completedTranslationCount += event.results.count
+        status("翻译进度 \(completedTranslationCount)/\(totalTranslationCount)", isError: false)
     }
 
     private func apply(results: [ImageOverlayTranslationResult]) {
@@ -572,6 +660,24 @@ private struct ImageOverlayTranslationView: View {
     var onClose: () -> Void
 
     var body: some View {
+        #if canImport(Translation)
+        if #available(macOS 15.0, *),
+           let coordinator = viewModel.appleTranslationCoordinator {
+            windowContent
+                .modifier(
+                    AppleOverlayTranslationTaskModifier(
+                        coordinator: coordinator
+                    )
+                )
+        } else {
+            windowContent
+        }
+        #else
+        windowContent
+        #endif
+    }
+
+    private var windowContent: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
                 .padding(.horizontal, 16)
@@ -617,6 +723,11 @@ private struct ImageOverlayTranslationView: View {
                 .padding(.vertical, 4)
                 .background(Color.primary.opacity(0.06), in: Capsule())
 
+            if viewModel.isProcessing {
+                ProgressView()
+                    .controlSize(.small)
+            }
+
             Spacer()
 
             if !viewModel.statusMessage.isEmpty {
@@ -638,13 +749,21 @@ private struct ImageOverlayTranslationView: View {
 
     private var toolbar: some View {
         HStack(spacing: 8) {
-            Button {
-                viewModel.startTranslation()
-            } label: {
-                Label("翻译", systemImage: "translate")
+            if viewModel.isTranslating {
+                Button {
+                    viewModel.cancelTranslation()
+                } label: {
+                    Label("停止", systemImage: "stop.fill")
+                }
+                .buttonStyle(.bordered)
+            } else if viewModel.canStartTranslation {
+                Button {
+                    viewModel.startTranslation()
+                } label: {
+                    Label("继续翻译", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
             }
-            .buttonStyle(.bordered)
-            .disabled(!viewModel.canStartTranslation)
 
             Button {
                 viewModel.copyOCRText()
@@ -686,7 +805,7 @@ private struct ImageOverlayTranslationView: View {
                 Image(systemName: "minus.magnifyingglass")
             }
             .buttonStyle(.bordered)
-            .disabled(!viewModel.shouldShowResultImage)
+            .disabled(!viewModel.shouldShowPreview)
 
             Text("\(Int((viewModel.session?.zoomScale ?? 1) * 100))%")
                 .font(.caption.monospacedDigit())
@@ -699,7 +818,7 @@ private struct ImageOverlayTranslationView: View {
                 Image(systemName: "arrow.counterclockwise")
             }
             .buttonStyle(.bordered)
-            .disabled(!viewModel.shouldShowResultImage)
+            .disabled(!viewModel.shouldShowPreview)
 
             Button {
                 viewModel.zoomIn()
@@ -707,7 +826,7 @@ private struct ImageOverlayTranslationView: View {
                 Image(systemName: "plus.magnifyingglass")
             }
             .buttonStyle(.bordered)
-            .disabled(!viewModel.shouldShowResultImage)
+            .disabled(!viewModel.shouldShowPreview)
 
         }
         .controlSize(.small)
@@ -715,12 +834,14 @@ private struct ImageOverlayTranslationView: View {
 
     @ViewBuilder
     private var content: some View {
-        if viewModel.shouldShowResultImage {
+        if viewModel.shouldShowPreview {
             HStack(spacing: 12) {
                 previewCanvas
-                Divider()
-                inspector
-                    .frame(width: 300)
+                if viewModel.selectedState != nil {
+                    Divider()
+                    inspector
+                        .frame(width: 300)
+                }
             }
         } else {
             processingView
@@ -798,7 +919,7 @@ private struct ImageOverlayTranslationView: View {
                     regions: viewModel.regions,
                     showOCRBoxes: false,
                     selectedSegmentID: nil,
-                    drawTranslatedOverlays: false,
+                    drawTranslatedOverlays: true,
                     onSelect: { id in
                         viewModel.selectSegment(id)
                     }

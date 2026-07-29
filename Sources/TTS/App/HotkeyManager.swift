@@ -32,7 +32,7 @@ final class HotkeyManager {
 
         KeyboardShortcuts.onKeyUp(for: .screenshotTranslate) { [weak self] in
             Task { @MainActor in
-                self?.screenshotCaptureController.startCapture(mode: .translate)
+                self?.screenshotCaptureController.startCapture(mode: .translateOverlay)
             }
         }
 

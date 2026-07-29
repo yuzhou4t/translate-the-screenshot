@@ -34,8 +34,9 @@ TTS 不是复杂的词典软件，也不是大而全的翻译平台。它更专�
 | --- | --- | --- |
 | 划词翻译 | `Option + D` | 选中文本后快速翻译 |
 | 输入翻译 | `Option + A` | 打开输入窗口，手动输入文本翻译 |
-| 截图翻译 | `Option + S` | 截取屏幕区域，识别文字并翻译 |
-| 截图翻译覆盖 | `Shift + Option + A` | 截图后将译文覆盖回原图 |
+| 截图翻译 | `Option + S` | 框选后自动 OCR、翻译并原位回填 |
+| 截图翻译（兼容快捷键） | `Shift + Option + A` | 与主截图翻译执行相同的一步式流程 |
+| 截图文字翻译 | 菜单栏入口 | OCR 后在文字悬浮窗中显示译文 |
 | 截图 OCR | `Shift + Option + S` | 截图后只识别文字，不自动翻译 |
 | 静默截图 OCR | `Option + C` | 截图识别后直接复制文字到剪贴板 |
 | 图片文件 OCR | 菜单栏入口 | 选择本地图片并识别文字 |
@@ -61,10 +62,11 @@ OCR 面板支持复制文本、查看原始 OCR、AI 修复和继续翻译。AI 
 1. 用户截图。
 2. Apple Vision accurate OCR 识别文字与位置。
 3. Swift 版 `AppleOCRLayoutEngine` 按 band、列、section 合并自然翻译区域。
-4. 打开覆盖翻译窗口并显示 OCR 框。
-5. 用户点击翻译后按 `OverlaySegment` 分批请求模型。
-6. 每批译文返回后立即在原图位置回填。
-7. 用户可复制图片、保存 PNG 或查看 debug 输出。
+4. 立即打开覆盖翻译窗口并显示冻结的原截图。
+5. macOS 15 及以上优先使用 Apple 设备端批量翻译；macOS 26.4 及以上使用 `lowLatency` 策略。
+6. macOS 13–14 使用云端兼容路径，最多同时处理两批；macOS 15 及以上不会在本地失败后静默上传截图文字。
+7. 译文返回后立即在原图位置回填，不需要再次确认。
+8. 用户可复制图片、保存 PNG 或查看 debug 输出。
 
 覆盖翻译窗口支持：
 
@@ -78,6 +80,8 @@ OCR 面板支持复制文本、查看原始 OCR、AI 修复和继续翻译。AI 
 - 打开 debug 输出目录。
 
 实现上，截图覆盖翻译不依赖 Gemini / OpenAI Vision 分块。它先把 Vision observation 组织成 `OCRLayoutBand` / `OCRLayoutSection`，再生成 `OverlaySegment`。翻译 prompt 会携带 OCR 行骨架，模型可返回 `lineTranslations`，渲染时优先用 `eraseBoxes` 擦除原文，再按 `lineBoxes` 回填译文。
+
+macOS 15 及以上的截图翻译使用 Apple `TranslationSession`，译文在设备端生成且不产生 API 费用。首次使用某个语言组合时，macOS 会请求一次离线语言包下载许可；安装完成后，后续截图无需再次确认。如果用户取消下载或本地语言组合不受支持，错误会留在当前覆盖窗口，不会静默上传截图文字。macOS 13–14 继续使用已配置的云端服务。
 
 ### AI 翻译模式
 
@@ -109,6 +113,8 @@ TTS 支持多种翻译服务和 AI 服务商：
 - 腾讯云机器翻译 TMT
 - 火山翻译
 - MyMemory
+
+截图覆盖翻译在 macOS 15 及以上固定使用 Apple 本地翻译；以上服务仅用于其他翻译场景和 macOS 13–14 的截图兼容路径。
 
 API Key 保存到 macOS Keychain 中，不会明文写入项目文件。你可以在设置页中管理不同服务商的 API Key、Endpoint 和模型名称。
 

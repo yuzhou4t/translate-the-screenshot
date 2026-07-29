@@ -26,9 +26,9 @@
 
 ## 三条截图相关链路
 
-### 普通截图翻译
+### 截图文字翻译（辅助入口）
 
-普通截图翻译的目标是得到一段可读译文，不需要图片覆盖。
+截图文字翻译的目标是得到一段可读译文，不需要图片覆盖。它保留在菜单栏中作为辅助入口；默认 `Option + S` 截图翻译走下方的原位覆盖链路。
 
 数据流：
 
@@ -77,9 +77,9 @@ ScreenshotCaptureController
 -> OCRService.recognizeOverlaySnapshot(.accurate)
 -> AppleOCRLayoutEngine
 -> OCRLayoutBand / OCRLayoutSection
--> ImageOverlayTranslationWindowController
--> TranslationService.translateImageOverlaySegmentsIncrementally
--> ImageOverlayBatchTranslator
+-> ImageOverlayTranslationWindowController 立即显示冻结截图
+-> Apple TranslationSession 本地批量翻译（macOS 15+）
+-> macOS 13–14 使用 TranslationService 云端兼容路径
 -> OverlayCanvasView 实时绘制
 -> ScreenshotTranslationOverlayRenderer 导出图片
 ```
@@ -90,7 +90,11 @@ ScreenshotCaptureController
 - `AppleOCRLayoutEngine` 负责把 Vision observation 按 band、列、section 合并成自然翻译区域。
 - 翻译单位是 `OverlaySegment`，不是单个 OCR block。
 - 覆盖擦除单位是 `eraseBoxes`，优先贴近原文字区域。
-- 截图后先展示 OCR 覆盖框，用户点击翻译后按批次原位回填译文。
+- 截图后立即展示冻结原图，自动开始 OCR 和翻译，不再经过文字悬浮窗或二次确认。
+- macOS 15 及以上优先使用 Apple 设备端翻译；macOS 26.4 及以上选择 `lowLatency` 策略。
+- 首次使用某个语言组合时由 macOS 请求一次离线语言包下载许可；之后不需要确认，也不产生 API 费用。
+- macOS 15 及以上不会在本地失败或用户取消下载后静默上传文字；错误保留在当前覆盖窗口。
+- macOS 13–14 的云端兼容路径最多同时处理两批，任一批完成后立即回填。
 - `nativeReplace` 尝试先擦除原文，再按原位回填译文。
 
 ## 关键数据结构
@@ -190,6 +194,8 @@ Vision observations
 ## 行骨架翻译
 
 截图覆盖翻译现在不是只让模型返回整段译文，而是让模型尽量按 OCR 行骨架返回。
+
+Apple 本地翻译返回语义段译文后，本地会按同一套 OCR 行骨架做比例切分并回填。云端 Prompt provider 仍可直接返回结构化 `lineTranslations`。
 
 输入给模型的是：
 

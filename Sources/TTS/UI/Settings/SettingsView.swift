@@ -295,8 +295,8 @@ struct SettingsView: View {
             Section("快捷键") {
                 KeyboardShortcuts.Recorder("划词翻译", name: .translateSelection)
                 KeyboardShortcuts.Recorder("输入翻译", name: .inputTranslate)
-                KeyboardShortcuts.Recorder("截图翻译", name: .screenshotTranslate)
-                KeyboardShortcuts.Recorder("截图翻译覆盖", name: .screenshotTranslateOverlay)
+                KeyboardShortcuts.Recorder("截图翻译（原位覆盖）", name: .screenshotTranslate)
+                KeyboardShortcuts.Recorder("截图翻译覆盖（兼容快捷键）", name: .screenshotTranslateOverlay)
                 KeyboardShortcuts.Recorder("截图 OCR", name: .screenshotOCR)
                 KeyboardShortcuts.Recorder("静默截图 OCR", name: .silentScreenshotOCR)
             }
@@ -309,7 +309,7 @@ struct SettingsView: View {
                 )
                 SettingsInfoRow(
                     title: "截图相关快捷键",
-                    message: "截图翻译会先 OCR 再翻译；截图翻译覆盖会生成覆盖预览图；截图 OCR 只显示识别文本；静默截图 OCR 会直接复制识别结果。",
+                    message: "截图翻译会在框选后自动 OCR、翻译并原位回填，不需要再次确认；兼容快捷键执行相同操作。截图 OCR 只显示识别文本，静默截图 OCR 会直接复制识别结果。",
                     systemImage: "viewfinder"
                 )
                 SettingsInfoRow(

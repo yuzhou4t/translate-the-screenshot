@@ -128,19 +128,55 @@ final class TranslationService {
                         from: validSegments,
                         batchSize: batchSize
                     )
-                    for (index, batch) in batches.enumerated() {
-                        try Task.checkCancellation()
-                        let results = try await translateImageOverlaySegmentBatch(
-                            batch,
-                            targetLanguage: targetLanguage
-                        )
-                        continuation.yield(
-                            ImageOverlayTranslationBatchEvent(
-                                batchIndex: index,
-                                batchCount: batches.count,
-                                results: results
-                            )
-                        )
+                    let maximumConcurrentBatches = min(2, batches.count)
+                    try await withThrowingTaskGroup(of: ImageOverlayTranslationBatchEvent.self) { group in
+                        var nextBatchIndex = 0
+
+                        while nextBatchIndex < maximumConcurrentBatches {
+                            let index = nextBatchIndex
+                            let batch = batches[index]
+                            nextBatchIndex += 1
+                            group.addTask { [weak self] in
+                                guard let self else {
+                                    throw CancellationError()
+                                }
+                                try Task.checkCancellation()
+                                let results = try await self.translateImageOverlaySegmentBatch(
+                                    batch,
+                                    targetLanguage: targetLanguage
+                                )
+                                return ImageOverlayTranslationBatchEvent(
+                                    batchIndex: index,
+                                    batchCount: batches.count,
+                                    results: results
+                                )
+                            }
+                        }
+
+                        while let event = try await group.next() {
+                            continuation.yield(event)
+
+                            if nextBatchIndex < batches.count {
+                                let index = nextBatchIndex
+                                let batch = batches[index]
+                                nextBatchIndex += 1
+                                group.addTask { [weak self] in
+                                    guard let self else {
+                                        throw CancellationError()
+                                    }
+                                    try Task.checkCancellation()
+                                    let results = try await self.translateImageOverlaySegmentBatch(
+                                        batch,
+                                        targetLanguage: targetLanguage
+                                    )
+                                    return ImageOverlayTranslationBatchEvent(
+                                        batchIndex: index,
+                                        batchCount: batches.count,
+                                        results: results
+                                    )
+                                }
+                            }
+                        }
                     }
                     continuation.finish()
                 } catch {

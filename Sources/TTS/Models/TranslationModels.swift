@@ -80,6 +80,7 @@ struct SimpleScenarioTranslationConfig: Codable, Equatable, Identifiable {
 }
 
 enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
+    case appleTranslation = "apple-translation"
     case openAICompatible = "openai-compatible"
     case myMemory = "mymemory"
     case deepL = "deepl"
@@ -98,6 +99,8 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
 
     var displayName: String {
         switch self {
+        case .appleTranslation:
+            "Apple 本地翻译"
         case .openAICompatible:
             "OpenAI 兼容接口"
         case .myMemory:
@@ -129,7 +132,7 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
 
     var isTranslationProvider: Bool {
         switch self {
-        case .openAICompatible, .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
+        case .appleTranslation, .openAICompatible, .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
             true
         case .localOCR:
             false
@@ -140,7 +143,7 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .openAICompatible, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
             true
-        case .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .localOCR:
+        case .appleTranslation, .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .localOCR:
             false
         }
     }
@@ -204,7 +207,7 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
                 .init("gemini-2.5-flash-preview-09-2025"),
                 .init("gemini-2.5-flash-lite-preview-09-2025")
             ]
-        case .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .localOCR:
+        case .appleTranslation, .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .localOCR:
             []
         }
     }

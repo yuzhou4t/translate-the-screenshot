@@ -288,7 +288,10 @@ final class ScreenshotCaptureController {
                         toastPanel.hide()
                         imageOverlayTranslationWindowController.showProgress(
                             originalImage: originalImage,
-                            message: "正在 OCR 版式识别..."
+                            message: "正在 OCR 版式识别...",
+                            onCancel: { [weak self] in
+                                self?.cancelActiveWork()
+                            }
                         )
                     }
                     let snapshot = try await ocrService.recognizeOverlaySnapshot(
@@ -409,7 +412,7 @@ final class ScreenshotCaptureController {
                         }
                     case .translateOverlay:
                         toastPanel.hide()
-                        toastPanel.show(message, near: point)
+                        imageOverlayTranslationWindowController.showError(message)
                     case .ocr:
                         ocrResultPanel.showError(message, near: point)
                     case .silentOCR:

@@ -2,7 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 
-enum TextAtomKind: String, Codable, Equatable {
+enum TextAtomKind: String, Codable, Equatable, Sendable {
     case word
     case cjkChunk
     case punctuation
@@ -13,7 +13,7 @@ enum TextAtomKind: String, Codable, Equatable {
     case unknown
 }
 
-struct TextAtom: Identifiable, Codable, Equatable {
+struct TextAtom: Identifiable, Codable, Equatable, Sendable {
     var id: String
     var text: String
     var boundingBox: CGRect
@@ -22,7 +22,7 @@ struct TextAtom: Identifiable, Codable, Equatable {
     var kind: TextAtomKind
 }
 
-struct TextLine: Identifiable, Codable, Equatable {
+struct TextLine: Identifiable, Codable, Equatable, Sendable {
     var id: String
     var atoms: [TextAtom]
     var text: String

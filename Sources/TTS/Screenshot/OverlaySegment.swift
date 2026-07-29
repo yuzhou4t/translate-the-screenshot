@@ -1,7 +1,7 @@
 import CoreGraphics
 import Foundation
 
-enum OverlaySegmentRole: String, Codable, CaseIterable, Equatable {
+enum OverlaySegmentRole: String, Codable, CaseIterable, Equatable, Sendable {
     case title
     case paragraph
     case button
@@ -14,7 +14,7 @@ enum OverlaySegmentRole: String, Codable, CaseIterable, Equatable {
     case unknown
 }
 
-struct OverlaySegment: Identifiable, Equatable {
+struct OverlaySegment: Identifiable, Equatable, Sendable {
     var id: String
     var sourceBlockIDs: [UUID]
     var sourceAtomIDs: [String]
