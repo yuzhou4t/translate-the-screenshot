@@ -153,9 +153,9 @@ struct OverlayPipelineDebugWriter: Sendable {
     }
 
     private func makeDebugDirectory() throws -> URL {
+        ScreenshotArtifactRetention.pruneExpiredOverlayArtifacts()
         let timestamp = DateFormatter.overlayDebugTimestamp.string(from: Date())
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tts-overlay-debug", isDirectory: true)
+        let directory = ScreenshotArtifactRetention.overlayDebugDirectory()
             .appendingPathComponent(timestamp, isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         return directory

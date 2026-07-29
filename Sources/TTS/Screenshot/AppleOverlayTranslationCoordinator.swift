@@ -21,6 +21,8 @@ struct AppleOverlayTranslationWorkItem: Sendable {
 @available(macOS 15.0, *)
 @MainActor
 final class AppleOverlayTranslationCoordinator: ObservableObject {
+    private static let requestTimeoutNanoseconds: UInt64 = 12_000_000_000
+
     @Published private(set) var requestID: UUID?
 
     private struct PendingRequest {
@@ -34,6 +36,7 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
     }
 
     private var pendingRequest: PendingRequest?
+    private var requestTimeoutTask: Task<Void, Never>?
 
     var languagePair: (source: Locale.Language?, target: Locale.Language)? {
         guard let pendingRequest else {
@@ -48,6 +51,7 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
     ) -> AsyncThrowingStream<ImageOverlayTranslationBatchEvent, Error> {
         AsyncThrowingStream { continuation in
             let id = UUID()
+            requestTimeoutTask?.cancel()
             pendingRequest?.continuation.finish(throwing: CancellationError())
             pendingRequest = PendingRequest(
                 id: id,
@@ -61,6 +65,7 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
                 emittedCount: 0
             )
             requestID = id
+            scheduleRequestTimeout(requestID: id)
 
             continuation.onTermination = { [weak self] _ in
                 Task { @MainActor in
@@ -100,6 +105,7 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
         )
         request.emittedCount += 1
         pendingRequest = request
+        scheduleRequestTimeout(requestID: requestID)
     }
 
     func complete(requestID: UUID) {
@@ -124,12 +130,34 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
         finish(throwing: CancellationError(), requestID: requestID)
     }
 
+    private func scheduleRequestTimeout(requestID: UUID) {
+        requestTimeoutTask?.cancel()
+        requestTimeoutTask = Task { [weak self] in
+            do {
+                try await Task.sleep(
+                    nanoseconds: Self.requestTimeoutNanoseconds
+                )
+            } catch {
+                return
+            }
+            guard !Task.isCancelled else {
+                return
+            }
+            self?.fail(
+                AppleOverlayTranslationError.requestTimedOut,
+                requestID: requestID
+            )
+        }
+    }
+
     private func finish(requestID: UUID) {
         guard let request = pendingRequest,
               request.id == requestID else {
             return
         }
         request.continuation.finish()
+        requestTimeoutTask?.cancel()
+        requestTimeoutTask = nil
         pendingRequest = nil
         self.requestID = nil
     }
@@ -140,6 +168,8 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
             return
         }
         request.continuation.finish(throwing: error)
+        requestTimeoutTask?.cancel()
+        requestTimeoutTask = nil
         pendingRequest = nil
         self.requestID = nil
     }
@@ -325,13 +355,16 @@ struct AppleOverlayTranslationTaskModifier: ViewModifier {
     }
 }
 
-private enum AppleOverlayTranslationError: LocalizedError {
+enum AppleOverlayTranslationError: LocalizedError, Equatable {
     case unsupportedLanguagePair
+    case requestTimedOut
 
     var errorDescription: String? {
         switch self {
         case .unsupportedLanguagePair:
             "Apple 本地翻译暂不支持当前语言组合。"
+        case .requestTimedOut:
+            "Apple 本地翻译连续 12 秒没有返回结果。首次使用时语言包会继续在后台下载；请在“系统设置 → 通用 → 语言与地区 → 翻译语言”确认完成后，再点“继续翻译”。"
         }
     }
 }

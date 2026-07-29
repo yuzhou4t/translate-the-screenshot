@@ -209,6 +209,8 @@ final class FloatingTranslatePanel {
             .input
         case .ocrTranslate:
             .screenshot
+        case .imageOverlay:
+            .imageOverlay
         case .ocr:
             item.translationMode == .ocrCleanup ? .ocrCleanup : .screenshot
         }

@@ -377,6 +377,7 @@ enum TranslationHistoryMode: String, Codable, Equatable {
     case selectedText
     case ocr
     case ocrTranslate
+    case imageOverlay
     case input
 
     var displayName: String {
@@ -387,6 +388,8 @@ enum TranslationHistoryMode: String, Codable, Equatable {
             "截图 OCR"
         case .ocrTranslate:
             "截图翻译"
+        case .imageOverlay:
+            "截图覆盖翻译"
         case .input:
             "输入翻译"
         }

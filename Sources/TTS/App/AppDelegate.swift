@@ -10,6 +10,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.setActivationPolicy(.accessory)
         configureStatusItem()
         services.hotkeyManager.start()
+        ScreenshotArtifactRetention.pruneExpiredOverlayArtifacts()
+        Task {
+            try? await services.historyStore.pruneExpiredImageOverlayItems()
+        }
     }
 
     private func configureStatusItem() {
@@ -44,8 +48,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             keyEquivalent: ""
         ))
         menu.addItem(NSMenuItem(
-            title: "截图文字翻译",
-            action: #selector(startScreenshotTextTranslate),
+            title: "截图覆盖翻译",
+            action: #selector(startScreenshotOverlayTranslate),
             keyEquivalent: ""
         ))
         menu.addItem(NSMenuItem(
@@ -104,11 +108,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func startScreenshotTranslate() {
-        services.screenshotCaptureController.startCapture(mode: .translateOverlay)
+        services.screenshotCaptureController.startCapture(mode: .translate)
     }
 
-    @objc private func startScreenshotTextTranslate() {
-        services.screenshotCaptureController.startCapture(mode: .translate)
+    @objc private func startScreenshotOverlayTranslate() {
+        services.screenshotCaptureController.startCapture(mode: .translateOverlay)
     }
 
     @objc private func startScreenshotOCR() {

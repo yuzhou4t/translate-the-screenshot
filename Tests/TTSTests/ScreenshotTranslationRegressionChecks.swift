@@ -13,6 +13,10 @@ public func runTTSPackageRegressionChecks() {
     checkScreenshotTranslationRendererPreservesButtonSurface()
     announceRegressionCheck("identified batch fallback")
     runAsyncScreenshotTranslationRegressionChecks()
+    announceRegressionCheck("screenshot overlay artifact retention")
+    checkScreenshotOverlayRetentionRemovesOnlyExpiredOwnedArtifacts()
+    announceRegressionCheck("screenshot overlay history retention")
+    checkScreenshotOverlayHistoryExpiresAfterThreeDays()
     print("TTS screenshot translation regression checks passed")
 }
 

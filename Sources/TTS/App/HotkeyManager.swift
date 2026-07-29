@@ -32,7 +32,7 @@ final class HotkeyManager {
 
         KeyboardShortcuts.onKeyUp(for: .screenshotTranslate) { [weak self] in
             Task { @MainActor in
-                self?.screenshotCaptureController.startCapture(mode: .translateOverlay)
+                self?.screenshotCaptureController.startCapture(mode: .translate)
             }
         }
 
@@ -60,7 +60,7 @@ final class HotkeyManager {
 extension KeyboardShortcuts.Name {
     static let translateSelection = Self("translateSelection", initial: .init(.d, modifiers: [.option]))
     static let screenshotTranslate = Self("screenshotTranslate", initial: .init(.s, modifiers: [.option]))
-    static let screenshotTranslateOverlay = Self("screenshotTranslateOverlay", initial: .init(.a, modifiers: [.shift, .option]))
+    static let screenshotTranslateOverlay = Self("screenshotTranslateOverlay", initial: .init(.w, modifiers: [.option]))
     static let inputTranslate = Self("inputTranslate", initial: .init(.a, modifiers: [.option]))
     static let screenshotOCR = Self("screenshotOCR", initial: .init(.s, modifiers: [.shift, .option]))
     static let silentScreenshotOCR = Self("silentScreenshotOCR", initial: .init(.c, modifiers: [.option]))

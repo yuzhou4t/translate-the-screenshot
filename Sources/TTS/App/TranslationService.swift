@@ -110,6 +110,31 @@ final class TranslationService {
         return output
     }
 
+    func recordImageOverlayHistory(
+        sourceText: String,
+        translatedText: String
+    ) async throws -> TranslationHistoryItem {
+        let trimmedSource = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedTranslation = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedSource.isEmpty, !trimmedTranslation.isEmpty else {
+            throw TranslationServiceError.emptyText
+        }
+
+        let item = TranslationHistoryItem(
+            sourceText: trimmedSource,
+            translatedText: trimmedTranslation,
+            providerID: imageOverlayHistoryProviderID(),
+            sourceLanguage: nil,
+            targetLanguage: providerFactory.targetLanguage,
+            createdAt: Date(),
+            mode: .imageOverlay,
+            translationMode: .imageOverlay
+        )
+
+        try await historyStore.add(item)
+        return item
+    }
+
     func translateImageOverlaySegmentsIncrementally(
         _ segments: [OverlaySegment],
         targetLanguage: String? = nil,
@@ -470,6 +495,17 @@ final class TranslationService {
                     errorMessage: error.localizedDescription
                 )
             }
+        }
+    }
+
+    private func imageOverlayHistoryProviderID() -> TranslationProviderID {
+        do {
+            return try resolveProviderPlan(
+                scenario: .imageOverlay,
+                translationMode: .imageOverlay
+            ).primaryConfig.id
+        } catch {
+            return providerFactory.defaultProviderID
         }
     }
 

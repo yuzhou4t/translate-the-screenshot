@@ -188,7 +188,10 @@ final class ScreenshotCaptureController {
         }
 
         do {
-            let fileURL = try saveScreenshot(selectionRect: selectionRect)
+            let fileURL = try saveScreenshot(
+                selectionRect: selectionRect,
+                mode: activeMode
+            )
             print("screenshot saved: \(fileURL.path)")
             handleScreenshot(
                 imageURL: fileURL,
@@ -483,7 +486,10 @@ final class ScreenshotCaptureController {
         activeProcessingAnchorPoint = nil
     }
 
-    private func saveScreenshot(selectionRect: CGRect) throws -> URL {
+    private func saveScreenshot(
+        selectionRect: CGRect,
+        mode: ScreenshotCaptureMode
+    ) throws -> URL {
         let displayRect = convertToDisplayRect(selectionRect)
         guard let image = CGWindowListCreateImage(
             displayRect,
@@ -494,8 +500,14 @@ final class ScreenshotCaptureController {
             throw ScreenshotCaptureError.captureFailed
         }
 
-        let directory = FileManager.default.temporaryDirectory
-            .appendingPathComponent("tts-screenshots", isDirectory: true)
+        let directory: URL
+        if mode == .translateOverlay {
+            ScreenshotArtifactRetention.pruneExpiredOverlayArtifacts()
+            directory = ScreenshotArtifactRetention.overlayScreenshotDirectory()
+        } else {
+            directory = FileManager.default.temporaryDirectory
+                .appendingPathComponent("tts-screenshots", isDirectory: true)
+        }
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
 
         let timestamp = Int(Date().timeIntervalSince1970 * 1000)
