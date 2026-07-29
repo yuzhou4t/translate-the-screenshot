@@ -33,8 +33,6 @@ final class KeychainService {
     }
 
     func saveAPIKey(_ apiKey: String, account: String) throws {
-        saveCachedAPIKey(apiKey, account: account)
-
         let data = Data(apiKey.utf8)
         let query = baseQuery(account: account)
         let attributes: [String: Any] = [
@@ -43,6 +41,7 @@ final class KeychainService {
 
         let status = SecItemUpdate(query as CFDictionary, attributes as CFDictionary)
         if status == errSecSuccess {
+            deleteCachedAPIKey(account: account)
             return
         }
 
@@ -51,12 +50,13 @@ final class KeychainService {
             addQuery[kSecValueData as String] = data
             let addStatus = SecItemAdd(addQuery as CFDictionary, nil)
             guard addStatus == errSecSuccess else {
-                return
+                throw KeychainServiceError.unexpectedStatus(addStatus)
             }
+            deleteCachedAPIKey(account: account)
             return
         }
 
-        return
+        throw KeychainServiceError.unexpectedStatus(status)
     }
 
     func loadAPIKey(for providerID: TranslationProviderID) throws -> String? {
@@ -64,11 +64,6 @@ final class KeychainService {
     }
 
     func loadAPIKey(account: String) throws -> String? {
-        if let cached = cachedAPIKey(account: account),
-           !cached.isEmpty {
-            return cached
-        }
-
         var query = baseQuery(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
@@ -76,7 +71,14 @@ final class KeychainService {
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         if status == errSecItemNotFound {
-            return nil
+            guard let cached = cachedAPIKey(account: account),
+                  !cached.isEmpty else {
+                deleteCachedAPIKey(account: account)
+                return nil
+            }
+
+            try saveAPIKey(cached, account: account)
+            return cached
         }
 
         guard status == errSecSuccess else {
@@ -88,7 +90,7 @@ final class KeychainService {
             throw KeychainServiceError.invalidData
         }
 
-        saveCachedAPIKey(apiKey, account: account)
+        deleteCachedAPIKey(account: account)
         return apiKey
     }
 
@@ -97,11 +99,10 @@ final class KeychainService {
     }
 
     func deleteAPIKey(account: String) throws {
-        deleteCachedAPIKey(account: account)
-
         let status = SecItemDelete(baseQuery(account: account) as CFDictionary)
+        deleteCachedAPIKey(account: account)
         guard status == errSecSuccess || status == errSecItemNotFound else {
-            return
+            throw KeychainServiceError.unexpectedStatus(status)
         }
     }
 
@@ -115,10 +116,6 @@ final class KeychainService {
 
     private func cachedAPIKey(account: String) -> String? {
         userDefaults.string(forKey: cacheKey(account: account))
-    }
-
-    private func saveCachedAPIKey(_ apiKey: String, account: String) {
-        userDefaults.set(apiKey, forKey: cacheKey(account: account))
     }
 
     private func deleteCachedAPIKey(account: String) {

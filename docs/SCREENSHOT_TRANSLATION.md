@@ -1,6 +1,6 @@
 # 截图翻译实现说明
 
-本文档用于理解 TTS 的截图翻译、截图 OCR 和截图覆盖翻译。它按当前代码状态书写，优先解释本地 OCR、文本分块、批量翻译和覆盖渲染之间的关系。
+本文档用于理解 TTS 的截图翻译、截图 OCR 和图片翻译。它按当前代码状态书写，优先解释火山整图主链路与本地坐标备用链路的边界。
 
 ## 先看什么
 
@@ -66,11 +66,34 @@ ScreenshotCaptureController
 - `OCRTextPostProcessor`
 - `TranslationMode.ocrCleanup`，它只做 OCR 修复，不做翻译。
 
-### 截图覆盖翻译
+### 火山图片翻译 Beta
 
-截图覆盖翻译是单独链路，不再使用 Gemini / OpenAI Vision 做视觉分块。当前主路径是本地 Apple Vision OCR + Swift 版 OCR layout engine。
+图片翻译是单独链路。默认快捷键为 `Option + W`，主路径直接调用火山 `TranslateImage` 整图翻译接口，不先运行本地 OCR。
 
-默认快捷键为 `Option + W`。
+数据流：
+
+```text
+ScreenshotCaptureController
+-> ImageOverlayTranslationWindowController 立即显示冻结截图
+-> VolcengineImagePayloadEncoder 本地校验和压缩
+-> VolcengineImageTranslationPolicyStore 预占本月次数
+-> VolcengineTranslateProvider.translateImage
+-> 同一窗口显示火山返回的整图
+```
+
+主路径规则：
+
+- 第一次使用会询问是否允许上传完整截图；同意记录可在设置中撤销。
+- 提交前查询火山账号本自然月图片用量，并与本机保守计数取较大值；第 100 次允许，第 101 次阻止。
+- 请求提交即计数，失败和超时不返还；应用不自动重试。
+- 账号用量查询失败时停止，不冒险提交完整截图。
+- 完整截图固定发送到火山官方 HTTPS 域名，不使用可编辑的文字翻译 Endpoint。
+- 原截图立即显示，整图结果只保留在当前窗口内存中，除非用户主动保存。
+- 火山失败时不静默上传到其他服务，也不自动降级；用户可手动选择本地备用。
+
+### 本地坐标翻译（备用）
+
+本地备用链路使用 Apple Vision OCR + Swift 版 OCR layout engine。它不再是 `Option + W` 的默认路径，可从菜单栏或火山结果窗口手动进入。
 
 数据流：
 
@@ -86,20 +109,20 @@ ScreenshotCaptureController
 -> ScreenshotTranslationOverlayRenderer 导出图片
 ```
 
-这条链路的核心目标是：
+本地链路的核心目标是：
 
 - OCR 负责识别文字和定位。
 - `AppleOCRLayoutEngine` 负责把 Vision observation 按 band、列、section 合并成自然翻译区域。
 - 翻译单位是 `OverlaySegment`，不是单个 OCR block。
 - 覆盖擦除单位是 `eraseBoxes`，优先贴近原文字区域。
-- 截图后立即展示冻结原图，自动开始 OCR 和翻译，不再经过文字悬浮窗或二次确认。
+- 截图后立即展示冻结原图并自动开始 OCR 和翻译。
 - macOS 15 及以上优先使用 Apple 设备端翻译；macOS 26.4 及以上选择 `lowLatency` 策略。
 - 首次使用某个语言组合时由 macOS 请求一次离线语言包下载许可；之后不需要确认，也不产生 API 费用。
 - 本地翻译连续 12 秒没有结果就停止加载，每返回一段译文会重新计时；语言包仍未就绪时提示用户先在系统设置完成下载，避免覆盖窗口无限转圈。
 - macOS 15 及以上不会在本地失败或用户取消下载后静默上传文字；错误保留在当前覆盖窗口。
 - macOS 13–14 的云端兼容路径最多同时处理两批，任一批完成后立即回填。
 - `nativeReplace` 尝试先擦除原文，再按原位回填译文。
-- 覆盖翻译历史、应用临时截图和 overlay debug 目录保留 3 天后自动清理；用户手动保存的 PNG 和显式收藏不受影响。
+- 火山图片翻译和本地备用翻译的历史、应用临时截图和 overlay debug 目录保留 3 天后自动清理；用户手动保存的 PNG 和显式收藏不受影响。
 
 ## 关键数据结构
 
@@ -323,16 +346,16 @@ TTS_DEBUG_OVERLAY_PIPELINE=1 swift run
 
 `usedVisionModel` 在当前主链路中应为 `false`。
 
-## 当前不走的路线
+## 当前路线边界
 
 当前产品决策是：
 
-- 不让 Gemini / OpenAI Vision 参与截图版面分块。
-- 不让大模型生成坐标。
-- 不让视觉模型生成图片。
-- OCR 与定位只由本地 Apple Vision 和本地算法负责。
+- `Option + W` 直接使用火山整图翻译，不自行生成或校正坐标。
+- 本地备用不让 Gemini / OpenAI Vision 参与版面分块，也不让大模型生成坐标。
+- 本地备用的 OCR 与定位只由 Apple Vision 和本地算法负责。
+- 火山失败不自动重试，也不静默切换其他云服务或本地链路。
 
-这符合项目当前的轻量化方向：速度优先、成本可控、失败路径简单。
+这样将复杂版面的整图效果交给专用云端接口，同时保留可控、透明的本地备用。
 
 ## 维护判断
 
@@ -344,4 +367,5 @@ TTS_DEBUG_OVERLAY_PIPELINE=1 swift run
 - 不同段误合并：看 `AppleOCRLayoutEngine` 的 band、column 和 `shouldMerge` 规则。
 - 翻译行数不稳：看 `PromptBuilder` 和 `ImageOverlayBatchTranslator` 的 `lineTranslations` 解析。
 - 白块感明显：看 `ScreenshotTranslationOverlayRenderer` 的 `nativeReplace` 擦除和逐行绘制逻辑。
-- 速度慢：先看日志中的 `ocr / segmentation / translation` 阶段耗时，通常远端翻译服务比本地 OCR 更容易成为瓶颈。
+- 火山主路径速度慢：先区分本地图片编码与单次 `TranslateImage` 网络耗时。
+- 本地备用速度慢：看日志中的 `ocr / segmentation / translation` 阶段耗时。

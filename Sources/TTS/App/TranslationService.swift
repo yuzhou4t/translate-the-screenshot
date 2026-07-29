@@ -112,7 +112,8 @@ final class TranslationService {
 
     func recordImageOverlayHistory(
         sourceText: String,
-        translatedText: String
+        translatedText: String,
+        providerID: TranslationProviderID? = nil
     ) async throws -> TranslationHistoryItem {
         let trimmedSource = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
         let trimmedTranslation = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -123,7 +124,7 @@ final class TranslationService {
         let item = TranslationHistoryItem(
             sourceText: trimmedSource,
             translatedText: trimmedTranslation,
-            providerID: imageOverlayHistoryProviderID(),
+            providerID: providerID ?? imageOverlayHistoryProviderID(),
             sourceLanguage: nil,
             targetLanguage: providerFactory.targetLanguage,
             createdAt: Date(),

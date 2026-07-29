@@ -7,6 +7,7 @@ import UniformTypeIdentifiers
 enum ScreenshotCaptureMode {
     case translate
     case translateOverlay
+    case translateOverlayLocal
     case ocr
     case silentOCR
 }
@@ -21,6 +22,9 @@ final class ScreenshotCaptureController {
     private let floatingPanel: FloatingTranslatePanel
     private let toastPanel: ToastPanel
     private let imageOverlayTranslationWindowController: ImageOverlayTranslationWindowController
+    private let providerRegistry: ProviderRegistry
+    private let policyStore: VolcengineImageTranslationPolicyStore
+    private let settingsWindowController: SettingsWindowController
     private var overlayWindows: [ScreenshotOverlayWindow] = []
     private var isCapturing = false
     private var didHideSystemCursor = false
@@ -38,7 +42,10 @@ final class ScreenshotCaptureController {
         historyStore: HistoryStore,
         floatingPanel: FloatingTranslatePanel,
         toastPanel: ToastPanel,
-        imageOverlayTranslationWindowController: ImageOverlayTranslationWindowController
+        imageOverlayTranslationWindowController: ImageOverlayTranslationWindowController,
+        providerRegistry: ProviderRegistry,
+        policyStore: VolcengineImageTranslationPolicyStore,
+        settingsWindowController: SettingsWindowController
     ) {
         self.permissionManager = permissionManager
         self.ocrService = ocrService
@@ -48,6 +55,9 @@ final class ScreenshotCaptureController {
         self.floatingPanel = floatingPanel
         self.toastPanel = toastPanel
         self.imageOverlayTranslationWindowController = imageOverlayTranslationWindowController
+        self.providerRegistry = providerRegistry
+        self.policyStore = policyStore
+        self.settingsWindowController = settingsWindowController
     }
 
     func startCapture(mode: ScreenshotCaptureMode) {
@@ -56,6 +66,13 @@ final class ScreenshotCaptureController {
         }
 
         cancelActiveProcessing(showFeedback: false)
+        if mode == .translateOverlay || mode == .translateOverlayLocal {
+            imageOverlayTranslationWindowController.cancelCurrentWork()
+        }
+
+        if mode == .translateOverlay, !prepareVolcengineImageTranslation() {
+            return
+        }
 
         guard permissionManager.isScreenRecordingTrusted else {
             permissionManager.requestScreenRecordingIfNeeded()
@@ -82,6 +99,50 @@ final class ScreenshotCaptureController {
         overlayWindows.forEach { $0.orderFrontRegardless() }
         overlayWindows.forEach { $0.updateCrosshair(globalPoint: NSEvent.mouseLocation) }
         overlayWindows.first?.makeKey()
+    }
+
+    private func prepareVolcengineImageTranslation() -> Bool {
+        do {
+            _ = try providerRegistry.makeVolcengineImageTranslationProvider()
+        } catch {
+            toastPanel.show("请先配置火山翻译的 AccessKey ID 与 Secret Access Key")
+            NSApp.activate(ignoringOtherApps: true)
+            settingsWindowController.show(
+                tab: .translationService,
+                providerID: .volcengine
+            )
+            return false
+        }
+
+        let usage = policyStore.snapshot
+        guard usage.remainingCount > 0 else {
+            toastPanel.show("火山图片翻译本月安全计数已达 \(usage.limit) 张上限；可从菜单使用本地坐标备用")
+            return false
+        }
+
+        guard !policyStore.hasUploadConsent else {
+            return true
+        }
+
+        NSApp.activate(ignoringOtherApps: true)
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = "启用火山图片翻译 Beta？"
+        alert.informativeText = """
+        Option + W 框选的完整截图会上传到火山引擎进行 OCR、翻译和整图回填。
+
+        你只需同意一次；之后快捷键会直接上传。每次提交前会同步火山账号当月图片用量，并与本机保守计数取较大值；免费 100 张用完后直接阻止。失败或超时也计入本机限额。
+        """
+        alert.addButton(withTitle: "同意并继续")
+        alert.addButton(withTitle: "取消")
+
+        guard alert.runModal() == .alertFirstButtonReturn else {
+            toastPanel.show("已取消；截图没有上传")
+            return false
+        }
+
+        policyStore.grantUploadConsent()
+        return true
     }
 
     func openImageFileOCR() {
@@ -169,8 +230,14 @@ final class ScreenshotCaptureController {
             return
         }
 
-        let didCancel = cancelActiveProcessing(showFeedback: true)
-        if !didCancel {
+        let hadProcessingTask = activeProcessingTask != nil
+        let didCancel = cancelActiveProcessing(showFeedback: false)
+        let didCancelWindow = hadProcessingTask
+            ? false
+            : imageOverlayTranslationWindowController.cancelCurrentWork()
+        if didCancel || didCancelWindow {
+            toastPanel.show("已停止当前截图任务")
+        } else {
             toastPanel.show("当前没有正在运行的截图任务")
         }
     }
@@ -244,6 +311,27 @@ final class ScreenshotCaptureController {
         mode: ScreenshotCaptureMode,
         captureDisplaySize: CGSize? = nil
     ) {
+        if mode == .translateOverlay {
+            do {
+                let originalImage = try Self.loadImage(from: imageURL)
+                imageOverlayTranslationWindowController.showVolcengineTranslation(
+                    originalImage: originalImage,
+                    imageURL: imageURL,
+                    onUseLocalFallback: { [weak self] in
+                        self?.handleScreenshot(
+                            imageURL: imageURL,
+                            near: point,
+                            mode: .translateOverlayLocal,
+                            captureDisplaySize: captureDisplaySize
+                        )
+                    }
+                )
+            } catch {
+                imageOverlayTranslationWindowController.showError(error.localizedDescription)
+            }
+            return
+        }
+
         let presentationID: UUID?
         switch mode {
         case .translate:
@@ -256,8 +344,10 @@ final class ScreenshotCaptureController {
             )
         case .translateOverlay:
             presentationID = nil
+        case .translateOverlayLocal:
+            presentationID = nil
             toastPanel.showLoading(
-                "正在识别截图文字...",
+                "正在准备本地坐标翻译...",
                 near: point,
                 onCancel: { [weak self] in
                     self?.cancelActiveWork()
@@ -285,7 +375,7 @@ final class ScreenshotCaptureController {
             }
             do {
                 let startedAt = Date()
-                if mode == .translateOverlay {
+                if mode == .translateOverlayLocal {
                     let originalImage = try Self.loadImage(from: imageURL)
                     await MainActor.run {
                         toastPanel.hide()
@@ -350,6 +440,8 @@ final class ScreenshotCaptureController {
                         }
                     case .translateOverlay:
                         break
+                    case .translateOverlayLocal:
+                        break
                     case .ocr:
                         ocrResultPanel.showResult(result, imageURL: imageURL, near: point)
                     case .silentOCR:
@@ -378,6 +470,8 @@ final class ScreenshotCaptureController {
                     }
                 case .translateOverlay:
                     break
+                case .translateOverlayLocal:
+                    break
                 case .ocr:
                     let item = TranslationHistoryItem(
                         sourceText: plainText,
@@ -398,7 +492,10 @@ final class ScreenshotCaptureController {
                     case .translate:
                         floatingPanel.hide()
                     case .translateOverlay:
+                        imageOverlayTranslationWindowController.showCancelled()
+                    case .translateOverlayLocal:
                         toastPanel.hide()
+                        imageOverlayTranslationWindowController.showCancelled()
                     case .ocr:
                         ocrResultPanel.hide()
                     case .silentOCR:
@@ -414,6 +511,9 @@ final class ScreenshotCaptureController {
                             floatingPanel.showError(message, near: point, presentationID: presentationID)
                         }
                     case .translateOverlay:
+                        toastPanel.hide()
+                        imageOverlayTranslationWindowController.showError(message)
+                    case .translateOverlayLocal:
                         toastPanel.hide()
                         imageOverlayTranslationWindowController.showError(message)
                     case .ocr:
@@ -444,7 +544,10 @@ final class ScreenshotCaptureController {
             case .translate:
                 floatingPanel.hide()
             case .translateOverlay:
+                imageOverlayTranslationWindowController.cancelCurrentWork()
+            case .translateOverlayLocal:
                 toastPanel.hide()
+                imageOverlayTranslationWindowController.showCancelled()
             case .ocr:
                 ocrResultPanel.hide()
             case .silentOCR:
@@ -501,7 +604,7 @@ final class ScreenshotCaptureController {
         }
 
         let directory: URL
-        if mode == .translateOverlay {
+        if mode == .translateOverlay || mode == .translateOverlayLocal {
             ScreenshotArtifactRetention.pruneExpiredOverlayArtifacts()
             directory = ScreenshotArtifactRetention.overlayScreenshotDirectory()
         } else {

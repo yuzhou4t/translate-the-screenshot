@@ -10,6 +10,7 @@ struct VolcengineTranslateProvider: TranslationProvider {
     private let region: String
     private let timeout: TimeInterval
     private let urlSession: URLSession
+    private let now: @Sendable () -> Date
 
     init(
         endpoint: URL,
@@ -17,7 +18,8 @@ struct VolcengineTranslateProvider: TranslationProvider {
         secretAccessKey: String,
         region: String = "cn-north-1",
         timeout: TimeInterval = 30,
-        urlSession: URLSession = .shared
+        urlSession: URLSession = .shared,
+        now: @escaping @Sendable () -> Date = { Date() }
     ) {
         self.endpoint = endpoint
         self.accessKeyID = accessKeyID
@@ -25,6 +27,7 @@ struct VolcengineTranslateProvider: TranslationProvider {
         self.region = region
         self.timeout = timeout
         self.urlSession = urlSession
+        self.now = now
     }
 
     func translate(_ request: TranslationRequest) async throws -> TranslationResponse {
@@ -49,7 +52,7 @@ struct VolcengineTranslateProvider: TranslationProvider {
         let payloadData = try JSONEncoder.volcengine.encode(payload)
         let payloadString = String(data: payloadData, encoding: .utf8) ?? "{}"
         let payloadHash = SigningUtilities.sha256Hex(payloadString)
-        let signingDate = Date()
+        let signingDate = now()
         let xDate = xDateString(signingDate)
         let shortDate = shortDateString(signingDate)
         let authorization = authorizationHeader(
@@ -104,20 +107,227 @@ struct VolcengineTranslateProvider: TranslationProvider {
         }
     }
 
+    func translateImage(
+        imageData: Data,
+        targetLanguage: String
+    ) async throws -> VolcengineImageTranslationResult {
+        let imagePayload = try VolcengineImagePayloadEncoder.encode(
+            originalData: imageData
+        )
+        return try await translatePreparedImage(
+            imagePayload,
+            targetLanguage: targetLanguage
+        )
+    }
+
+    func translatePreparedImage(
+        _ imagePayload: VolcengineImagePayload,
+        targetLanguage: String
+    ) async throws -> VolcengineImageTranslationResult {
+        guard let host = endpoint.host else {
+            throw TranslationProviderError.invalidEndpoint
+        }
+
+        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "Action", value: "TranslateImage"),
+            URLQueryItem(name: "Version", value: "2020-07-01")
+        ]
+        guard let url = components?.url else {
+            throw TranslationProviderError.invalidEndpoint
+        }
+
+        let normalizedTargetLanguage = normalizedLanguage(targetLanguage)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard Self.imageTargetLanguageCodes.contains(normalizedTargetLanguage) else {
+            throw TranslationProviderError.providerMessage(
+                "火山图片翻译不支持目标语言：\(targetLanguage)"
+            )
+        }
+
+        let payload = VolcengineImageTranslationRequest(
+            image: imagePayload.data.base64EncodedString(),
+            targetLanguage: normalizedTargetLanguage
+        )
+        let payloadData = try JSONEncoder().encode(payload)
+        let payloadHash = SigningUtilities.sha256Hex(payloadData)
+        let signingDate = now()
+        let xDate = xDateString(signingDate)
+        let shortDate = shortDateString(signingDate)
+        let authorization = authorizationHeader(
+            host: host,
+            xDate: xDate,
+            shortDate: shortDate,
+            canonicalQueryString: "Action=TranslateImage&Version=2020-07-01",
+            payloadHash: payloadHash
+        )
+
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.timeoutInterval = timeout
+        urlRequest.setValue(host, forHTTPHeaderField: "Host")
+        urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        urlRequest.setValue(xDate, forHTTPHeaderField: "X-Date")
+        urlRequest.setValue(payloadHash, forHTTPHeaderField: "X-Content-Sha256")
+        urlRequest.setValue(authorization, forHTTPHeaderField: "Authorization")
+        urlRequest.httpBody = payloadData
+
+        do {
+            let (data, response) = try await urlSession.data(for: urlRequest)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw TranslationProviderError.invalidResponse
+            }
+
+            guard (200..<300).contains(httpResponse.statusCode) else {
+                throw mapHTTPError(statusCode: httpResponse.statusCode, data: data)
+            }
+
+            let decoded = try JSONDecoder().decode(
+                VolcengineImageTranslationResponse.self,
+                from: data
+            )
+            if let error = decoded.responseMetadata?.error {
+                throw mapVolcengineError(code: error.code, message: error.message)
+            }
+
+            guard let encodedTranslatedImage = decoded.image,
+                  let translatedImageData = Data(base64Encoded: encodedTranslatedImage),
+                  !translatedImageData.isEmpty else {
+                throw TranslationProviderError.invalidResponse
+            }
+
+            return VolcengineImageTranslationResult(
+                imageData: translatedImageData,
+                textBlocks: decoded.textBlocks ?? [],
+                responseMetadata: decoded.responseMetadata
+            )
+        } catch let error as TranslationProviderError {
+            throw error
+        } catch let urlError as URLError {
+            throw mapURLError(urlError)
+        } catch {
+            throw TranslationProviderError.providerMessage(
+                "火山图片翻译请求失败：\(error.localizedDescription)"
+            )
+        }
+    }
+
+    func getImageUsage(from: Int, to: Int) async throws -> Int {
+        guard let host = endpoint.host else {
+            throw TranslationProviderError.invalidEndpoint
+        }
+        guard (10_000_000...99_999_999).contains(from),
+              (10_000_000...99_999_999).contains(to),
+              from <= to else {
+            throw TranslationProviderError.providerMessage(
+                "火山图片翻译用量查询日期无效，请使用 YYYYMMDD。"
+            )
+        }
+
+        var components = URLComponents(url: endpoint, resolvingAgainstBaseURL: false)
+        components?.queryItems = [
+            URLQueryItem(name: "Action", value: "GetUsage"),
+            URLQueryItem(name: "Version", value: "2025-03-01")
+        ]
+        guard let url = components?.url else {
+            throw TranslationProviderError.invalidEndpoint
+        }
+
+        let payload = VolcengineImageUsageRequest(
+            service: "image",
+            from: from,
+            to: to
+        )
+        let payloadData = try JSONEncoder().encode(payload)
+        let payloadHash = SigningUtilities.sha256Hex(payloadData)
+        let signingDate = now()
+        let xDate = xDateString(signingDate)
+        let shortDate = shortDateString(signingDate)
+        let authorization = authorizationHeader(
+            host: host,
+            xDate: xDate,
+            shortDate: shortDate,
+            canonicalQueryString: "Action=GetUsage&Version=2025-03-01",
+            payloadHash: payloadHash,
+            signingRegion: "cn-beijing",
+            signsContentType: false
+        )
+
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = "POST"
+        urlRequest.timeoutInterval = timeout
+        urlRequest.setValue(host, forHTTPHeaderField: "Host")
+        urlRequest.setValue(
+            "application/json; charset=UTF-8",
+            forHTTPHeaderField: "Content-Type"
+        )
+        urlRequest.setValue(xDate, forHTTPHeaderField: "X-Date")
+        urlRequest.setValue(payloadHash, forHTTPHeaderField: "X-Content-Sha256")
+        urlRequest.setValue(authorization, forHTTPHeaderField: "Authorization")
+        urlRequest.httpBody = payloadData
+
+        do {
+            let (data, response) = try await urlSession.data(for: urlRequest)
+            guard let httpResponse = response as? HTTPURLResponse else {
+                throw TranslationProviderError.invalidResponse
+            }
+
+            guard (200..<300).contains(httpResponse.statusCode) else {
+                throw mapHTTPError(statusCode: httpResponse.statusCode, data: data)
+            }
+
+            let decoded = try JSONDecoder().decode(
+                VolcengineImageUsageResponse.self,
+                from: data
+            )
+            if let error = decoded.responseMetadata?.error {
+                throw mapVolcengineError(code: error.code, message: error.message)
+            }
+            guard let points = decoded.result?.points else {
+                throw TranslationProviderError.invalidResponse
+            }
+
+            return points.reduce(into: 0) { total, point in
+                total += max(0, point.value)
+            }
+        } catch let error as TranslationProviderError {
+            throw error
+        } catch let urlError as URLError {
+            throw mapURLError(urlError)
+        } catch {
+            throw TranslationProviderError.providerMessage(
+                "火山图片翻译用量查询失败：\(error.localizedDescription)"
+            )
+        }
+    }
+
     private func authorizationHeader(
         host: String,
         xDate: String,
         shortDate: String,
         canonicalQueryString: String,
-        payloadHash: String
+        payloadHash: String,
+        signingRegion: String? = nil,
+        signsContentType: Bool = true
     ) -> String {
-        let signedHeaders = "content-type;host;x-content-sha256;x-date"
-        let canonicalHeaders = [
-            "content-type:application/json",
-            "host:\(host)",
-            "x-content-sha256:\(payloadHash)",
-            "x-date:\(xDate)"
-        ].joined(separator: "\n") + "\n"
+        let signedHeaders: String
+        let canonicalHeaders: String
+        if signsContentType {
+            signedHeaders = "content-type;host;x-content-sha256;x-date"
+            canonicalHeaders = [
+                "content-type:application/json",
+                "host:\(host)",
+                "x-content-sha256:\(payloadHash)",
+                "x-date:\(xDate)"
+            ].joined(separator: "\n") + "\n"
+        } else {
+            signedHeaders = "host;x-content-sha256;x-date"
+            canonicalHeaders = [
+                "host:\(host)",
+                "x-content-sha256:\(payloadHash)",
+                "x-date:\(xDate)"
+            ].joined(separator: "\n") + "\n"
+        }
 
         let canonicalRequest = [
             "POST",
@@ -128,7 +338,8 @@ struct VolcengineTranslateProvider: TranslationProvider {
             payloadHash
         ].joined(separator: "\n")
 
-        let credentialScope = "\(shortDate)/\(region)/translate/request"
+        let signingRegion = signingRegion ?? region
+        let credentialScope = "\(shortDate)/\(signingRegion)/translate/request"
         let stringToSign = [
             "HMAC-SHA256",
             xDate,
@@ -137,7 +348,7 @@ struct VolcengineTranslateProvider: TranslationProvider {
         ].joined(separator: "\n")
 
         let dateKey = SigningUtilities.hmacSHA256(key: Data(secretAccessKey.utf8), message: shortDate)
-        let regionKey = SigningUtilities.hmacSHA256(key: dateKey, message: region)
+        let regionKey = SigningUtilities.hmacSHA256(key: dateKey, message: signingRegion)
         let serviceKey = SigningUtilities.hmacSHA256(key: regionKey, message: "translate")
         let signingKey = SigningUtilities.hmacSHA256(key: serviceKey, message: "request")
         let signature = SigningUtilities.hmacSHA256Hex(key: signingKey, message: stringToSign)
@@ -229,6 +440,14 @@ struct VolcengineTranslateProvider: TranslationProvider {
         formatter.dateFormat = "yyyyMMdd"
         return formatter.string(from: date)
     }
+
+    private static let imageTargetLanguageCodes: Set<String> = [
+        "af", "bg", "bn", "bs", "cs", "da", "de", "el", "en", "es",
+        "et", "fi", "fr", "he", "hi", "hr", "id", "it", "ja", "ka",
+        "km", "kn", "ko", "lt", "lv", "mk", "ml", "mn", "mr", "ms",
+        "my", "nl", "no", "pl", "pt", "ro", "ru", "sk", "sl", "sv",
+        "ta", "te", "th", "tl", "tr", "uk", "zh", "zh-Hant"
+    ]
 }
 
 private struct VolcengineTranslateRequest: Encodable {

@@ -1,37 +1,52 @@
 import KeyboardShortcuts
 import SwiftUI
 
+enum SettingsTab: Hashable {
+    case general
+    case shortcuts
+    case translationService
+    case scenarios
+    case aiMode
+    case privacy
+}
+
 struct SettingsView: View {
     @StateObject var viewModel: SettingsViewModel
 
     var body: some View {
-        TabView {
+        TabView(selection: $viewModel.selectedTab) {
             generalSettings
+                .tag(SettingsTab.general)
                 .tabItem {
                     Label("通用", systemImage: "gearshape")
                 }
 
             shortcutSettings
+                .tag(SettingsTab.shortcuts)
                 .tabItem {
                     Label("快捷键", systemImage: "keyboard")
                 }
 
             translationServiceSettings
+                .tag(SettingsTab.translationService)
                 .tabItem {
                     Label("翻译服务", systemImage: "network")
                 }
 
             scenarioTranslationSettings
+                .tag(SettingsTab.scenarios)
                 .tabItem {
                     Label("场景配置", systemImage: "square.grid.2x2")
                 }
 
             aiModeSettings
+                .tag(SettingsTab.aiMode)
                 .tabItem {
                     Label("AI 模式", systemImage: "sparkles")
                 }
 
             permissionPrivacySettings
+                .tag(SettingsTab.privacy)
                 .tabItem {
                     Label("权限与隐私", systemImage: "lock.shield")
                 }
@@ -83,9 +98,9 @@ struct SettingsView: View {
                     systemImage: "text.cursor"
                 )
                 SettingsInfoRow(
-                    title: "截图翻译",
-                    message: "先通过本地 OCR 识别截图文本，再交给翻译服务处理。",
-                    systemImage: "viewfinder"
+                    title: "火山图片翻译 Beta",
+                    message: "Option + W 截图后直接上传整张图片给火山翻译并返回译图；本地坐标翻译保留为手动备用。",
+                    systemImage: "cloud"
                 )
                 SettingsInfoRow(
                     title: "服务 fallback",
@@ -250,7 +265,10 @@ struct SettingsView: View {
                     TextField("Endpoint", text: $viewModel.endpoint)
                         .textFieldStyle(.roundedBorder)
 
-                    TextField("模型 / 区域", text: $viewModel.model)
+                    TextField(
+                        config.id == .volcengine ? "Region（默认 cn-north-1）" : "模型 / 区域",
+                        text: $viewModel.model
+                    )
                         .textFieldStyle(.roundedBorder)
 
                     ModelSuggestionPicker(
@@ -259,13 +277,21 @@ struct SettingsView: View {
                         modelName: $viewModel.model
                     )
 
-                    TextField("App ID / SecretId / AccessKeyId", text: $viewModel.appID)
+                    TextField(
+                        config.id == .volcengine ? "AccessKey ID" : "App ID / SecretId / AccessKeyId",
+                        text: $viewModel.appID
+                    )
                         .textFieldStyle(.roundedBorder)
 
-                    SecureField("API Key", text: $viewModel.apiKey)
-                        .textFieldStyle(.roundedBorder)
+                    if config.id != .volcengine {
+                        SecureField("API Key", text: $viewModel.apiKey)
+                            .textFieldStyle(.roundedBorder)
+                    }
 
-                    SecureField("Secret Key", text: $viewModel.secretKey)
+                    SecureField(
+                        config.id == .volcengine ? "Secret Access Key" : "Secret Key",
+                        text: $viewModel.secretKey
+                    )
                         .textFieldStyle(.roundedBorder)
 
                     HStack {
@@ -275,6 +301,35 @@ struct SettingsView: View {
                             .frame(width: 80)
                         Text("秒")
                             .foregroundStyle(.secondary)
+                    }
+
+                    if config.id == .volcengine {
+                        Divider()
+
+                        Text("安全说明：上面的 Endpoint 只用于火山文字翻译；Option + W 的完整截图固定发送到 https://translate.volcengineapi.com，不能改为其他域名。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        LabeledContent("图片翻译 Beta 安全计数") {
+                            Text(viewModel.volcengineImageUsageText)
+                                .monospacedDigit()
+                        }
+
+                        Text("Option + W 会直接上传完整截图到火山图片翻译。提交前会查询火山账号当月图片用量，并与本机计数取较大值；达到免费 100 张后阻止。请求一旦发出，即使失败或超时也不会返还本机计数。用量查询失败时会停止，不冒险继续提交。")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        if viewModel.hasVolcengineUploadConsent {
+                            Button("撤销 Option + W 自动上传同意") {
+                                viewModel.revokeVolcengineUploadConsent()
+                            }
+                        } else {
+                            Text("首次按 Option + W 时会说明上传范围，并只询问一次。")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
                     }
 
                     Button("保存当前服务商配置") {
@@ -296,7 +351,7 @@ struct SettingsView: View {
                 KeyboardShortcuts.Recorder("划词翻译", name: .translateSelection)
                 KeyboardShortcuts.Recorder("输入翻译", name: .inputTranslate)
                 KeyboardShortcuts.Recorder("截图翻译", name: .screenshotTranslate)
-                KeyboardShortcuts.Recorder("截图覆盖翻译", name: .screenshotTranslateOverlay)
+                KeyboardShortcuts.Recorder("火山图片翻译 Beta", name: .screenshotTranslateOverlay)
                 KeyboardShortcuts.Recorder("截图 OCR", name: .screenshotOCR)
                 KeyboardShortcuts.Recorder("静默截图 OCR", name: .silentScreenshotOCR)
             }
@@ -309,7 +364,7 @@ struct SettingsView: View {
                 )
                 SettingsInfoRow(
                     title: "截图相关快捷键",
-                    message: "Option + S 截图翻译会在文字悬浮窗中显示译文；Option + W 截图覆盖翻译会自动 OCR 并在原图位置回填。截图 OCR 只显示识别文本，静默截图 OCR 会直接复制识别结果。",
+                    message: "Option + S 截图翻译会在文字悬浮窗中显示译文；Option + W 会直接上传整张截图并显示火山返回的译图。本地坐标覆盖可从菜单或结果窗口手动使用。",
                     systemImage: "viewfinder"
                 )
                 SettingsInfoRow(
@@ -379,7 +434,7 @@ struct SettingsView: View {
                     .buttonStyle(.borderedProminent)
                 }
 
-                Text("为不同功能指定主要翻译服务和可选备用服务。截图覆盖翻译使用本地 OCR 与本地语义分块，不依赖 Gemini 或 OpenAI 视觉分块。")
+                Text("为不同文字功能指定主要翻译服务和可选备用服务。Option + W 的火山整图翻译固定使用火山 AK/SK；本地坐标备用仍使用本地 OCR 与本地语义分块。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
@@ -435,8 +490,13 @@ struct SettingsView: View {
             Section("隐私说明") {
                 SettingsInfoRow(
                     title: "截图 OCR",
-                    message: "截图内容用于本机 Apple Vision OCR；截图翻译会把识别后的文本交给你启用的翻译服务。",
+                    message: "截图 OCR 与 Option + S 先在本机使用 Apple Vision；Option + S 再把识别文字交给启用的翻译服务。",
                     systemImage: "viewfinder"
+                )
+                SettingsInfoRow(
+                    title: "火山图片翻译 Beta",
+                    message: "Option + W 会把完整框选截图上传到火山引擎。首次只询问一次；云端失败不会静默切换本地。",
+                    systemImage: "cloud"
                 )
                 SettingsInfoRow(
                     title: "图片文件 OCR",
@@ -445,7 +505,7 @@ struct SettingsView: View {
                 )
                 SettingsInfoRow(
                     title: "API Key",
-                    message: "API Key 会保存到本机配置缓存，并在 Keychain 可用时同步；重新打包调试时不需要反复输入。",
+                    message: "API Key、AccessKey Secret 等凭据只保存在 macOS Keychain；旧版 UserDefaults 明文缓存会在首次读取时迁移并删除。",
                     systemImage: "key"
                 )
 
@@ -766,6 +826,7 @@ private struct StatusPill: View {
 
 @MainActor
 final class SettingsViewModel: ObservableObject {
+    @Published var selectedTab: SettingsTab = .general
     @Published var providerConfigs: [ProviderConfig] = []
     @Published var defaultProviderID: TranslationProviderID
     @Published var selectedProviderID: TranslationProviderID?
@@ -791,10 +852,13 @@ final class SettingsViewModel: ObservableObject {
     @Published var statusIsError = false
     @Published var isAccessibilityTrusted = false
     @Published var isScreenRecordingTrusted = false
+    @Published var volcengineImageUsageText = ""
+    @Published var hasVolcengineUploadConsent = false
 
     private let configurationStore: AppConfigurationStore
     private let keychainService: KeychainService
     private let providerRegistry: ProviderRegistry
+    private let policyStore: VolcengineImageTranslationPolicyStore
     private let permissionManager = AppServices.shared.permissionManager
     private let aiProviderIDs: Set<TranslationProviderID> = [
         .openAICompatible,
@@ -807,11 +871,13 @@ final class SettingsViewModel: ObservableObject {
     init(
         configurationStore: AppConfigurationStore,
         keychainService: KeychainService,
-        providerRegistry: ProviderRegistry
+        providerRegistry: ProviderRegistry,
+        policyStore: VolcengineImageTranslationPolicyStore
     ) {
         self.configurationStore = configurationStore
         self.keychainService = keychainService
         self.providerRegistry = providerRegistry
+        self.policyStore = policyStore
         defaultProviderID = configurationStore.defaultProviderID
         targetLanguage = configurationStore.targetLanguage
         translationDirection = configurationStore.translationDirection
@@ -884,6 +950,9 @@ final class SettingsViewModel: ObservableObject {
         visionSegmentationModel = visionConfig.model
         visionSegmentationAPIKey = loadVisionSegmentationAPIKey(for: visionConfig.providerID)
         scenarioTranslationConfigs = configurationStore.scenarioTranslationConfigs
+        let volcengineUsage = policyStore.snapshot
+        volcengineImageUsageText = "\(volcengineUsage.submittedCount)/\(volcengineUsage.limit)"
+        hasVolcengineUploadConsent = policyStore.hasUploadConsent
 
         if fallbackProviderID == defaultProviderID {
             fallbackProviderID = nil
@@ -1024,6 +1093,12 @@ final class SettingsViewModel: ObservableObject {
         } catch {
             status(error.localizedDescription, isError: true)
         }
+    }
+
+    func revokeVolcengineUploadConsent() {
+        policyStore.revokeUploadConsent()
+        reload()
+        status("已撤销自动上传同意；下次 Option + W 会重新询问。", isError: false)
     }
 
     func refreshPermissions() {

@@ -6,24 +6,32 @@ final class SettingsWindowController {
     private let configurationStore: AppConfigurationStore
     private let keychainService: KeychainService
     private let providerRegistry: ProviderRegistry
+    private let policyStore: VolcengineImageTranslationPolicyStore
     private var window: NSWindow?
+    private var viewModel: SettingsViewModel?
 
     init(
         configurationStore: AppConfigurationStore,
         keychainService: KeychainService,
-        providerRegistry: ProviderRegistry
+        providerRegistry: ProviderRegistry,
+        policyStore: VolcengineImageTranslationPolicyStore
     ) {
         self.configurationStore = configurationStore
         self.keychainService = keychainService
         self.providerRegistry = providerRegistry
+        self.policyStore = policyStore
     }
 
-    func show() {
+    func show(
+        tab: SettingsTab? = nil,
+        providerID: TranslationProviderID? = nil
+    ) {
         if window == nil {
             let viewModel = SettingsViewModel(
                 configurationStore: configurationStore,
                 keychainService: keychainService,
-                providerRegistry: providerRegistry
+                providerRegistry: providerRegistry,
+                policyStore: policyStore
             )
             let hostingController = NSHostingController(
                 rootView: SettingsView(viewModel: viewModel)
@@ -36,8 +44,16 @@ final class SettingsWindowController {
             newWindow.center()
             newWindow.isReleasedWhenClosed = false
             window = newWindow
+            self.viewModel = viewModel
         }
 
+        viewModel?.reload()
+        if let tab {
+            viewModel?.selectedTab = tab
+        }
+        if let providerID {
+            viewModel?.selectProvider(providerID)
+        }
         window?.makeKeyAndOrderFront(nil)
     }
 }

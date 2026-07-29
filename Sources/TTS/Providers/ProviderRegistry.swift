@@ -303,6 +303,30 @@ final class ProviderRegistry {
         }
     }
 
+    func makeVolcengineImageTranslationProvider() throws -> VolcengineTranslateProvider {
+        guard let config = providerConfig(for: .volcengine) else {
+            throw TranslationProviderError.providerMessage("缺少火山翻译配置。")
+        }
+
+        let secretKeyAccount = secretKeyAccount(for: .volcengine)
+        guard let accessKeyID = config.appID?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !accessKeyID.isEmpty,
+              let secretAccessKey = try keychainService.loadAPIKey(account: secretKeyAccount),
+              !secretAccessKey.isEmpty else {
+            throw TranslationProviderError.providerMessage(
+                "请在设置 → 翻译服务 → 火山翻译中填写 AccessKey ID 与 Secret Access Key。"
+            )
+        }
+
+        return VolcengineTranslateProvider(
+            endpoint: URL(string: "https://translate.volcengineapi.com")!,
+            accessKeyID: accessKeyID,
+            secretAccessKey: secretAccessKey,
+            region: config.model ?? "cn-north-1",
+            timeout: config.timeout
+        )
+    }
+
     func makeVisionSegmentationProvider(
         config: VisionSegmentationConfig
     ) throws -> any VisionSegmentationProvider {

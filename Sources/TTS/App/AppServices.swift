@@ -12,11 +12,21 @@ final class AppServices {
     let favoriteStore = FavoriteStore()
     let ocrService = OCRService()
     let toastPanel = ToastPanel()
+    let volcengineImageTranslationPolicyStore = VolcengineImageTranslationPolicyStore()
     let screenshotOverlayRenderer = ScreenshotTranslationOverlayRenderer()
     lazy var imageOverlayTranslationWindowController = ImageOverlayTranslationWindowController(
         renderer: screenshotOverlayRenderer,
         translationService: translationService,
-        debugWriter: OverlayPipelineDebugWriter()
+        debugWriter: OverlayPipelineDebugWriter(),
+        providerRegistry: providerRegistry,
+        configurationStore: configurationStore,
+        policyStore: volcengineImageTranslationPolicyStore,
+        openVolcengineSettings: { [weak self] in
+            self?.settingsWindowController.show(
+                tab: .translationService,
+                providerID: .volcengine
+            )
+        }
     )
 
     lazy var floatingPanel = FloatingTranslatePanel(
@@ -33,7 +43,8 @@ final class AppServices {
     lazy var settingsWindowController = SettingsWindowController(
         configurationStore: configurationStore,
         keychainService: keychainService,
-        providerRegistry: providerRegistry
+        providerRegistry: providerRegistry,
+        policyStore: volcengineImageTranslationPolicyStore
     )
 
     lazy var historyWindowController = HistoryWindowController(
@@ -78,7 +89,10 @@ final class AppServices {
         historyStore: historyStore,
         floatingPanel: floatingPanel,
         toastPanel: toastPanel,
-        imageOverlayTranslationWindowController: imageOverlayTranslationWindowController
+        imageOverlayTranslationWindowController: imageOverlayTranslationWindowController,
+        providerRegistry: providerRegistry,
+        policyStore: volcengineImageTranslationPolicyStore,
+        settingsWindowController: settingsWindowController
     )
 
     lazy var translationController = SelectionTranslationController(

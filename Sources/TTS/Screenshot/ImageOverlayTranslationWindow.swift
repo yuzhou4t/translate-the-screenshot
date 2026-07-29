@@ -11,12 +11,20 @@ final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate 
     init(
         renderer: ScreenshotTranslationOverlayRenderer,
         translationService: TranslationService,
-        debugWriter: OverlayPipelineDebugWriter
+        debugWriter: OverlayPipelineDebugWriter,
+        providerRegistry: ProviderRegistry,
+        configurationStore: AppConfigurationStore,
+        policyStore: VolcengineImageTranslationPolicyStore,
+        openVolcengineSettings: @escaping () -> Void
     ) {
         viewModel = ImageOverlayTranslationViewModel(
             renderer: renderer,
             translationService: translationService,
-            debugWriter: debugWriter
+            debugWriter: debugWriter,
+            providerRegistry: providerRegistry,
+            configurationStore: configurationStore,
+            policyStore: policyStore,
+            openVolcengineSettings: openVolcengineSettings
         )
         super.init()
     }
@@ -46,6 +54,22 @@ final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate 
         }
     }
 
+    func showVolcengineTranslation(
+        originalImage: NSImage,
+        imageURL: URL,
+        onUseLocalFallback: @escaping () -> Void
+    ) {
+        cancelProcessingAction = nil
+        ensureWindow(title: "火山图片翻译 Beta")
+        viewModel.configureVolcengineTranslation(
+            originalImage: originalImage,
+            imageURL: imageURL,
+            onUseLocalFallback: onUseLocalFallback
+        )
+        NSApp.activate(ignoringOtherApps: true)
+        window?.makeKeyAndOrderFront(nil)
+    }
+
     func showProgress(
         originalImage: NSImage,
         message: String,
@@ -62,6 +86,18 @@ final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate 
     func showError(_ message: String) {
         cancelProcessingAction = nil
         viewModel.showProcessingError(message)
+    }
+
+    func showCancelled() {
+        cancelProcessingAction = nil
+        viewModel.showCancelled()
+    }
+
+    @discardableResult
+    func cancelCurrentWork() -> Bool {
+        let hadActiveWork = viewModel.isTranslating || cancelProcessingAction != nil
+        cancelCurrentWorkIfNeeded()
+        return hadActiveWork
     }
 
     private func ensureWindow(title: String) {
@@ -91,6 +127,7 @@ final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate 
 
     private func closeWindow() {
         cancelCurrentWorkIfNeeded()
+        viewModel.releaseImages()
         window?.performClose(nil)
     }
 
@@ -98,14 +135,18 @@ final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate 
         let action = cancelProcessingAction
         cancelProcessingAction = nil
         action?()
-        if viewModel.isTranslating {
-            viewModel.cancelTranslation()
-        }
+        viewModel.cancelTranslation()
     }
 
     func windowWillClose(_ notification: Notification) {
         cancelCurrentWorkIfNeeded()
+        viewModel.releaseImages()
     }
+}
+
+private enum ImageOverlayWorkflow {
+    case local
+    case volcengine
 }
 
 @MainActor
@@ -118,11 +159,21 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     @Published var totalTranslationCount = 0
     @Published var progressStage = "等待"
     @Published private var hasGeneratedResult = false
+    @Published private var workflow: ImageOverlayWorkflow = .local
+    @Published private var volcengineResultImage: NSImage?
+    @Published private var volcengineTextBlocks: [VolcengineImageTextBlock] = []
 
     private let renderer: ScreenshotTranslationOverlayRenderer
     private let translationService: TranslationService
     private let debugWriter: OverlayPipelineDebugWriter
+    private let providerRegistry: ProviderRegistry
+    private let configurationStore: AppConfigurationStore
+    private let policyStore: VolcengineImageTranslationPolicyStore
+    private let openVolcengineSettingsAction: () -> Void
     private var translationTask: Task<Void, Never>?
+    private var activeRequestID: UUID?
+    private var volcengineImageURL: URL?
+    private var useLocalFallbackAction: (() -> Void)?
     #if canImport(Translation)
     private var appleTranslationCoordinatorStorage: AnyObject?
     #endif
@@ -131,11 +182,19 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     init(
         renderer: ScreenshotTranslationOverlayRenderer,
         translationService: TranslationService,
-        debugWriter: OverlayPipelineDebugWriter
+        debugWriter: OverlayPipelineDebugWriter,
+        providerRegistry: ProviderRegistry,
+        configurationStore: AppConfigurationStore,
+        policyStore: VolcengineImageTranslationPolicyStore,
+        openVolcengineSettings: @escaping () -> Void
     ) {
         self.renderer = renderer
         self.translationService = translationService
         self.debugWriter = debugWriter
+        self.providerRegistry = providerRegistry
+        self.configurationStore = configurationStore
+        self.policyStore = policyStore
+        openVolcengineSettingsAction = openVolcengineSettings
         #if canImport(Translation)
         if #available(macOS 15.0, *) {
             appleTranslationCoordinatorStorage = AppleOverlayTranslationCoordinator()
@@ -151,7 +210,8 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     #endif
 
     var imagePixelSize: CGSize {
-        guard let image = session?.originalImage,
+        let image = previewImage
+        guard image.size != .zero,
               let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil) else {
             return .zero
         }
@@ -159,14 +219,20 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     }
 
     var regions: [OverlayDisplayRegion] {
-        session?.displayRegions ?? []
+        guard workflow == .local else {
+            return []
+        }
+        return session?.displayRegions ?? []
     }
 
     var previewImage: NSImage {
-        session?.originalImage ?? NSImage(size: .zero)
+        volcengineResultImage ?? session?.originalImage ?? NSImage(size: .zero)
     }
 
     var selectedState: ImageOverlaySegmentState? {
+        guard workflow == .local else {
+            return nil
+        }
         guard let session,
               let selectedID = session.selectedSegmentID else {
             return nil
@@ -182,6 +248,9 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     }
 
     var canStartTranslation: Bool {
+        if workflow == .volcengine {
+            return canRetryVolcengine
+        }
         guard !isTranslating,
               let session else {
             return false
@@ -190,6 +259,9 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     }
 
     var canRetrySelected: Bool {
+        guard workflow == .local else {
+            return false
+        }
         guard !isTranslating, let selectedState else {
             return false
         }
@@ -213,6 +285,11 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     }
 
     var canCopyOCRText: Bool {
+        if workflow == .volcengine {
+            return volcengineTextBlocks.contains {
+                !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            }
+        }
         guard let text = session?.recognizedText else {
             return false
         }
@@ -220,10 +297,42 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     }
 
     var canOpenDebugDirectory: Bool {
+        guard workflow == .local else {
+            return false
+        }
         guard let session else {
             return false
         }
         return !session.textLines.isEmpty || !session.segmentStates.isEmpty
+    }
+
+    var isVolcengineWorkflow: Bool {
+        workflow == .volcengine
+    }
+
+    var workflowBadgeText: String {
+        isVolcengineWorkflow ? "火山整图 Beta · 云端" : "本地坐标 · 备用"
+    }
+
+    var monthlyUsageText: String {
+        let snapshot = policyStore.snapshot
+        return "本月安全计数 \(snapshot.submittedCount)/\(snapshot.limit)"
+    }
+
+    var canRetryVolcengine: Bool {
+        workflow == .volcengine &&
+            !isTranslating &&
+            volcengineResultImage == nil &&
+            policyStore.snapshot.remainingCount > 0 &&
+            volcengineImageURL != nil
+    }
+
+    var canUseLocalFallback: Bool {
+        workflow == .volcengine && !isTranslating && useLocalFallbackAction != nil
+    }
+
+    var volcengineTextBlockCount: Int {
+        volcengineTextBlocks.count
     }
 
     func configure(
@@ -239,6 +348,8 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         totalTranslationCount = 0
         hasGeneratedResult = false
         savedHistoryFingerprint = nil
+        workflow = .local
+        clearVolcengineState(keepOriginalSession: true)
         session = ImageOverlaySession.make(
             originalImage: originalImage,
             ocrSnapshot: ocrSnapshot,
@@ -257,6 +368,8 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         totalTranslationCount = 0
         hasGeneratedResult = false
         savedHistoryFingerprint = nil
+        workflow = .local
+        clearVolcengineState(keepOriginalSession: true)
         session = ImageOverlaySession(
             originalImage: originalImage,
             ocrSnapshot: OverlayOCRSnapshot(
@@ -288,6 +401,22 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         status(message, isError: false)
     }
 
+    func configureVolcengineTranslation(
+        originalImage: NSImage,
+        imageURL: URL,
+        onUseLocalFallback: @escaping () -> Void
+    ) {
+        configureProgress(
+            originalImage: originalImage,
+            message: "正在上传并生成整图译文..."
+        )
+        workflow = .volcengine
+        volcengineImageURL = imageURL
+        useLocalFallbackAction = onUseLocalFallback
+        progressStage = "火山云端"
+        startVolcengineTranslation()
+    }
+
     func showProcessingError(_ message: String) {
         isTranslating = false
         translationTask = nil
@@ -295,7 +424,28 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         status(message, isError: true)
     }
 
+    func showCancelled() {
+        isTranslating = false
+        translationTask = nil
+        activeRequestID = nil
+        progressStage = "已取消"
+        status("已取消当前处理。", isError: false)
+    }
+
+    func releaseImages() {
+        translationTask?.cancel()
+        translationTask = nil
+        activeRequestID = nil
+        session = nil
+        clearVolcengineState(keepOriginalSession: false)
+        progressStage = "等待"
+    }
+
     func startTranslation() {
+        if workflow == .volcengine {
+            startVolcengineTranslation()
+            return
+        }
         guard let session else {
             return
         }
@@ -323,14 +473,35 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     func cancelTranslation() {
         translationTask?.cancel()
         translationTask = nil
+        activeRequestID = nil
         #if canImport(Translation)
-        if #available(macOS 15.0, *) {
+        if workflow == .local, #available(macOS 15.0, *) {
             appleTranslationCoordinator?.cancel()
         }
         #endif
         isTranslating = false
+        if workflow == .volcengine {
+            progressStage = "已取消"
+            status("已停止火山图片翻译；没有自动切换到本地。", isError: false)
+            return
+        }
         markTranslatingSegmentsAsRecognized()
         status("已取消翻译。", isError: false)
+    }
+
+    func useLocalFallback() {
+        guard canUseLocalFallback else {
+            return
+        }
+        let action = useLocalFallbackAction
+        translationTask?.cancel()
+        translationTask = nil
+        activeRequestID = nil
+        action?()
+    }
+
+    func openVolcengineSettings() {
+        openVolcengineSettingsAction()
     }
 
     func selectSegment(_ id: String?) {
@@ -372,7 +543,17 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     }
 
     func copyOCRText() {
-        guard let text = session?.recognizedText,
+        let text: String
+        if workflow == .volcengine {
+            text = volcengineTextBlocks
+                .map(\.text)
+                .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+                .joined(separator: "\n")
+        } else {
+            text = session?.recognizedText ?? ""
+        }
+
+        guard
               !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             status("没有可复制的 OCR 文本。", isError: true)
             return
@@ -412,8 +593,9 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         }
 
         let panel = NSSavePanel()
-        panel.title = "保存翻译覆盖图片"
-        panel.nameFieldStringValue = "tts-overlay-\(Int(Date().timeIntervalSince1970)).png"
+        panel.title = "保存翻译图片"
+        let prefix = workflow == .volcengine ? "tts-volcengine" : "tts-overlay"
+        panel.nameFieldStringValue = "\(prefix)-\(Int(Date().timeIntervalSince1970)).png"
         panel.allowedContentTypes = [.png]
         panel.canCreateDirectories = true
 
@@ -452,6 +634,172 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
             status("已打开 debug 目录。", isError: false)
         } else {
             status("生成 debug 目录失败。", isError: true)
+        }
+    }
+
+    private func startVolcengineTranslation() {
+        guard workflow == .volcengine,
+              let imageURL = volcengineImageURL else {
+            return
+        }
+
+        translationTask?.cancel()
+        let requestID = UUID()
+        activeRequestID = requestID
+        volcengineResultImage = nil
+        volcengineTextBlocks = []
+        hasGeneratedResult = false
+        isTranslating = true
+        completedTranslationCount = 0
+        totalTranslationCount = 0
+        progressStage = "火山云端"
+        status("正在准备截图并核对火山账号当月免费额度…", isError: false)
+
+        translationTask = Task { [weak self] in
+            guard let self else {
+                return
+            }
+
+            do {
+                let provider = try providerRegistry.makeVolcengineImageTranslationProvider()
+                let billingRange = Self.currentVolcengineBillingDateRange()
+                let preparationTask = Task.detached(priority: .userInitiated) {
+                    let originalData = try Data(contentsOf: imageURL)
+                    return try VolcengineImagePayloadEncoder.encode(
+                        originalData: originalData
+                    )
+                }
+                let usageTask = Task.detached(priority: .userInitiated) {
+                    do {
+                        return try await provider.getImageUsage(
+                            from: billingRange.from,
+                            to: billingRange.to
+                        )
+                    } catch {
+                        throw TranslationProviderError.providerMessage(
+                            "无法确认火山账号当月图片用量，为避免超出免费额度已停止提交：\(error.localizedDescription)"
+                        )
+                    }
+                }
+                let preparedImage: VolcengineImagePayload
+                let accountUsage: Int
+                do {
+                    (preparedImage, accountUsage) = try await withTaskCancellationHandler {
+                        let preparedImage = try await preparationTask.value
+                        let accountUsage = try await usageTask.value
+                        return (preparedImage, accountUsage)
+                    } onCancel: {
+                        preparationTask.cancel()
+                        usageTask.cancel()
+                    }
+                } catch {
+                    preparationTask.cancel()
+                    usageTask.cancel()
+                    throw error
+                }
+                try Task.checkCancellation()
+
+                let usage = try policyStore.reserveSubmission(
+                    accountSubmittedCount: accountUsage
+                )
+                status(
+                    "已提交火山图片翻译，本月安全计数 \(usage.submittedCount)/\(usage.limit)…",
+                    isError: false
+                )
+
+                let startedAt = Date()
+                let targetLanguage = configurationStore.targetLanguage
+                let imageRequestTask = Task.detached(priority: .userInitiated) {
+                    try await provider.translatePreparedImage(
+                        preparedImage,
+                        targetLanguage: targetLanguage
+                    )
+                }
+                let result = try await withTaskCancellationHandler {
+                    try await imageRequestTask.value
+                } onCancel: {
+                    imageRequestTask.cancel()
+                }
+                try Task.checkCancellation()
+                guard activeRequestID == requestID else {
+                    return
+                }
+                guard let translatedImage = NSImage(data: result.imageData) else {
+                    throw TranslationProviderError.invalidResponse
+                }
+
+                volcengineResultImage = translatedImage
+                volcengineTextBlocks = result.textBlocks
+                completedTranslationCount = result.textBlocks.count
+                totalTranslationCount = result.textBlocks.count
+                hasGeneratedResult = true
+                isTranslating = false
+                translationTask = nil
+                activeRequestID = nil
+                progressStage = "已生成"
+
+                let elapsed = String(
+                    format: "%.2f",
+                    Date().timeIntervalSince(startedAt)
+                )
+                status(
+                    "火山整图翻译完成（\(elapsed) 秒），本月安全计数 \(policyStore.snapshot.submittedCount)/\(policyStore.snapshot.limit)。",
+                    isError: false
+                )
+                print(
+                    "volcengine image translation completed: elapsed=\(elapsed)s, blocks=\(result.textBlocks.count), request=\(result.responseMetadata?.requestID ?? "-")"
+                )
+                await saveVolcengineHistoryIfPossible(result.textBlocks)
+            } catch is CancellationError {
+                guard activeRequestID == requestID else {
+                    return
+                }
+                isTranslating = false
+                translationTask = nil
+                activeRequestID = nil
+                progressStage = "已取消"
+                status("已停止火山图片翻译；没有自动切换到本地。", isError: false)
+            } catch {
+                guard activeRequestID == requestID else {
+                    return
+                }
+                isTranslating = false
+                translationTask = nil
+                activeRequestID = nil
+                progressStage = "失败"
+                status(
+                    "\(error.localizedDescription) 未自动切换本地，可手动选择“本地坐标备用”。",
+                    isError: true
+                )
+            }
+        }
+    }
+
+    private func saveVolcengineHistoryIfPossible(
+        _ textBlocks: [VolcengineImageTextBlock]
+    ) async {
+        let pairs = textBlocks.compactMap { block -> (String, String)? in
+            let source = block.text.trimmingCharacters(in: .whitespacesAndNewlines)
+            let translation = block.translation.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !source.isEmpty, !translation.isEmpty else {
+                return nil
+            }
+            return (source, translation)
+        }
+        guard !pairs.isEmpty else {
+            return
+        }
+
+        do {
+            _ = try await translationService.recordImageOverlayHistory(
+                sourceText: pairs.map { $0.0 }.joined(separator: "\n"),
+                translatedText: pairs.map { $0.1 }.joined(separator: "\n"),
+                providerID: .volcengine
+            )
+        } catch {
+            print(
+                "volcengine image translation history skipped: \(error.localizedDescription)"
+            )
         }
     }
 
@@ -673,6 +1021,10 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     }
 
     private func exportImage() -> NSImage {
+        if let volcengineResultImage {
+            return volcengineResultImage
+        }
+
         guard let session else {
             return NSImage(size: .zero)
         }
@@ -733,6 +1085,20 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         return CGSize(width: CGFloat(cgImage.width), height: CGFloat(cgImage.height))
     }
 
+    private static func currentVolcengineBillingDateRange(
+        now: Date = Date()
+    ) -> (from: Int, to: Int) {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(identifier: "Asia/Shanghai")
+            ?? TimeZone(secondsFromGMT: 8 * 60 * 60)!
+        let current = calendar.dateComponents([.year, .month, .day], from: now)
+        let from = (current.year ?? 0) * 10_000 + (current.month ?? 0) * 100 + 1
+        let to = (current.year ?? 0) * 10_000
+            + (current.month ?? 0) * 100
+            + (current.day ?? 0)
+        return (from, to)
+    }
+
     private func hasStartedTranslation(_ session: ImageOverlaySession) -> Bool {
         session.segmentStates.contains { state in
             switch state.phase {
@@ -741,6 +1107,16 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
             case .recognized, .originalKept, .excluded:
                 return false
             }
+        }
+    }
+
+    private func clearVolcengineState(keepOriginalSession: Bool) {
+        volcengineResultImage = nil
+        volcengineTextBlocks = []
+        volcengineImageURL = nil
+        useLocalFallbackAction = nil
+        if !keepOriginalSession {
+            session = nil
         }
     }
 
@@ -795,17 +1171,24 @@ private struct ImageOverlayTranslationView: View {
 
     private var header: some View {
         HStack(spacing: 10) {
-            Label("截图覆盖翻译", systemImage: "text.viewfinder")
+            Label(
+                viewModel.isVolcengineWorkflow ? "火山图片翻译 Beta" : "本地坐标翻译",
+                systemImage: viewModel.isVolcengineWorkflow ? "cloud" : "text.viewfinder"
+            )
                 .font(.headline)
 
-            Text(viewModel.session?.ocrStage.displayName ?? "等待 OCR")
+            Text(viewModel.workflowBadgeText)
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
                 .background(Color.primary.opacity(0.06), in: Capsule())
 
-            if viewModel.totalTranslationCount > 0 {
+            if viewModel.isVolcengineWorkflow {
+                Text(viewModel.monthlyUsageText)
+                    .font(.caption.monospacedDigit())
+                    .foregroundStyle(.secondary)
+            } else if viewModel.totalTranslationCount > 0 {
                 Text(viewModel.translationProgressText)
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
@@ -851,11 +1234,35 @@ private struct ImageOverlayTranslationView: View {
                     Label("停止", systemImage: "stop.fill")
                 }
                 .buttonStyle(.bordered)
+            } else if viewModel.isVolcengineWorkflow && viewModel.canRetryVolcengine {
+                Button {
+                    viewModel.startTranslation()
+                } label: {
+                    Label("重试火山", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.borderedProminent)
             } else if viewModel.canStartTranslation {
                 Button {
                     viewModel.startTranslation()
                 } label: {
                     Label("继续翻译", systemImage: "arrow.clockwise")
+                }
+                .buttonStyle(.bordered)
+            }
+
+            if viewModel.isVolcengineWorkflow {
+                Button {
+                    viewModel.useLocalFallback()
+                } label: {
+                    Label("本地坐标备用", systemImage: "desktopcomputer")
+                }
+                .buttonStyle(.bordered)
+                .disabled(!viewModel.canUseLocalFallback)
+
+                Button {
+                    viewModel.openVolcengineSettings()
+                } label: {
+                    Label("火山设置", systemImage: "gearshape")
                 }
                 .buttonStyle(.bordered)
             }
@@ -1033,6 +1440,20 @@ private struct ImageOverlayTranslationView: View {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .stroke(Color.primary.opacity(0.08), lineWidth: 1)
             )
+            .overlay {
+                if viewModel.isVolcengineWorkflow && viewModel.isTranslating {
+                    HStack(spacing: 10) {
+                        ProgressView()
+                            .controlSize(.small)
+                        Text("火山正在生成整图译文…")
+                            .font(.callout.weight(.medium))
+                    }
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(.ultraThickMaterial, in: Capsule())
+                    .shadow(radius: 8, y: 3)
+                }
+            }
         }
     }
 
@@ -1113,11 +1534,19 @@ private struct ImageOverlayTranslationView: View {
 
     private var footer: some View {
         HStack(spacing: 8) {
-            summaryChip("区域 \(viewModel.session?.segmentStates.count ?? 0)")
-            summaryChip("成功 \(viewModel.session?.summary.successCount ?? 0)")
-            summaryChip("备用 \(viewModel.session?.summary.fallbackCount ?? 0)")
-            summaryChip("保留 \(viewModel.session?.summary.originalKeptCount ?? 0)")
-            summaryChip("失败 \(viewModel.session?.summary.failedCount ?? 0)")
+            if viewModel.isVolcengineWorkflow {
+                summaryChip("火山云端")
+                summaryChip(viewModel.monthlyUsageText)
+                if viewModel.volcengineTextBlockCount > 0 {
+                    summaryChip("文字块 \(viewModel.volcengineTextBlockCount)")
+                }
+            } else {
+                summaryChip("区域 \(viewModel.session?.segmentStates.count ?? 0)")
+                summaryChip("成功 \(viewModel.session?.summary.successCount ?? 0)")
+                summaryChip("备用 \(viewModel.session?.summary.fallbackCount ?? 0)")
+                summaryChip("保留 \(viewModel.session?.summary.originalKeptCount ?? 0)")
+                summaryChip("失败 \(viewModel.session?.summary.failedCount ?? 0)")
+            }
             Spacer()
             Text(footerStatusText)
                 .font(.caption)
@@ -1126,6 +1555,15 @@ private struct ImageOverlayTranslationView: View {
     }
 
     private var footerStatusText: String {
+        if viewModel.isVolcengineWorkflow {
+            if viewModel.isTranslating {
+                return "正在上传整张截图并等待火山返回译图。"
+            }
+            if viewModel.canExportImage {
+                return "云端译图仅保存在内存；手动保存的 PNG 不会自动删除。"
+            }
+            return "失败不会自动切换本地；可手动选择本地坐标备用。"
+        }
         if viewModel.isTranslating {
             return "正在处理截图覆盖翻译，完成后会显示生成图片。"
         }

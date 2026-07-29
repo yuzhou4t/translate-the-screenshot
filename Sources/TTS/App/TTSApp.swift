@@ -10,7 +10,8 @@ struct TTSApp: App {
                 viewModel: SettingsViewModel(
                     configurationStore: AppServices.shared.configurationStore,
                     keychainService: AppServices.shared.keychainService,
-                    providerRegistry: AppServices.shared.providerRegistry
+                    providerRegistry: AppServices.shared.providerRegistry,
+                    policyStore: AppServices.shared.volcengineImageTranslationPolicyStore
                 )
             )
         }
