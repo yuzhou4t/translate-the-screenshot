@@ -15,8 +15,8 @@ public func runTTSPackageRegressionChecks() {
     runAsyncScreenshotTranslationRegressionChecks()
     announceRegressionCheck("screenshot overlay artifact retention")
     checkScreenshotOverlayRetentionRemovesOnlyExpiredOwnedArtifacts()
-    announceRegressionCheck("screenshot overlay history retention")
-    checkScreenshotOverlayHistoryExpiresAfterThreeDays()
+    announceRegressionCheck("translation history retention")
+    checkTranslationHistoryUsesModeSpecificRetention()
     announceRegressionCheck("Volcengine image monthly policy")
     MainActor.assumeIsolated {
         runVolcengineImageTranslationPolicyChecks()

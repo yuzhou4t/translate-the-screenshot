@@ -2,6 +2,7 @@ import Foundation
 
 actor HistoryStore {
     static let imageOverlayRetentionInterval: TimeInterval = 3 * 24 * 60 * 60
+    static let ordinaryHistoryRetentionInterval: TimeInterval = 7 * 24 * 60 * 60
 
     private let fileURL: URL
     private let encoder = JSONEncoder()
@@ -40,9 +41,9 @@ actor HistoryStore {
         try save([])
     }
 
-    func pruneExpiredImageOverlayItems(now: Date = Date()) throws {
+    func pruneExpiredItems(now: Date = Date()) throws {
         let items = try load(pruningAt: nil)
-        let retainedItems = Self.retainingUnexpiredImageOverlayItems(
+        let retainedItems = Self.retainingUnexpiredItems(
             items,
             now: now
         )
@@ -67,7 +68,7 @@ actor HistoryStore {
             return items
         }
 
-        let retainedItems = Self.retainingUnexpiredImageOverlayItems(
+        let retainedItems = Self.retainingUnexpiredItems(
             items,
             now: now
         )
@@ -82,13 +83,17 @@ actor HistoryStore {
         try data.write(to: fileURL, options: [.atomic])
     }
 
-    static func retainingUnexpiredImageOverlayItems(
+    static func retainingUnexpiredItems(
         _ items: [TranslationHistoryItem],
         now: Date
     ) -> [TranslationHistoryItem] {
-        let cutoff = now.addingTimeInterval(-imageOverlayRetentionInterval)
+        let imageOverlayCutoff = now.addingTimeInterval(-imageOverlayRetentionInterval)
+        let ordinaryHistoryCutoff = now.addingTimeInterval(-ordinaryHistoryRetentionInterval)
         return items.filter { item in
-            item.mode != .imageOverlay || item.createdAt >= cutoff
+            let cutoff = item.mode == .imageOverlay
+                ? imageOverlayCutoff
+                : ordinaryHistoryCutoff
+            return item.createdAt >= cutoff
         }
     }
 }

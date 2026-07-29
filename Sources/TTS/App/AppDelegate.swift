@@ -12,7 +12,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         services.hotkeyManager.start()
         ScreenshotArtifactRetention.pruneExpiredOverlayArtifacts()
         Task {
-            try? await services.historyStore.pruneExpiredImageOverlayItems()
+            try? await services.historyStore.pruneExpiredItems()
         }
     }
 

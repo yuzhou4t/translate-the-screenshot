@@ -50,7 +50,7 @@ func checkScreenshotOverlayRetentionRemovesOnlyExpiredOwnedArtifacts() {
     precondition(fileManager.fileExists(atPath: externalURL.path))
 }
 
-func checkScreenshotOverlayHistoryExpiresAfterThreeDays() {
+func checkTranslationHistoryUsesModeSpecificRetention() {
     let now = Date()
     let expiredOverlay = makeRetentionHistoryItem(
         mode: .imageOverlay,
@@ -60,23 +60,53 @@ func checkScreenshotOverlayHistoryExpiresAfterThreeDays() {
         mode: .imageOverlay,
         createdAt: now.addingTimeInterval(-2 * 24 * 60 * 60)
     )
-    let oldScreenshotTranslation = makeRetentionHistoryItem(
-        mode: .ocrTranslate,
-        createdAt: now.addingTimeInterval(-30 * 24 * 60 * 60)
+    let overlayAtCutoff = makeRetentionHistoryItem(
+        mode: .imageOverlay,
+        createdAt: now.addingTimeInterval(-HistoryStore.imageOverlayRetentionInterval)
+    )
+    let ordinaryModes: [TranslationHistoryMode] = [
+        .selectedText,
+        .ocr,
+        .ocrTranslate,
+        .input
+    ]
+    let expiredOrdinaryItems = ordinaryModes.map {
+        makeRetentionHistoryItem(
+            mode: $0,
+            createdAt: now.addingTimeInterval(-8 * 24 * 60 * 60)
+        )
+    }
+    let recentOrdinaryItems = ordinaryModes.map {
+        makeRetentionHistoryItem(
+            mode: $0,
+            createdAt: now.addingTimeInterval(-6 * 24 * 60 * 60)
+        )
+    }
+    let ordinaryItemAtCutoff = makeRetentionHistoryItem(
+        mode: .selectedText,
+        createdAt: now.addingTimeInterval(-HistoryStore.ordinaryHistoryRetentionInterval)
     )
 
-    let retained = HistoryStore.retainingUnexpiredImageOverlayItems(
+    let retained = HistoryStore.retainingUnexpiredItems(
         [
             expiredOverlay,
             recentOverlay,
-            oldScreenshotTranslation
-        ],
+            overlayAtCutoff,
+            ordinaryItemAtCutoff
+        ] + expiredOrdinaryItems + recentOrdinaryItems,
         now: now
     )
 
     precondition(!retained.contains(where: { $0.id == expiredOverlay.id }))
     precondition(retained.contains(where: { $0.id == recentOverlay.id }))
-    precondition(retained.contains(where: { $0.id == oldScreenshotTranslation.id }))
+    precondition(retained.contains(where: { $0.id == overlayAtCutoff.id }))
+    precondition(retained.contains(where: { $0.id == ordinaryItemAtCutoff.id }))
+    for item in expiredOrdinaryItems {
+        precondition(!retained.contains(where: { $0.id == item.id }))
+    }
+    for item in recentOrdinaryItems {
+        precondition(retained.contains(where: { $0.id == item.id }))
+    }
 }
 
 private func makeRetentionHistoryItem(
