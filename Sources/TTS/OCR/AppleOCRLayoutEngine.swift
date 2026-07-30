@@ -370,7 +370,11 @@ struct AppleOCRLayoutEngine: Sendable {
             "，,。.!！?？:：;；)]）】".contains($0)
         } ?? false
 
-        let detachedPhraseGap = max(metrics.characterWidth * 1.55, maxHeight * 0.75, 18)
+        let localCharacterWidth = min(
+            referenceBox.width / CGFloat(max(compactTextLength(reference.text), 1)),
+            candidateBox.width / CGFloat(max(compactTextLength(candidate.text), 1))
+        )
+        let detachedPhraseGap = max(localCharacterWidth * 1.55, maxHeight * 0.75, 18)
         if gap > detachedPhraseGap,
            !punctuationContinuation,
            !isFirstCharLowercaseOrContinuation(candidateText),

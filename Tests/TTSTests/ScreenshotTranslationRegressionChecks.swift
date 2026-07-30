@@ -1,8 +1,10 @@
 @testable import TTS
 import Foundation
 
-@_cdecl("runTTSPackageRegressionChecks")
-public func runTTSPackageRegressionChecks() {
+@MainActor
+func runTTSPackageRegressionChecks() async {
+    announceRegressionCheck("Apple OCR layout")
+    runAppleOCRLayoutEngineRegressionChecks()
     announceRegressionCheck("MyMemory payload IDs")
     checkMyMemoryBatchPayloadsRespectUTF8LimitAndStableIDs()
     announceRegressionCheck("MyMemory UTF-8 limit")
@@ -12,30 +14,34 @@ public func runTTSPackageRegressionChecks() {
     announceRegressionCheck("native renderer button surface")
     checkScreenshotTranslationRendererPreservesButtonSurface()
     announceRegressionCheck("identified batch fallback")
-    runAsyncScreenshotTranslationRegressionChecks()
+    await checkIdentifiedBatchTranslationFallsBackOnlyForMissingSegmentsAndKeepsOrder()
+    announceRegressionCheck("bounded overlay translation cache")
+    await checkImageOverlayTranslationCacheEvictsOldEntries()
+    announceRegressionCheck("API retranslation preserves existing result")
+    checkFailedHighQualityRetranslationPreservesExistingResult()
+    announceRegressionCheck("coordinate translation hotkey routing")
+    checkCoordinateTranslationHotkeyRoutesAndDefaults()
+    announceRegressionCheck("screenshot overlay mode routing")
+    checkScreenshotCaptureModesRouteOverlayTranslationEngines()
     announceRegressionCheck("screenshot overlay artifact retention")
     checkScreenshotOverlayRetentionRemovesOnlyExpiredOwnedArtifacts()
-    announceRegressionCheck("translation history retention")
-    checkTranslationHistoryUsesModeSpecificRetention()
+    announceRegressionCheck("screenshot annotation document and renderer")
+    runScreenshotAnnotationRegressionChecks()
+    announceRegressionCheck("legacy configuration compatibility")
+    checkLegacyConfigurationDecodesAfterSimplification()
+    announceRegressionCheck("fallback configuration invariants")
+    checkFallbackConfigurationStaysValid()
+    #if canImport(Translation)
+    if #available(macOS 15.0, *) {
+        announceRegressionCheck("Apple overlay repeated request lifecycle")
+        checkRepeatedAppleOverlayRequestsInvalidateTranslationConfiguration()
+    }
+    #endif
     announceRegressionCheck("Volcengine image monthly policy")
-    MainActor.assumeIsolated {
-        runVolcengineImageTranslationPolicyChecks()
-    }
+    runVolcengineImageTranslationPolicyChecks()
     announceRegressionCheck("Volcengine image request and payload")
-    runVolcengineImageTranslationRegressionChecks()
+    await runVolcengineImageTranslationRegressionChecks()
     print("TTS screenshot translation regression checks passed")
-}
-
-private func runAsyncScreenshotTranslationRegressionChecks() {
-    let semaphore = DispatchSemaphore(value: 0)
-    Task.detached {
-        await checkIdentifiedBatchTranslationFallsBackOnlyForMissingSegmentsAndKeepsOrder()
-        semaphore.signal()
-    }
-    precondition(
-        semaphore.wait(timeout: .now() + 15) == .success,
-        "async screenshot translation regression checks timed out"
-    )
 }
 
 private func announceRegressionCheck(_ name: String) {

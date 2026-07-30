@@ -2,6 +2,11 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+enum ImageOverlayTranslationEngine: Equatable {
+    case appleLocal
+    case configuredProvider
+}
+
 @MainActor
 final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate {
     private let viewModel: ImageOverlayTranslationViewModel
@@ -35,6 +40,7 @@ final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate 
         segmentation: OverlaySegmentationSnapshot,
         stage: ImageOverlayOCRStage,
         title: String = "截图覆盖翻译",
+        translationEngine: ImageOverlayTranslationEngine = .appleLocal,
         autoStart: Bool = false
     ) {
         cancelProcessingAction = nil
@@ -44,7 +50,8 @@ final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate 
             originalImage: originalImage,
             ocrSnapshot: ocrSnapshot,
             segmentation: segmentation,
-            stage: stage
+            stage: stage,
+            translationEngine: translationEngine
         )
 
         NSApp.activate(ignoringOtherApps: true)
@@ -74,11 +81,16 @@ final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate 
         originalImage: NSImage,
         message: String,
         title: String = "截图覆盖翻译",
+        translationEngine: ImageOverlayTranslationEngine = .appleLocal,
         onCancel: (() -> Void)? = nil
     ) {
         cancelProcessingAction = onCancel
         ensureWindow(title: title)
-        viewModel.configureProgress(originalImage: originalImage, message: message)
+        viewModel.configureProgress(
+            originalImage: originalImage,
+            message: message,
+            translationEngine: translationEngine
+        )
         NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
@@ -160,6 +172,7 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     @Published var progressStage = "等待"
     @Published private var hasGeneratedResult = false
     @Published private var workflow: ImageOverlayWorkflow = .local
+    @Published private var translationEngine: ImageOverlayTranslationEngine = .appleLocal
     @Published private var volcengineResultImage: NSImage?
     @Published private var volcengineTextBlocks: [VolcengineImageTextBlock] = []
 
@@ -177,7 +190,6 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     #if canImport(Translation)
     private var appleTranslationCoordinatorStorage: AnyObject?
     #endif
-    private var savedHistoryFingerprint: String?
 
     init(
         renderer: ScreenshotTranslationOverlayRenderer,
@@ -311,7 +323,35 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     }
 
     var workflowBadgeText: String {
-        isVolcengineWorkflow ? "火山整图 Beta · 云端" : "本地坐标 · 备用"
+        if isVolcengineWorkflow {
+            return "火山整图 Beta · 云端"
+        }
+        switch translationEngine {
+        case .appleLocal:
+            return "本地坐标 · Apple 快速"
+        case .configuredProvider:
+            return "本地坐标 · API 高质量"
+        }
+    }
+
+    var canStartHighQualityTranslation: Bool {
+        guard workflow == .local, !isTranslating, let session else {
+            return false
+        }
+        return session.segmentStates.contains { $0.canTranslate }
+    }
+
+    private var configuredProviderLabel: String {
+        guard let config = configurationStore.providerConfig(
+            for: configurationStore.defaultProviderID
+        ) else {
+            return "默认翻译 API"
+        }
+        guard let model = config.model?.trimmingCharacters(in: .whitespacesAndNewlines),
+              !model.isEmpty else {
+            return config.displayName
+        }
+        return "\(config.displayName) · \(model)"
     }
 
     var monthlyUsageText: String {
@@ -339,16 +379,18 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         originalImage: NSImage,
         ocrSnapshot: OverlayOCRSnapshot,
         segmentation: OverlaySegmentationSnapshot,
-        stage: ImageOverlayOCRStage
+        stage: ImageOverlayOCRStage,
+        translationEngine: ImageOverlayTranslationEngine
     ) {
         translationTask?.cancel()
         translationTask = nil
+        activeRequestID = nil
         isTranslating = false
         completedTranslationCount = 0
         totalTranslationCount = 0
         hasGeneratedResult = false
-        savedHistoryFingerprint = nil
         workflow = .local
+        self.translationEngine = translationEngine
         clearVolcengineState(keepOriginalSession: true)
         session = ImageOverlaySession.make(
             originalImage: originalImage,
@@ -360,15 +402,20 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         status("OCR 完成，正在准备翻译。", isError: false)
     }
 
-    func configureProgress(originalImage: NSImage, message: String) {
+    func configureProgress(
+        originalImage: NSImage,
+        message: String,
+        translationEngine: ImageOverlayTranslationEngine = .appleLocal
+    ) {
         translationTask?.cancel()
         translationTask = nil
+        activeRequestID = nil
         isTranslating = false
         completedTranslationCount = 0
         totalTranslationCount = 0
         hasGeneratedResult = false
-        savedHistoryFingerprint = nil
         workflow = .local
+        self.translationEngine = translationEngine
         clearVolcengineState(keepOriginalSession: true)
         session = ImageOverlaySession(
             originalImage: originalImage,
@@ -420,6 +467,7 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
     func showProcessingError(_ message: String) {
         isTranslating = false
         translationTask = nil
+        activeRequestID = nil
         progressStage = "失败"
         status(message, isError: true)
     }
@@ -460,14 +508,42 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
             return
         }
 
-        translate(segments: segments, resetProgress: true)
+        translate(
+            segments: segments,
+            resetProgress: true,
+            using: translationEngine
+        )
+    }
+
+    func startHighQualityTranslation() {
+        guard workflow == .local, !isTranslating, let session else {
+            return
+        }
+
+        let segments = session.segmentStates
+            .filter(\.canTranslate)
+            .map(\.segment)
+        guard !segments.isEmpty else {
+            status("没有需要翻译的 OCR 区域。", isError: false)
+            return
+        }
+
+        translate(
+            segments: segments,
+            resetProgress: true,
+            using: .configuredProvider
+        )
     }
 
     func retrySelected() {
         guard let selectedState, selectedState.segment.shouldTranslate else {
             return
         }
-        translate(segments: [selectedState.segment], resetProgress: false)
+        translate(
+            segments: [selectedState.segment],
+            resetProgress: false,
+            using: translationEngine
+        )
     }
 
     func cancelTranslation() {
@@ -475,14 +551,16 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         translationTask = nil
         activeRequestID = nil
         #if canImport(Translation)
-        if workflow == .local, #available(macOS 15.0, *) {
+        if workflow == .local,
+           translationEngine == .appleLocal,
+           #available(macOS 15.0, *) {
             appleTranslationCoordinator?.cancel()
         }
         #endif
         isTranslating = false
         if workflow == .volcengine {
             progressStage = "已取消"
-            status("已停止火山图片翻译；没有自动切换到本地。", isError: false)
+            status("已停止火山图片翻译；没有自动切换到其他翻译引擎。", isError: false)
             return
         }
         markTranslatingSegmentsAsRecognized()
@@ -749,7 +827,6 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
                 print(
                     "volcengine image translation completed: elapsed=\(elapsed)s, blocks=\(result.textBlocks.count), request=\(result.responseMetadata?.requestID ?? "-")"
                 )
-                await saveVolcengineHistoryIfPossible(result.textBlocks)
             } catch is CancellationError {
                 guard activeRequestID == requestID else {
                     return
@@ -758,7 +835,7 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
                 translationTask = nil
                 activeRequestID = nil
                 progressStage = "已取消"
-                status("已停止火山图片翻译；没有自动切换到本地。", isError: false)
+                status("已停止火山图片翻译；没有自动切换到其他翻译引擎。", isError: false)
             } catch {
                 guard activeRequestID == requestID else {
                     return
@@ -768,46 +845,27 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
                 activeRequestID = nil
                 progressStage = "失败"
                 status(
-                    "\(error.localizedDescription) 未自动切换本地，可手动选择“本地坐标备用”。",
+                    "\(error.localizedDescription) 未自动切换，可手动选择“Apple 本地坐标翻译”。",
                     isError: true
                 )
             }
         }
     }
 
-    private func saveVolcengineHistoryIfPossible(
-        _ textBlocks: [VolcengineImageTextBlock]
-    ) async {
-        let pairs = textBlocks.compactMap { block -> (String, String)? in
-            let source = block.text.trimmingCharacters(in: .whitespacesAndNewlines)
-            let translation = block.translation.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !source.isEmpty, !translation.isEmpty else {
-                return nil
-            }
-            return (source, translation)
-        }
-        guard !pairs.isEmpty else {
-            return
-        }
-
-        do {
-            _ = try await translationService.recordImageOverlayHistory(
-                sourceText: pairs.map { $0.0 }.joined(separator: "\n"),
-                translatedText: pairs.map { $0.1 }.joined(separator: "\n"),
-                providerID: .volcengine
-            )
-        } catch {
-            print(
-                "volcengine image translation history skipped: \(error.localizedDescription)"
-            )
-        }
-    }
-
     private func translate(
         segments: [OverlaySegment],
-        resetProgress: Bool
+        resetProgress: Bool,
+        using engine: ImageOverlayTranslationEngine
     ) {
         translationTask?.cancel()
+        let requestID = UUID()
+        activeRequestID = requestID
+        #if canImport(Translation)
+        if engine == .configuredProvider, #available(macOS 15.0, *) {
+            appleTranslationCoordinator?.cancel()
+        }
+        #endif
+        translationEngine = engine
         markSegments(segments.map(\.id), phase: .translating)
         isTranslating = true
         if resetProgress {
@@ -817,35 +875,65 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
             completedTranslationCount = 0
             totalTranslationCount = segments.count
         }
-        status("正在使用 Apple 本地翻译；连续 12 秒无结果会停止等待。", isError: false)
-        progressStage = "本地翻译"
+        switch engine {
+        case .appleLocal:
+            status("正在使用 Apple 本地翻译；连续 12 秒无结果会停止等待。", isError: false)
+            progressStage = "Apple 快速"
+        case .configuredProvider:
+            status("正在使用 \(configuredProviderLabel) 进行高质量翻译。", isError: false)
+            progressStage = "API 高质量"
+        }
 
         translationTask = Task { [weak self] in
             guard let self else {
                 return
             }
             do {
-                try await translateLocallyOrUseLegacyCloud(segments)
+                let failedCount = try await translateSegments(
+                    segments,
+                    using: engine,
+                    requestID: requestID
+                )
+                guard activeRequestID == requestID else {
+                    return
+                }
                 isTranslating = false
                 translationTask = nil
-                progressStage = "已生成"
+                activeRequestID = nil
                 hasGeneratedResult = true
                 writeDebugArtifactsIfNeeded()
-                if resetProgress {
-                    await saveHistoryIfNeeded()
+                if failedCount > 0 {
+                    progressStage = "部分完成"
+                    status(
+                        "\(failedCount) 个区域未能更新，已保留原结果或原文。",
+                        isError: true
+                    )
                 } else {
-                    status("翻译完成，已生成图片。", isError: false)
+                    progressStage = "已生成"
+                    let message = engine == .configuredProvider
+                        ? "API 高质量翻译完成，已生成图片。"
+                        : "Apple 本地翻译完成，已生成图片。"
+                    status(message, isError: false)
                 }
             } catch is CancellationError {
+                guard activeRequestID == requestID else {
+                    return
+                }
                 isTranslating = false
                 translationTask = nil
+                activeRequestID = nil
                 markTranslatingSegmentsAsRecognized()
             } catch {
+                guard activeRequestID == requestID else {
+                    return
+                }
                 #if canImport(Translation)
-                if let localError = error as? AppleOverlayTranslationError,
+                if engine == .appleLocal,
+                   let localError = error as? AppleOverlayTranslationError,
                    localError == .requestTimedOut {
                     isTranslating = false
                     translationTask = nil
+                    activeRequestID = nil
                     markTranslatingSegmentsAsRecognized()
                     progressStage = "语言包未就绪"
                     status(localError.localizedDescription, isError: false)
@@ -854,6 +942,7 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
                 #endif
                 isTranslating = false
                 translationTask = nil
+                activeRequestID = nil
                 markSegments(segments.map(\.id), phase: .failed, errorMessage: error.localizedDescription)
                 progressStage = "失败"
                 status(error.localizedDescription, isError: true)
@@ -861,114 +950,67 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
         }
     }
 
-    private func translateLocallyOrUseLegacyCloud(
-        _ segments: [OverlaySegment]
-    ) async throws {
-        #if canImport(Translation)
-        if #available(macOS 15.0, *),
-           let appleTranslationCoordinator {
-            for try await event in appleTranslationCoordinator.translate(
-                segments: segments,
-                targetLanguage: translationService.defaultTargetLanguage
-            ) {
-                try Task.checkCancellation()
-                apply(event: event)
+    private func translateSegments(
+        _ segments: [OverlaySegment],
+        using engine: ImageOverlayTranslationEngine,
+        requestID: UUID
+    ) async throws -> Int {
+        switch engine {
+        case .appleLocal:
+            #if canImport(Translation)
+            if #available(macOS 15.0, *),
+               let appleTranslationCoordinator {
+                var failedCount = 0
+                for try await event in appleTranslationCoordinator.translate(
+                    segments: segments,
+                    targetLanguage: translationService.defaultTargetLanguage
+                ) {
+                    try Task.checkCancellation()
+                    guard activeRequestID == requestID else {
+                        throw CancellationError()
+                    }
+                    failedCount += event.results.filter(\.didFailTranslation).count
+                    apply(event: event)
+                }
+                return failedCount
             }
-            return
+            #endif
+            progressStage = "API 兼容"
+            return try await translateWithConfiguredProvider(
+                segments,
+                requestID: requestID
+            )
+        case .configuredProvider:
+            return try await translateWithConfiguredProvider(
+                segments,
+                requestID: requestID
+            )
         }
-        #endif
+    }
 
-        progressStage = "云端兼容"
+    private func translateWithConfiguredProvider(
+        _ segments: [OverlaySegment],
+        requestID: UUID
+    ) async throws -> Int {
+        var failedCount = 0
         for try await event in translationService.translateImageOverlaySegmentsIncrementally(
             segments,
             batchSize: 6
         ) {
             try Task.checkCancellation()
+            guard activeRequestID == requestID else {
+                throw CancellationError()
+            }
+            failedCount += event.results.filter(\.didFailTranslation).count
             apply(event: event)
         }
+        return failedCount
     }
 
     private func apply(event: ImageOverlayTranslationBatchEvent) {
         apply(results: event.results)
         completedTranslationCount += event.results.count
         status("翻译进度 \(completedTranslationCount)/\(totalTranslationCount)", isError: false)
-    }
-
-    private func saveHistoryIfNeeded() async {
-        guard let session,
-              let historyText = imageOverlayHistoryText(from: session) else {
-            status("翻译完成，已生成图片。", isError: false)
-            return
-        }
-
-        let fingerprint = historyText.sourceText + "\u{1F}" + historyText.translatedText
-        guard savedHistoryFingerprint != fingerprint else {
-            status("翻译完成，已生成图片。", isError: false)
-            return
-        }
-
-        do {
-            _ = try await translationService.recordImageOverlayHistory(
-                sourceText: historyText.sourceText,
-                translatedText: historyText.translatedText
-            )
-            savedHistoryFingerprint = fingerprint
-            status("翻译完成，已生成图片并保存到历史。", isError: false)
-        } catch {
-            status("翻译完成，已生成图片，但保存历史失败：\(error.localizedDescription)", isError: true)
-        }
-    }
-
-    private func imageOverlayHistoryText(
-        from session: ImageOverlaySession
-    ) -> (sourceText: String, translatedText: String)? {
-        let states = session.segmentStates
-            .filter { !$0.isExcluded }
-            .sorted { lhs, rhs in
-                lhs.segment.readingOrder < rhs.segment.readingOrder
-            }
-
-        var sourceParts: [String] = []
-        var translatedParts: [String] = []
-        var hasTranslatedSegment = false
-
-        for state in states {
-            guard let result = state.translationResult else {
-                continue
-            }
-
-            let source = state.segment.sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !source.isEmpty else {
-                continue
-            }
-
-            switch result.status {
-            case .success, .fallbackUsed:
-                let translated = result.translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard !translated.isEmpty else {
-                    continue
-                }
-                sourceParts.append(source)
-                translatedParts.append(translated)
-                hasTranslatedSegment = true
-            case .originalKept:
-                sourceParts.append(source)
-                translatedParts.append(source)
-            case .failed:
-                continue
-            }
-        }
-
-        guard hasTranslatedSegment,
-              !sourceParts.isEmpty,
-              !translatedParts.isEmpty else {
-            return nil
-        }
-
-        return (
-            sourceParts.joined(separator: "\n"),
-            translatedParts.joined(separator: "\n")
-        )
     }
 
     private func apply(results: [ImageOverlayTranslationResult]) {
@@ -980,11 +1022,7 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
             guard let index = session.segmentStates.firstIndex(where: { $0.id == result.segmentID }) else {
                 continue
             }
-            session.segmentStates[index].translationResult = result
-            session.segmentStates[index].errorMessage = result.errorMessage
-            if !session.segmentStates[index].isExcluded {
-                session.segmentStates[index].phase = result.status.livePhase
-            }
+            session.segmentStates[index].applyTranslationResult(result)
         }
         self.session = session
     }
@@ -1003,8 +1041,14 @@ private final class ImageOverlayTranslationViewModel: ObservableObject {
             guard !session.segmentStates[index].isExcluded else {
                 continue
             }
-            session.segmentStates[index].phase = phase
             session.segmentStates[index].errorMessage = errorMessage
+            if phase == .failed,
+               let previousResult = session.segmentStates[index].translationResult,
+               !previousResult.didFailTranslation {
+                session.segmentStates[index].phase = previousResult.status.livePhase
+            } else {
+                session.segmentStates[index].phase = phase
+            }
         }
         self.session = session
     }
@@ -1250,11 +1294,21 @@ private struct ImageOverlayTranslationView: View {
                 .buttonStyle(.bordered)
             }
 
+            if !viewModel.isVolcengineWorkflow {
+                Button {
+                    viewModel.startHighQualityTranslation()
+                } label: {
+                    Label("API 高质量重译", systemImage: "sparkles")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(!viewModel.canStartHighQualityTranslation)
+            }
+
             if viewModel.isVolcengineWorkflow {
                 Button {
                     viewModel.useLocalFallback()
                 } label: {
-                    Label("本地坐标备用", systemImage: "desktopcomputer")
+                    Label("Apple 本地坐标", systemImage: "desktopcomputer")
                 }
                 .buttonStyle(.bordered)
                 .disabled(!viewModel.canUseLocalFallback)
@@ -1562,7 +1616,7 @@ private struct ImageOverlayTranslationView: View {
             if viewModel.canExportImage {
                 return "云端译图仅保存在内存；手动保存的 PNG 不会自动删除。"
             }
-            return "失败不会自动切换本地；可手动选择本地坐标备用。"
+            return "失败不会自动切换；可手动选择 Apple 本地坐标翻译。"
         }
         if viewModel.isTranslating {
             return "正在处理截图覆盖翻译，完成后会显示生成图片。"

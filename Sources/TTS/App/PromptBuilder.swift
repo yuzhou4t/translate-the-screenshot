@@ -19,20 +19,6 @@ struct PromptBuilder {
         var text: String
     }
 
-    struct VisionSegmentationOCRBlock: Encodable {
-        struct BoundingBox: Encodable {
-            var x: Double
-            var y: Double
-            var width: Double
-            var height: Double
-        }
-
-        var id: String
-        var text: String
-        var boundingBox: BoundingBox
-        var confidence: Double
-    }
-
     static func build(
         mode: TranslationMode,
         sourceText: String,
@@ -303,72 +289,5 @@ struct PromptBuilder {
             </input_segments_json>
             """
         )
-    }
-
-    static func buildVisionSegmentationSystemPrompt() -> String {
-        """
-        你是截图翻译覆盖功能的版面分析器。
-
-        你的任务：
-        根据截图画面和 OCR block 列表，把碎片化 OCR block 合并为适合翻译和覆盖的自然语义段。
-
-        核心规则：
-        1. 不要逐个 OCR block 翻译。
-        2. 对于明显属于同一行、同一段、同一气泡、同一说明文字、同一标题、同一按钮或同一完整标签的 OCR block，应积极合并为一个 segment。
-        3. 一句话、一个标题、一个段落、一个按钮、一个完整标签，通常应该尽量只对应一个 segment。
-        4. 只有在跨按钮、跨菜单项、跨表格单元格、跨列表项、或跨明显不同区域时，才不要合并。
-        5. 保持自然阅读顺序。
-        6. 不要改写 OCR 原文。
-        7. 不要创造新的 block id。
-        8. 坐标由本地程序根据 block id 计算，你只返回 block id。
-        9. URL、邮箱、代码、命令、版本号、纯数字、金额、日期，通常不需要翻译，请设置 shouldTranslate=false，或设置合适 role。
-        10. 如果一个 OCR block 是完整的独立 UI 文本，可以单独成为一个 segment。
-        11. 如果多个 OCR block 组成一句完整话，必须合并为一个 segment。
-        12. 如果多个 OCR block 在版面上明显属于同一语义单元，应优先合并；只有在边界明显不同时才保持分开。
-        13. 只返回 JSON，不要 markdown，不要解释。
-
-        输出 JSON 格式：
-        {
-          "segments": [
-            {
-              "id": "seg_1",
-              "blockIDs": ["ocr_block_id_1", "ocr_block_id_2"],
-              "sourceText": "合并后的原文",
-              "role": "paragraph",
-              "readingOrder": 1,
-              "shouldTranslate": true
-            }
-          ]
-        }
-
-        role 只能使用：
-        title
-        paragraph
-        button
-        label
-        tableCell
-        caption
-        code
-        url
-        number
-        unknown
-        """
-    }
-
-    static func buildVisionSegmentationUserPrompt(
-        ocrBlocks: [VisionSegmentationOCRBlock],
-        targetLanguage: String
-    ) -> String {
-        let encodedBlocks = (try? JSONEncoder().encode(ocrBlocks))
-            .flatMap { String(data: $0, encoding: .utf8) } ?? "[]"
-
-        return """
-        最终这些 segment 会被翻译成 \(targetLanguage) 并覆盖回截图原图。
-        请结合截图画面和下方 OCR block 列表，返回适合翻译覆盖的语义段合并方案。
-
-        <ocr_blocks_json>
-        \(encodedBlocks)
-        </ocr_blocks_json>
-        """
     }
 }

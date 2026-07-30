@@ -7,7 +7,6 @@ final class FloatingTranslatePanel {
     private var hostingController: NSHostingController<FloatingTranslateView>?
     private var localMouseDownMonitor: Any?
     private var globalMouseDownMonitor: Any?
-    private let favoriteStore: FavoriteStore
     private let translationService: TranslationService
     private let normalPanelSize = NSSize(width: 560, height: 540)
     private let comparisonPanelSize = NSSize(width: 800, height: 600)
@@ -17,8 +16,7 @@ final class FloatingTranslatePanel {
     private var isPinned = false
     private var currentCancelAction: (() -> Void)?
 
-    init(favoriteStore: FavoriteStore, translationService: TranslationService) {
-        self.favoriteStore = favoriteStore
+    init(translationService: TranslationService) {
         self.translationService = translationService
     }
 
@@ -75,7 +73,6 @@ final class FloatingTranslatePanel {
     private func show(state: FloatingTranslateState, near point: NSPoint, shouldReposition: Bool) {
         let contentView = FloatingTranslateView(
             state: state,
-            favoriteStore: favoriteStore,
             onRetranslate: retranslate(_:using:),
             onComparisonLayoutChange: setComparisonExpanded(_:),
             onPinnedChange: setPinned(_:),
@@ -251,7 +248,6 @@ enum FloatingTranslateState: Equatable {
 
 struct FloatingTranslateView: View {
     var state: FloatingTranslateState
-    var favoriteStore: FavoriteStore
     var onRetranslate: (TranslationHistoryItem, TranslationMode) async throws -> TranslationHistoryItem
     var onComparisonLayoutChange: (Bool) -> Void
     var onPinnedChange: (Bool) -> Void
@@ -259,10 +255,8 @@ struct FloatingTranslateView: View {
     var onCancelLoading: (() -> Void)?
     var onClose: () -> Void
 
-    @State private var isFavorite = false
     @State private var isPinned = false
     @State private var isComparisonVisible = false
-    @State private var favoriteErrorMessage: String?
     @State private var currentItem: TranslationHistoryItem?
     @State private var previousItem: TranslationHistoryItem?
     @State private var selectedTranslationMode: TranslationMode = .accurate
@@ -290,9 +284,6 @@ struct FloatingTranslateView: View {
         .background(WindowDragView())
         .task(id: resultTaskID) {
             syncResultState()
-        }
-        .task(id: favoriteTaskID) {
-            await refreshFavoriteState()
         }
     }
 
@@ -453,10 +444,6 @@ struct FloatingTranslateView: View {
         }
     }
 
-    private var favoriteTaskID: UUID? {
-        resultItem?.id
-    }
-
     private var statusRow: some View {
         HStack(spacing: 8) {
             statusIndicator
@@ -604,7 +591,7 @@ struct FloatingTranslateView: View {
 
     private func aiModeMenu(item: TranslationHistoryItem) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            ForEach(TranslationMode.allCases) { mode in
+            ForEach(TranslationMode.userSelectableCases) { mode in
                 Button {
                     guard !isRetranslating else {
                         return
@@ -891,13 +878,6 @@ struct FloatingTranslateView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if let favoriteErrorMessage {
-                Text(favoriteErrorMessage)
-                    .font(.caption2)
-                    .foregroundStyle(.red)
-                    .lineLimit(1)
-            }
-
             if let retranslateErrorMessage {
                 Text(retranslateErrorMessage)
                     .font(.caption2)
@@ -929,20 +909,6 @@ struct FloatingTranslateView: View {
                     }
                 } label: {
                     Label("复制双语", systemImage: "text.append")
-                }
-                .disabled(resultItem == nil)
-
-                Button {
-                    if let item = resultItem {
-                        Task {
-                            await toggleFavorite(item)
-                        }
-                    }
-                } label: {
-                    Label(
-                        isFavorite ? "已收藏" : "收藏",
-                        systemImage: isFavorite ? "star.fill" : "star"
-                    )
                 }
                 .disabled(resultItem == nil)
 
@@ -1017,7 +983,7 @@ struct FloatingTranslateView: View {
         isModeMenuPresented = false
         hoveredTranslationMode = nil
         onComparisonLayoutChange(false)
-        selectedTranslationMode = item.translationMode
+        selectedTranslationMode = item.translationMode.userSelectableFallback
     }
 
     private func retranslate(_ item: TranslationHistoryItem, using mode: TranslationMode) async {
@@ -1035,44 +1001,13 @@ struct FloatingTranslateView: View {
             let updatedItem = try await onRetranslate(item, mode)
             previousItem = item
             currentItem = updatedItem
-            selectedTranslationMode = updatedItem.translationMode
+            selectedTranslationMode = updatedItem.translationMode.userSelectableFallback
             hoveredTranslationMode = nil
-            favoriteErrorMessage = nil
             setComparisonVisible(true)
         } catch {
             retranslateErrorMessage = error.localizedDescription
-            selectedTranslationMode = item.translationMode
+            selectedTranslationMode = item.translationMode.userSelectableFallback
             hoveredTranslationMode = nil
-        }
-    }
-
-    private func refreshFavoriteState() async {
-        guard let item = resultItem else {
-            isFavorite = false
-            favoriteErrorMessage = nil
-            return
-        }
-
-        do {
-            isFavorite = try await favoriteStore.isFavorite(historyItemID: item.id)
-            favoriteErrorMessage = nil
-        } catch {
-            favoriteErrorMessage = error.localizedDescription
-        }
-    }
-
-    private func toggleFavorite(_ item: TranslationHistoryItem) async {
-        do {
-            if isFavorite {
-                try await favoriteStore.removeFavorite(historyItemID: item.id)
-                isFavorite = false
-            } else {
-                try await favoriteStore.addFavorite(item)
-                isFavorite = true
-            }
-            favoriteErrorMessage = nil
-        } catch {
-            favoriteErrorMessage = error.localizedDescription
         }
     }
 

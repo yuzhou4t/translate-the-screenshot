@@ -1,7 +1,6 @@
-import AppKit
 import Foundation
 
-struct GeminiProvider: PromptCompletionProvider, VisionSegmentationProvider {
+struct GeminiProvider: PromptCompletionProvider {
     let id: TranslationProviderID
     let displayName: String
 
@@ -27,10 +26,6 @@ struct GeminiProvider: PromptCompletionProvider, VisionSegmentationProvider {
         self.apiKey = apiKey
         self.timeout = timeout
         self.urlSession = urlSession
-    }
-
-    var supportsVisionInput: Bool {
-        true
     }
 
     func translate(_ request: TranslationRequest) async throws -> TranslationResponse {
@@ -67,36 +62,7 @@ struct GeminiProvider: PromptCompletionProvider, VisionSegmentationProvider {
                 )
             ],
             generationConfig: .init(
-                temperature: temperature,
-                responseMimeType: nil
-            )
-        )
-        return try await performGenerateContentRequest(body)
-    }
-
-    func completeVisionSegmentation(
-        systemPrompt: String,
-        userPrompt: String,
-        image: NSImage,
-        temperature: Double
-    ) async throws -> String {
-        let imagePayload = try VisionImagePayloadEncoder.encode(image)
-        let body = GeminiGenerateContentRequest(
-            contents: [
-                .init(
-                    role: "user",
-                    parts: [
-                        .text(combinedPrompt(systemPrompt: systemPrompt, userPrompt: userPrompt)),
-                        .inlineData(
-                            mimeType: imagePayload.mimeType,
-                            data: imagePayload.base64Data
-                        )
-                    ]
-                )
-            ],
-            generationConfig: .init(
-                temperature: temperature,
-                responseMimeType: "application/json"
+                temperature: temperature
             )
         )
         return try await performGenerateContentRequest(body)
@@ -266,28 +232,14 @@ private struct GeminiContent: Encodable {
 
 private struct GeminiGenerationConfig: Encodable {
     var temperature: Double
-    var responseMimeType: String?
 }
 
 private struct GeminiPart: Encodable {
-    var text: String?
-    var inlineData: GeminiInlineData?
+    var text: String
 
     static func text(_ text: String) -> Self {
-        .init(text: text, inlineData: nil)
+        .init(text: text)
     }
-
-    static func inlineData(mimeType: String, data: String) -> Self {
-        .init(
-            text: nil,
-            inlineData: .init(mimeType: mimeType, data: data)
-        )
-    }
-}
-
-private struct GeminiInlineData: Encodable {
-    var mimeType: String
-    var data: String
 }
 
 private struct GeminiGenerateContentResponse: Decodable {

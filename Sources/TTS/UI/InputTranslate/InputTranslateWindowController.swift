@@ -4,12 +4,10 @@ import SwiftUI
 @MainActor
 final class InputTranslateWindowController {
     private let translationService: TranslationService
-    private let favoriteStore: FavoriteStore
     private var window: InputTranslatePanel?
 
-    init(translationService: TranslationService, favoriteStore: FavoriteStore) {
+    init(translationService: TranslationService) {
         self.translationService = translationService
-        self.favoriteStore = favoriteStore
     }
 
     func show() {
@@ -30,8 +28,7 @@ final class InputTranslateWindowController {
             panel.contentViewController = NSHostingController(
                 rootView: InputTranslateView(
                     viewModel: InputTranslateViewModel(
-                        translationService: self.translationService,
-                        favoriteStore: self.favoriteStore
+                        translationService: self.translationService
                     ),
                     onClose: { [weak self] in
                         self?.close()

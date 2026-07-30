@@ -7,6 +7,7 @@ final class SettingsWindowController {
     private let keychainService: KeychainService
     private let providerRegistry: ProviderRegistry
     private let policyStore: VolcengineImageTranslationPolicyStore
+    private let permissionManager: PermissionManager
     private var window: NSWindow?
     private var viewModel: SettingsViewModel?
 
@@ -14,12 +15,14 @@ final class SettingsWindowController {
         configurationStore: AppConfigurationStore,
         keychainService: KeychainService,
         providerRegistry: ProviderRegistry,
-        policyStore: VolcengineImageTranslationPolicyStore
+        policyStore: VolcengineImageTranslationPolicyStore,
+        permissionManager: PermissionManager
     ) {
         self.configurationStore = configurationStore
         self.keychainService = keychainService
         self.providerRegistry = providerRegistry
         self.policyStore = policyStore
+        self.permissionManager = permissionManager
     }
 
     func show(
@@ -31,7 +34,8 @@ final class SettingsWindowController {
                 configurationStore: configurationStore,
                 keychainService: keychainService,
                 providerRegistry: providerRegistry,
-                policyStore: policyStore
+                policyStore: policyStore,
+                permissionManager: permissionManager
             )
             let hostingController = NSHostingController(
                 rootView: SettingsView(viewModel: viewModel)

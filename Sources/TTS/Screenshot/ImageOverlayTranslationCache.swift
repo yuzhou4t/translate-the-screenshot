@@ -1,6 +1,9 @@
 import Foundation
 
 actor ImageOverlayTranslationCache {
+    static let defaultMaximumEntryCount = 500
+    static let defaultRetentionInterval: TimeInterval = 24 * 60 * 60
+
     struct Key: Hashable {
         var sourceText: String
         var targetLanguage: String
@@ -16,16 +19,37 @@ actor ImageOverlayTranslationCache {
     }
 
     private var storage: [Key: Entry] = [:]
+    private let maximumEntryCount: Int
+    private let retentionInterval: TimeInterval
+
+    init(
+        maximumEntryCount: Int = defaultMaximumEntryCount,
+        retentionInterval: TimeInterval = defaultRetentionInterval
+    ) {
+        self.maximumEntryCount = max(maximumEntryCount, 1)
+        self.retentionInterval = max(retentionInterval, 0)
+    }
 
     func value(for key: Key) -> Entry? {
-        storage[key]
+        let now = Date()
+        removeExpiredEntries(now: now)
+        guard var entry = storage[key] else {
+            return nil
+        }
+        entry.timestamp = now
+        storage[key] = entry
+        return entry
     }
 
     func values(for keys: [Key]) -> [Key: Entry] {
+        let now = Date()
+        removeExpiredEntries(now: now)
         var output: [Key: Entry] = [:]
         for key in Set(keys) {
-            if let value = storage[key] {
-                output[key] = value
+            if var entry = storage[key] {
+                entry.timestamp = now
+                storage[key] = entry
+                output[key] = entry
             }
         }
         return output
@@ -41,10 +65,31 @@ actor ImageOverlayTranslationCache {
             return
         }
 
+        let now = Date()
+        removeExpiredEntries(now: now)
         storage[key] = Entry(
             translatedText: cleanedText,
             lineTranslations: lineTranslations,
-            timestamp: Date()
+            timestamp: now
         )
+        removeLeastRecentlyUsedEntriesIfNeeded()
+    }
+
+    private func removeExpiredEntries(now: Date) {
+        guard retentionInterval > 0 else {
+            storage.removeAll()
+            return
+        }
+        let cutoff = now.addingTimeInterval(-retentionInterval)
+        storage = storage.filter { $0.value.timestamp >= cutoff }
+    }
+
+    private func removeLeastRecentlyUsedEntriesIfNeeded() {
+        while storage.count > maximumEntryCount,
+              let oldestKey = storage.min(by: {
+                  $0.value.timestamp < $1.value.timestamp
+              })?.key {
+            storage.removeValue(forKey: oldestKey)
+        }
     }
 }

@@ -8,6 +8,11 @@ final class ToastPanel {
     private var dismissTask: Task<Void, Never>?
     private let panelSize = NSSize(width: 220, height: 56)
     private let cancelablePanelSize = NSSize(width: 260, height: 86)
+    private let windowLevel: NSWindow.Level
+
+    init(level: NSWindow.Level = .floating) {
+        windowLevel = level
+    }
 
     func show(_ message: String, near point: NSPoint? = nil) {
         dismissTask?.cancel()
@@ -51,7 +56,7 @@ final class ToastPanel {
             newPanel.isOpaque = false
             newPanel.backgroundColor = .clear
             newPanel.hasShadow = true
-            newPanel.level = .floating
+            newPanel.level = windowLevel
             newPanel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
             newPanel.isReleasedWhenClosed = false
             panel = newPanel

@@ -1,3 +1,4 @@
+import AppKit
 import Foundation
 
 @MainActor
@@ -8,10 +9,11 @@ final class AppServices {
     let keychainService = KeychainService()
     let clipboardManager = ClipboardManager()
     let permissionManager = PermissionManager()
-    let historyStore = HistoryStore()
-    let favoriteStore = FavoriteStore()
     let ocrService = OCRService()
     let toastPanel = ToastPanel()
+    let screenshotClipboardToastPanel = ToastPanel(
+        level: NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
+    )
     let volcengineImageTranslationPolicyStore = VolcengineImageTranslationPolicyStore()
     let screenshotOverlayRenderer = ScreenshotTranslationOverlayRenderer()
     lazy var imageOverlayTranslationWindowController = ImageOverlayTranslationWindowController(
@@ -30,7 +32,6 @@ final class AppServices {
     )
 
     lazy var floatingPanel = FloatingTranslatePanel(
-        favoriteStore: favoriteStore,
         translationService: translationService
     )
 
@@ -44,16 +45,8 @@ final class AppServices {
         configurationStore: configurationStore,
         keychainService: keychainService,
         providerRegistry: providerRegistry,
-        policyStore: volcengineImageTranslationPolicyStore
-    )
-
-    lazy var historyWindowController = HistoryWindowController(
-        historyStore: historyStore,
-        favoriteStore: favoriteStore
-    )
-
-    lazy var favoritesWindowController = FavoritesWindowController(
-        favoriteStore: favoriteStore
+        policyStore: volcengineImageTranslationPolicyStore,
+        permissionManager: permissionManager
     )
 
     lazy var selectionReader = SelectionReader(
@@ -72,13 +65,11 @@ final class AppServices {
     )
 
     lazy var translationService = TranslationService(
-        providerFactory: providerFactory,
-        historyStore: historyStore
+        providerFactory: providerFactory
     )
 
     lazy var inputTranslateWindowController = InputTranslateWindowController(
-        translationService: translationService,
-        favoriteStore: favoriteStore
+        translationService: translationService
     )
 
     lazy var screenshotCaptureController = ScreenshotCaptureController(
@@ -86,9 +77,9 @@ final class AppServices {
         ocrService: ocrService,
         ocrResultPanel: ocrResultPanel,
         translationService: translationService,
-        historyStore: historyStore,
         floatingPanel: floatingPanel,
         toastPanel: toastPanel,
+        clipboardToastPanel: screenshotClipboardToastPanel,
         imageOverlayTranslationWindowController: imageOverlayTranslationWindowController,
         providerRegistry: providerRegistry,
         policyStore: volcengineImageTranslationPolicyStore,

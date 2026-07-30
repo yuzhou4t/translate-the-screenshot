@@ -1,5 +1,55 @@
 @testable import TTS
+import AppKit
 import Foundation
+import KeyboardShortcuts
+
+@MainActor
+func checkCoordinateTranslationHotkeyRoutesAndDefaults() {
+    precondition(
+        HotkeyManager.coordinateTranslationMode(for: .screenshotTranslateOverlay)
+            == .translateOverlayLocal
+    )
+    precondition(
+        HotkeyManager.coordinateTranslationMode(for: .screenshotTranslateOverlayAPI)
+            == .translateOverlayAPI
+    )
+    precondition(
+        HotkeyManager.coordinateTranslationMode(for: .volcengineImageTranslation)
+            == .translateOverlay
+    )
+
+    precondition(
+        KeyboardShortcuts.Name.screenshotTranslateOverlay.rawValue
+            == "screenshotTranslateOverlay"
+    )
+    precondition(
+        KeyboardShortcuts.Name.screenshotTranslateOverlay.initial
+            == .init(.w, modifiers: [.option])
+    )
+    precondition(KeyboardShortcuts.Name.screenshotTranslateOverlayAPI.initial == nil)
+    precondition(KeyboardShortcuts.Name.volcengineImageTranslation.initial == nil)
+
+    let rawNames = [
+        KeyboardShortcuts.Name.screenshotTranslateOverlay.rawValue,
+        KeyboardShortcuts.Name.screenshotTranslateOverlayAPI.rawValue,
+        KeyboardShortcuts.Name.volcengineImageTranslation.rawValue
+    ]
+    precondition(Set(rawNames).count == rawNames.count)
+}
+
+func checkScreenshotCaptureModesRouteOverlayTranslationEngines() {
+    precondition(
+        ScreenshotCaptureMode.translateOverlayAPI.coordinateTranslationEngine == .configuredProvider
+    )
+    precondition(
+        ScreenshotCaptureMode.translateOverlayLocal.coordinateTranslationEngine == .appleLocal
+    )
+    precondition(ScreenshotCaptureMode.translateOverlay.coordinateTranslationEngine == nil)
+    precondition(ScreenshotCaptureMode.translateOverlay.usesOverlayWindow)
+    precondition(ScreenshotCaptureMode.translateOverlayAPI.usesOverlayWindow)
+    precondition(ScreenshotCaptureMode.translateOverlayLocal.usesOverlayWindow)
+    precondition(!ScreenshotCaptureMode.translate.usesOverlayWindow)
+}
 
 func checkScreenshotOverlayRetentionRemovesOnlyExpiredOwnedArtifacts() {
     let fileManager = FileManager.default
@@ -48,79 +98,4 @@ func checkScreenshotOverlayRetentionRemovesOnlyExpiredOwnedArtifacts() {
     precondition(!fileManager.fileExists(atPath: expiredURL.path))
     precondition(fileManager.fileExists(atPath: recentURL.path))
     precondition(fileManager.fileExists(atPath: externalURL.path))
-}
-
-func checkTranslationHistoryUsesModeSpecificRetention() {
-    let now = Date()
-    let expiredOverlay = makeRetentionHistoryItem(
-        mode: .imageOverlay,
-        createdAt: now.addingTimeInterval(-4 * 24 * 60 * 60)
-    )
-    let recentOverlay = makeRetentionHistoryItem(
-        mode: .imageOverlay,
-        createdAt: now.addingTimeInterval(-2 * 24 * 60 * 60)
-    )
-    let overlayAtCutoff = makeRetentionHistoryItem(
-        mode: .imageOverlay,
-        createdAt: now.addingTimeInterval(-HistoryStore.imageOverlayRetentionInterval)
-    )
-    let ordinaryModes: [TranslationHistoryMode] = [
-        .selectedText,
-        .ocr,
-        .ocrTranslate,
-        .input
-    ]
-    let expiredOrdinaryItems = ordinaryModes.map {
-        makeRetentionHistoryItem(
-            mode: $0,
-            createdAt: now.addingTimeInterval(-8 * 24 * 60 * 60)
-        )
-    }
-    let recentOrdinaryItems = ordinaryModes.map {
-        makeRetentionHistoryItem(
-            mode: $0,
-            createdAt: now.addingTimeInterval(-6 * 24 * 60 * 60)
-        )
-    }
-    let ordinaryItemAtCutoff = makeRetentionHistoryItem(
-        mode: .selectedText,
-        createdAt: now.addingTimeInterval(-HistoryStore.ordinaryHistoryRetentionInterval)
-    )
-
-    let retained = HistoryStore.retainingUnexpiredItems(
-        [
-            expiredOverlay,
-            recentOverlay,
-            overlayAtCutoff,
-            ordinaryItemAtCutoff
-        ] + expiredOrdinaryItems + recentOrdinaryItems,
-        now: now
-    )
-
-    precondition(!retained.contains(where: { $0.id == expiredOverlay.id }))
-    precondition(retained.contains(where: { $0.id == recentOverlay.id }))
-    precondition(retained.contains(where: { $0.id == overlayAtCutoff.id }))
-    precondition(retained.contains(where: { $0.id == ordinaryItemAtCutoff.id }))
-    for item in expiredOrdinaryItems {
-        precondition(!retained.contains(where: { $0.id == item.id }))
-    }
-    for item in recentOrdinaryItems {
-        precondition(retained.contains(where: { $0.id == item.id }))
-    }
-}
-
-private func makeRetentionHistoryItem(
-    mode: TranslationHistoryMode,
-    createdAt: Date
-) -> TranslationHistoryItem {
-    TranslationHistoryItem(
-        sourceText: "source",
-        translatedText: "translation",
-        providerID: .localOCR,
-        sourceLanguage: nil,
-        targetLanguage: "zh-CN",
-        createdAt: createdAt,
-        mode: mode,
-        translationMode: .imageOverlay
-    )
 }

@@ -24,6 +24,68 @@ func checkIdentifiedBatchTranslationFallsBackOnlyForMissingSegmentsAndKeepsOrder
     precondition(individuallyTranslatedTexts == ["Second"])
 }
 
+func checkImageOverlayTranslationCacheEvictsOldEntries() async {
+    let cache = ImageOverlayTranslationCache(
+        maximumEntryCount: 2,
+        retentionInterval: 60
+    )
+    let keys = ["first", "second", "third"].map {
+        ImageOverlayTranslationCache.Key(
+            sourceText: $0,
+            targetLanguage: "简体中文",
+            providerID: "test",
+            modelName: "test",
+            translationMode: .imageOverlay
+        )
+    }
+
+    for key in keys {
+        await cache.insert(
+            translatedText: "translated-\(key.sourceText)",
+            lineTranslations: [],
+            for: key
+        )
+    }
+
+    let retained = await cache.values(for: keys)
+    precondition(retained.count == 2)
+    precondition(retained[keys[2]]?.translatedText == "translated-third")
+}
+
+func checkFailedHighQualityRetranslationPreservesExistingResult() {
+    let segment = testSegment(id: "preserve-existing", text: "Original")
+    let existingResult = ImageOverlayTranslationResult(
+        segmentID: segment.id,
+        sourceText: segment.sourceText,
+        translatedText: "已有译文",
+        lineTranslations: [],
+        status: .success,
+        errorMessage: nil
+    )
+    var state = ImageOverlaySegmentState(
+        segment: segment,
+        phase: .translated,
+        translationResult: existingResult,
+        errorMessage: nil,
+        isExcluded: false
+    )
+
+    state.applyTranslationResult(
+        ImageOverlayTranslationResult(
+            segmentID: segment.id,
+            sourceText: segment.sourceText,
+            translatedText: segment.sourceText,
+            lineTranslations: [],
+            status: .originalKept,
+            errorMessage: "API unavailable"
+        )
+    )
+
+    precondition(state.translationResult == existingResult)
+    precondition(state.phase == .translated)
+    precondition(state.errorMessage == "API unavailable")
+}
+
 private actor SingleTranslationRecorder {
     private(set) var texts: [String] = []
 

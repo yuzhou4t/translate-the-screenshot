@@ -5,8 +5,6 @@ enum SettingsTab: Hashable {
     case general
     case shortcuts
     case translationService
-    case scenarios
-    case aiMode
     case privacy
 }
 
@@ -31,18 +29,6 @@ struct SettingsView: View {
                 .tag(SettingsTab.translationService)
                 .tabItem {
                     Label("翻译服务", systemImage: "network")
-                }
-
-            scenarioTranslationSettings
-                .tag(SettingsTab.scenarios)
-                .tabItem {
-                    Label("场景配置", systemImage: "square.grid.2x2")
-                }
-
-            aiModeSettings
-                .tag(SettingsTab.aiMode)
-                .tabItem {
-                    Label("AI 模式", systemImage: "sparkles")
                 }
 
             permissionPrivacySettings
@@ -84,6 +70,28 @@ struct SettingsView: View {
                     Spacer()
                 }
 
+                HStack {
+                    Picker("默认翻译模式", selection: $viewModel.defaultTranslationMode) {
+                        ForEach(TranslationMode.userSelectableCases) { mode in
+                            Text(mode.displayName)
+                                .tag(mode)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .buttonStyle(.bordered)
+                    .frame(width: 280)
+
+                    Button("保存") {
+                        viewModel.saveDefaultTranslationMode()
+                    }
+                    .buttonStyle(.bordered)
+                    Spacer()
+                }
+
+                Text(viewModel.defaultTranslationMode.description)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+
                 if !viewModel.statusMessage.isEmpty {
                     Text(viewModel.statusMessage)
                         .font(.caption)
@@ -98,13 +106,18 @@ struct SettingsView: View {
                     systemImage: "text.cursor"
                 )
                 SettingsInfoRow(
-                    title: "火山图片翻译 Beta",
-                    message: "Option + W 截图后直接上传整张图片给火山翻译并返回译图；本地坐标翻译保留为手动备用。",
-                    systemImage: "cloud"
+                    title: "Apple 本地坐标翻译",
+                    message: "Option + W 在本机完成 OCR 和坐标分析；macOS 15 及以上使用 Apple 系统翻译，macOS 13–14 使用默认服务兼容翻译。",
+                    systemImage: "apple.logo"
+                )
+                SettingsInfoRow(
+                    title: "API 高质量坐标翻译",
+                    message: "可单独录制快捷键；坐标留在本机，只把分段文字交给默认翻译服务。",
+                    systemImage: "sparkles"
                 )
                 SettingsInfoRow(
                     title: "服务 fallback",
-                    message: "当前服务失败时，可按设置尝试一个备用服务，不做复杂路由。",
+                    message: "主翻译服务失败时，最多尝试一次全局备用服务，不做场景路由。",
                     systemImage: "arrow.triangle.branch"
                 )
             }
@@ -243,7 +256,7 @@ struct SettingsView: View {
                     }
                     .disabled(!viewModel.fallbackEnabled && viewModel.fallbackProviderID == nil && viewModel.fallbackModel.isEmpty)
 
-                    Text("默认先使用当前服务和模型；请求失败后最多重试 3 次，其中超时可重试一次，再尝试备用服务。")
+                    Text("默认先使用主翻译服务和模型；失败后最多尝试一次全局备用服务，不做场景路由或多级重试。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
@@ -306,7 +319,7 @@ struct SettingsView: View {
                     if config.id == .volcengine {
                         Divider()
 
-                        Text("安全说明：上面的 Endpoint 只用于火山文字翻译；Option + W 的完整截图固定发送到 https://translate.volcengineapi.com，不能改为其他域名。")
+                        Text("安全说明：上面的 Endpoint 只用于火山文字翻译；从菜单或已配置的“火山图片翻译 Beta”快捷键主动启动时，完整截图才会固定发送到 https://translate.volcengineapi.com。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
@@ -316,17 +329,17 @@ struct SettingsView: View {
                                 .monospacedDigit()
                         }
 
-                        Text("Option + W 会直接上传完整截图到火山图片翻译。提交前会查询火山账号当月图片用量，并与本机计数取较大值；达到免费 100 张后阻止。请求一旦发出，即使失败或超时也不会返还本机计数。用量查询失败时会停止，不冒险继续提交。")
+                        Text("从菜单或已配置快捷键启动火山图片翻译时会上传完整截图。提交前会查询火山账号当月图片用量，并与本机计数取较大值；达到免费 100 张后阻止。请求一旦发出，即使失败或超时也不会返还本机计数。用量查询失败时会停止，不冒险继续提交。")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .fixedSize(horizontal: false, vertical: true)
 
                         if viewModel.hasVolcengineUploadConsent {
-                            Button("撤销 Option + W 自动上传同意") {
+                            Button("撤销火山整图自动上传同意") {
                                 viewModel.revokeVolcengineUploadConsent()
                             }
                         } else {
-                            Text("首次按 Option + W 时会说明上传范围，并只询问一次。")
+                            Text("首次从菜单或已配置快捷键启动火山图片翻译时会说明上传范围，并只询问一次。")
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                         }
@@ -348,10 +361,13 @@ struct SettingsView: View {
     private var shortcutSettings: some View {
         Form {
             Section("快捷键") {
+                KeyboardShortcuts.Recorder("截图到剪贴板", name: .screenshotClipboard)
                 KeyboardShortcuts.Recorder("划词翻译", name: .translateSelection)
                 KeyboardShortcuts.Recorder("输入翻译", name: .inputTranslate)
                 KeyboardShortcuts.Recorder("截图翻译", name: .screenshotTranslate)
-                KeyboardShortcuts.Recorder("火山图片翻译 Beta", name: .screenshotTranslateOverlay)
+                KeyboardShortcuts.Recorder("Apple 本地坐标翻译", name: .screenshotTranslateOverlay)
+                KeyboardShortcuts.Recorder("API 高质量坐标翻译", name: .screenshotTranslateOverlayAPI)
+                KeyboardShortcuts.Recorder("火山图片翻译 Beta", name: .volcengineImageTranslation)
                 KeyboardShortcuts.Recorder("截图 OCR", name: .screenshotOCR)
                 KeyboardShortcuts.Recorder("静默截图 OCR", name: .silentScreenshotOCR)
             }
@@ -364,7 +380,7 @@ struct SettingsView: View {
                 )
                 SettingsInfoRow(
                     title: "截图相关快捷键",
-                    message: "Option + S 截图翻译会在文字悬浮窗中显示译文；Option + W 会直接上传整张截图并显示火山返回的译图。本地坐标覆盖可从菜单或结果窗口手动使用。",
+                    message: "默认 Control + A 只在内存中截图、标注并复制；Option + S 显示文字译文；Option + W 使用 Apple 本地坐标翻译。API 高质量和火山图片翻译可分别录制快捷键。",
                     systemImage: "viewfinder"
                 )
                 SettingsInfoRow(
@@ -376,87 +392,6 @@ struct SettingsView: View {
         }
         .formStyle(.grouped)
         .padding()
-    }
-
-    private var aiModeSettings: some View {
-        Form {
-            Section("默认 AI 翻译模式") {
-                Picker("默认模式", selection: $viewModel.defaultTranslationMode) {
-                    ForEach(TranslationMode.allCases) { mode in
-                        Text(mode.displayName)
-                            .tag(mode)
-                    }
-                }
-
-                Text(viewModel.defaultTranslationMode.description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                Button("保存默认 AI 模式") {
-                    viewModel.saveDefaultTranslationMode()
-                }
-            }
-
-            Section("模式说明") {
-                ForEach(TranslationMode.allCases) { mode in
-                    SettingsInfoRow(
-                        title: mode.displayName,
-                        message: mode.description,
-                        systemImage: mode.systemImage
-                    )
-                }
-            }
-
-            Section("提示词预留") {
-                Text("大模型类服务会使用所选模式的 prompt；传统翻译服务会保持原有请求方式。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-        }
-        .formStyle(.grouped)
-        .padding()
-    }
-
-    private var scenarioTranslationSettings: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(spacing: 10) {
-                    Label("场景翻译配置", systemImage: "square.grid.2x2")
-                        .font(.headline)
-
-                    Spacer()
-
-                    Button("保存场景配置") {
-                        viewModel.saveScenarioTranslationConfigs()
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
-
-                Text("为不同文字功能指定主要翻译服务和可选备用服务。Option + W 的火山整图翻译固定使用火山 AK/SK；本地坐标备用仍使用本地 OCR 与本地语义分块。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-
-                if !viewModel.statusMessage.isEmpty {
-                    Text(viewModel.statusMessage)
-                        .font(.caption)
-                        .foregroundStyle(viewModel.statusIsError ? Color.red : Color.secondary)
-                }
-
-                VStack(spacing: 14) {
-                    ForEach($viewModel.scenarioTranslationConfigs) { $config in
-                        ScenarioTranslationConfigCard(
-                            config: $config,
-                            availableProviders: viewModel.availableScenarioProviderConfigs
-                        )
-                    }
-                }
-            }
-            .padding()
-        }
-        .background(.background)
     }
 
     private var permissionPrivacySettings: some View {
@@ -494,8 +429,18 @@ struct SettingsView: View {
                     systemImage: "viewfinder"
                 )
                 SettingsInfoRow(
+                    title: "Apple 本地坐标翻译",
+                    message: "Option + W 在 macOS 15 及以上使用 Apple 系统翻译，不把 OCR 文字发送给已配置的第三方服务；系统可能按需下载语言包。macOS 13–14 使用默认服务兼容翻译。",
+                    systemImage: "apple.logo"
+                )
+                SettingsInfoRow(
+                    title: "API 高质量坐标翻译",
+                    message: "截图像素与坐标留在本机，只向默认翻译服务发送 OCR 分段文字和必要的段落结构信息。",
+                    systemImage: "sparkles"
+                )
+                SettingsInfoRow(
                     title: "火山图片翻译 Beta",
-                    message: "Option + W 会把完整框选截图上传到火山引擎。首次只询问一次；云端失败不会静默切换本地。",
+                    message: "从菜单或已配置的独立快捷键主动启动时会上传完整框选截图；首次使用会询问一次。",
                     systemImage: "cloud"
                 )
                 SettingsInfoRow(
@@ -596,158 +541,6 @@ private struct ModelSuggestionPicker: View {
     }
 }
 
-private struct ScenarioTranslationConfigCard: View {
-    @Binding var config: SimpleScenarioTranslationConfig
-    var availableProviders: [ProviderConfig]
-
-    private var scenario: TranslationScenario {
-        config.scenario
-    }
-
-    private var providerSelection: Binding<String> {
-        Binding(
-            get: {
-                if config.providerID.isEmpty {
-                    return availableProviders.first?.id.rawValue ?? ""
-                }
-                return config.providerID
-            },
-            set: { config.providerID = $0 }
-        )
-    }
-
-    private var fallbackProviderSelection: Binding<String> {
-        Binding(
-            get: { config.fallbackProviderID },
-            set: { config.fallbackProviderID = $0 }
-        )
-    }
-
-    private var selectedPrimaryProviderID: TranslationProviderID? {
-        TranslationProviderID(rawValue: config.providerID)
-    }
-
-    private var selectedFallbackProviderID: TranslationProviderID? {
-        TranslationProviderID(rawValue: config.fallbackProviderID)
-    }
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(scenario.displayName)
-                    .font(.headline)
-
-                Text(scenario.description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
-
-            Toggle("使用全局默认配置", isOn: $config.useGlobalDefault)
-
-            if config.useGlobalDefault {
-                Text("此场景将使用翻译服务页中的默认配置。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            } else {
-                VStack(alignment: .leading, spacing: 10) {
-                    Picker("主要服务商", selection: providerSelection) {
-                        ForEach(availableProviders) { provider in
-                            Text(provider.displayName)
-                                .tag(provider.id.rawValue)
-                        }
-                    }
-                    .pickerStyle(.menu)
-
-                    TextField("主要模型", text: $config.modelName)
-                        .textFieldStyle(.roundedBorder)
-
-                    if let selectedPrimaryProviderID {
-                        ModelSuggestionPicker(
-                            title: "主要模型建议",
-                            providerID: selectedPrimaryProviderID,
-                            modelName: $config.modelName
-                        )
-                    }
-
-                    Toggle("启用备用服务", isOn: $config.fallbackEnabled)
-
-                    if config.fallbackEnabled {
-                        Picker("备用服务商", selection: fallbackProviderSelection) {
-                            Text("未选择")
-                                .tag("")
-
-                            ForEach(availableProviders) { provider in
-                                Text(provider.displayName)
-                                    .tag(provider.id.rawValue)
-                            }
-                        }
-                        .pickerStyle(.menu)
-
-                        TextField("备用模型", text: $config.fallbackModelName)
-                            .textFieldStyle(.roundedBorder)
-
-                        if let selectedFallbackProviderID {
-                            ModelSuggestionPicker(
-                                title: "备用模型建议",
-                                providerID: selectedFallbackProviderID,
-                                modelName: $config.fallbackModelName
-                            )
-                        }
-                    }
-                }
-            }
-
-            if scenario == .ocrCleanup {
-                hintRow(
-                    "该场景需要支持 Prompt 的 AI 模型，不适合传统翻译 API。",
-                    systemImage: "sparkles.rectangle.stack"
-                )
-            }
-
-            if scenario == .imageOverlay {
-                hintRow(
-                    "建议选择输出稳定、译文简洁的 AI 模型。",
-                    systemImage: "text.below.photo"
-                )
-            }
-
-            Text("默认翻译模式：\(scenario.defaultTranslationMode.displayName)")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 16, style: .continuous)
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-        )
-    }
-
-    private func hintRow(_ text: String, systemImage: String) -> some View {
-        HStack(alignment: .top, spacing: 8) {
-            Image(systemName: systemImage)
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .padding(.top, 1)
-
-            Text(text)
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.primary.opacity(0.04), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-    }
-}
-
 private struct ProviderConfigRow: View {
     var config: ProviderConfig
     var isDefault: Bool
@@ -842,12 +635,6 @@ final class SettingsViewModel: ObservableObject {
     @Published var targetLanguage: String
     @Published var translationDirection: TranslationDirection
     @Published var defaultTranslationMode: TranslationMode
-    @Published var enableVisionSegmentation = false
-    @Published var visionSegmentationProviderID: TranslationProviderID
-    @Published var visionSegmentationEndpoint = ""
-    @Published var visionSegmentationModel = ""
-    @Published var visionSegmentationAPIKey = ""
-    @Published var scenarioTranslationConfigs: [SimpleScenarioTranslationConfig] = []
     @Published var statusMessage = ""
     @Published var statusIsError = false
     @Published var isAccessibilityTrusted = false
@@ -859,7 +646,7 @@ final class SettingsViewModel: ObservableObject {
     private let keychainService: KeychainService
     private let providerRegistry: ProviderRegistry
     private let policyStore: VolcengineImageTranslationPolicyStore
-    private let permissionManager = AppServices.shared.permissionManager
+    private let permissionManager: PermissionManager
     private let aiProviderIDs: Set<TranslationProviderID> = [
         .openAICompatible,
         .glm4Flash,
@@ -872,18 +659,18 @@ final class SettingsViewModel: ObservableObject {
         configurationStore: AppConfigurationStore,
         keychainService: KeychainService,
         providerRegistry: ProviderRegistry,
-        policyStore: VolcengineImageTranslationPolicyStore
+        policyStore: VolcengineImageTranslationPolicyStore,
+        permissionManager: PermissionManager
     ) {
         self.configurationStore = configurationStore
         self.keychainService = keychainService
         self.providerRegistry = providerRegistry
         self.policyStore = policyStore
+        self.permissionManager = permissionManager
         defaultProviderID = configurationStore.defaultProviderID
         targetLanguage = configurationStore.targetLanguage
         translationDirection = configurationStore.translationDirection
         defaultTranslationMode = configurationStore.defaultTranslationMode
-        enableVisionSegmentation = configurationStore.enableVisionSegmentation
-        visionSegmentationProviderID = configurationStore.visionSegmentationConfig.providerID
         reload()
         refreshPermissions()
     }
@@ -915,17 +702,6 @@ final class SettingsViewModel: ObservableObject {
         providerConfigs.filter { !aiProviderIDs.contains($0.id) }
     }
 
-    var availableScenarioProviderConfigs: [ProviderConfig] {
-        providerConfigs.filter {
-            $0.id.isTranslationProvider &&
-            isImplemented($0.id)
-        }
-    }
-
-    var visionSegmentationProviderIDs: [TranslationProviderID] {
-        [.openAICompatible, .gemini]
-    }
-
     var accessibilityStatus: String {
         isAccessibilityTrusted ? "已授权" : "未授权"
     }
@@ -943,13 +719,6 @@ final class SettingsViewModel: ObservableObject {
         targetLanguage = configurationStore.targetLanguage
         translationDirection = configurationStore.translationDirection
         defaultTranslationMode = configurationStore.defaultTranslationMode
-        enableVisionSegmentation = configurationStore.enableVisionSegmentation
-        let visionConfig = configurationStore.visionSegmentationConfig
-        visionSegmentationProviderID = visionConfig.providerID
-        visionSegmentationEndpoint = visionConfig.endpoint?.absoluteString ?? ""
-        visionSegmentationModel = visionConfig.model
-        visionSegmentationAPIKey = loadVisionSegmentationAPIKey(for: visionConfig.providerID)
-        scenarioTranslationConfigs = configurationStore.scenarioTranslationConfigs
         let volcengineUsage = policyStore.snapshot
         volcengineImageUsageText = "\(volcengineUsage.submittedCount)/\(volcengineUsage.limit)"
         hasVolcengineUploadConsent = policyStore.hasUploadConsent
@@ -1002,6 +771,10 @@ final class SettingsViewModel: ObservableObject {
     }
 
     func saveFallbackSettings() {
+        guard !fallbackEnabled || fallbackProviderID != nil else {
+            status("请先选择备用服务商。", isError: true)
+            return
+        }
         let providerID = fallbackEnabled ? fallbackProviderID : nil
         configurationStore.setFallbackConfiguration(
             enabled: fallbackEnabled,
@@ -1010,45 +783,6 @@ final class SettingsViewModel: ObservableObject {
         )
         reload()
         status("fallback 设置已保存。", isError: false)
-    }
-
-    func saveScenarioTranslationConfigs() {
-        configurationStore.setEnableVisionSegmentation(false)
-        configurationStore.setScenarioTranslationConfigs(
-            scenarioTranslationConfigs.map { config in
-                var next = config
-                if next.useGlobalDefault {
-                    next.fallbackEnabled = false
-                    next.fallbackProviderID = ""
-                    next.fallbackModelName = ""
-                } else if !next.fallbackEnabled {
-                    next.fallbackProviderID = ""
-                    next.fallbackModelName = ""
-                }
-                return next
-            }
-        )
-        reload()
-        status("场景配置已保存。", isError: false)
-    }
-
-    func selectVisionSegmentationProvider(_ id: TranslationProviderID) {
-        let currentDefaults = VisionSegmentationConfig.defaultConfig(for: visionSegmentationProviderID)
-        let nextDefaults = VisionSegmentationConfig.defaultConfig(for: id)
-        let currentEndpoint = visionSegmentationEndpoint.trimmingCharacters(in: .whitespacesAndNewlines)
-        let currentModel = visionSegmentationModel.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        visionSegmentationProviderID = id
-
-        if currentEndpoint.isEmpty || currentEndpoint == currentDefaults.endpoint?.absoluteString ?? "" {
-            visionSegmentationEndpoint = nextDefaults.endpoint?.absoluteString ?? ""
-        }
-
-        if currentModel.isEmpty || currentModel == currentDefaults.model {
-            visionSegmentationModel = nextDefaults.model
-        }
-
-        visionSegmentationAPIKey = loadVisionSegmentationAPIKey(for: id)
     }
 
     func saveSelectedProvider() {
@@ -1098,7 +832,7 @@ final class SettingsViewModel: ObservableObject {
     func revokeVolcengineUploadConsent() {
         policyStore.revokeUploadConsent()
         reload()
-        status("已撤销自动上传同意；下次 Option + W 会重新询问。", isError: false)
+        status("已撤销自动上传同意；下次从菜单或快捷键启动火山图片翻译时会重新询问。", isError: false)
     }
 
     func refreshPermissions() {
@@ -1153,13 +887,5 @@ final class SettingsViewModel: ObservableObject {
     private func status(_ message: String, isError: Bool) {
         statusMessage = message
         statusIsError = isError
-    }
-
-    private func visionSegmentationAPIKeyAccount(for id: TranslationProviderID) -> String {
-        "vision-segmentation.\(id.rawValue).apiKey"
-    }
-
-    private func loadVisionSegmentationAPIKey(for id: TranslationProviderID) -> String {
-        (try? keychainService.loadAPIKey(account: visionSegmentationAPIKeyAccount(for: id))) ?? ""
     }
 }

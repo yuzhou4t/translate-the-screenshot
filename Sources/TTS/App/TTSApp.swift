@@ -11,7 +11,8 @@ struct TTSApp: App {
                     configurationStore: AppServices.shared.configurationStore,
                     keychainService: AppServices.shared.keychainService,
                     providerRegistry: AppServices.shared.providerRegistry,
-                    policyStore: AppServices.shared.volcengineImageTranslationPolicyStore
+                    policyStore: AppServices.shared.volcengineImageTranslationPolicyStore,
+                    permissionManager: AppServices.shared.permissionManager
                 )
             )
         }

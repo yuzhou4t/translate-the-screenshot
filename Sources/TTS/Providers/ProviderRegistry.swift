@@ -19,14 +19,6 @@ final class ProviderRegistry {
         registerBuiltInProviders()
     }
 
-    var allDescriptors: [ProviderDescriptor] {
-        descriptors.values.sorted { $0.displayName < $1.displayName }
-    }
-
-    var enabledProviderConfigs: [ProviderConfig] {
-        configStore.enabledProviderConfigs
-    }
-
     var defaultProviderConfig: ProviderConfig? {
         configStore.providerConfig(for: configStore.defaultProviderID)
     }
@@ -41,58 +33,6 @@ final class ProviderRegistry {
 
     func descriptor(for id: TranslationProviderID) -> ProviderDescriptor? {
         descriptors[id]
-    }
-
-    func setEnabled(_ isEnabled: Bool, for id: TranslationProviderID) {
-        guard var config = configStore.providerConfig(for: id) else {
-            return
-        }
-
-        config.isEnabled = isEnabled
-        configStore.updateProviderConfig(config)
-    }
-
-    func setDefaultProvider(_ id: TranslationProviderID) {
-        configStore.setDefaultProvider(id)
-    }
-
-    func makeDefaultProvider() throws -> any TranslationProvider {
-        guard let config = defaultProviderConfig else {
-            throw TranslationProviderError.providerMessage("默认翻译服务不存在，请在设置中重新选择。")
-        }
-
-        guard config.isEnabled else {
-            configStore.setDefaultProvider(config.id)
-            guard let repairedConfig = defaultProviderConfig, repairedConfig.isEnabled else {
-                throw TranslationProviderError.providerMessage("默认翻译服务未启用。")
-            }
-            return try makeProvider(config: repairedConfig)
-        }
-
-        return try makeProvider(config: config)
-    }
-
-    func providerAttempts() -> [ProviderAttempt] {
-        let enabled = enabledProviderConfigs
-            .filter { descriptor(for: $0.id)?.isImplemented == true }
-            .sorted { lhs, rhs in
-                if lhs.id == configStore.defaultProviderID {
-                    return true
-                }
-                if rhs.id == configStore.defaultProviderID {
-                    return false
-                }
-                return lhs.priority < rhs.priority
-            }
-
-        return enabled.map { config in
-            ProviderAttempt(config: config) { [weak self] in
-                guard let self else {
-                    throw TranslationProviderError.providerMessage("ProviderRegistry 已释放。")
-                }
-                return try self.makeProvider(config: config)
-            }
-        }
     }
 
     func makeProvider(config: ProviderConfig, modelOverride: String? = nil) throws -> any TranslationProvider {
@@ -327,45 +267,6 @@ final class ProviderRegistry {
         )
     }
 
-    func makeVisionSegmentationProvider(
-        config: VisionSegmentationConfig
-    ) throws -> any VisionSegmentationProvider {
-        let normalizedConfig = config.normalized()
-        let apiKeyAccount = visionSegmentationAPIKeyAccount(for: normalizedConfig.providerID)
-
-        guard let apiKey = try keychainService.loadAPIKey(account: apiKeyAccount),
-              !apiKey.isEmpty else {
-            throw TranslationProviderError.missingAPIKey
-        }
-
-        switch normalizedConfig.providerID {
-        case .openAICompatible:
-            guard let endpoint = normalizedConfig.endpoint else {
-                throw TranslationProviderError.invalidEndpoint
-            }
-
-            return OpenAICompatibleProvider(
-                id: .openAICompatible,
-                displayName: "OpenAI Vision 分块",
-                endpoint: endpoint,
-                model: normalizedConfig.model,
-                apiKey: apiKey,
-                timeout: 8
-            )
-        case .gemini:
-            return GeminiProvider(
-                id: .gemini,
-                displayName: "Gemini Vision 分块",
-                endpoint: normalizedConfig.endpoint,
-                model: normalizedConfig.model,
-                apiKey: apiKey,
-                timeout: 8
-            )
-        default:
-            throw TranslationProviderError.providerMessage("视觉智能分块目前仅支持 OpenAI-compatible 或 Gemini。")
-        }
-    }
-
     private func registerBuiltInProviders() {
         register(.init(
             id: .openAICompatible,
@@ -393,9 +294,5 @@ final class ProviderRegistry {
 
     private func secretKeyAccount(for id: TranslationProviderID) -> String {
         "\(id.rawValue).secretKey"
-    }
-
-    private func visionSegmentationAPIKeyAccount(for id: TranslationProviderID) -> String {
-        "vision-segmentation.\(id.rawValue).apiKey"
     }
 }

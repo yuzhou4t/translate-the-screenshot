@@ -12,71 +12,12 @@ struct ModelSuggestion: Identifiable, Hashable {
     }
 }
 
-enum TranslationScenario: String, Codable, CaseIterable, Identifiable, Equatable {
+enum TranslationScenario: String, Codable, Equatable {
     case selection
     case input
     case screenshot
     case ocrCleanup
     case imageOverlay
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .selection:
-            "划词翻译"
-        case .input:
-            "输入翻译"
-        case .screenshot:
-            "截图翻译"
-        case .ocrCleanup:
-            "OCR AI 修复"
-        case .imageOverlay:
-            "截图覆盖翻译"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .selection:
-            "用于划词后的快速理解与短文本翻译。"
-        case .input:
-            "用于手动输入文本后的常规翻译。"
-        case .screenshot:
-            "用于截图 OCR 后的正文翻译。"
-        case .ocrCleanup:
-            "用于 OCR 文本的 AI 修复，不做目标语言翻译。"
-        case .imageOverlay:
-            "用于截图覆盖翻译，强调短小、紧凑和适合回填原图区域。"
-        }
-    }
-
-    var defaultTranslationMode: TranslationMode {
-        switch self {
-        case .selection:
-            .accurate
-        case .input:
-            .natural
-        case .screenshot:
-            .accurate
-        case .ocrCleanup:
-            .ocrCleanup
-        case .imageOverlay:
-            .imageOverlay
-        }
-    }
-}
-
-struct SimpleScenarioTranslationConfig: Codable, Equatable, Identifiable {
-    var scenario: TranslationScenario
-    var useGlobalDefault: Bool
-    var providerID: String
-    var modelName: String
-    var fallbackEnabled: Bool
-    var fallbackProviderID: String
-    var fallbackModelName: String
-
-    var id: TranslationScenario { scenario }
 }
 
 enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
@@ -455,68 +396,6 @@ struct TranslationHistoryItem: Identifiable, Codable, Equatable {
     }
 }
 
-struct FavoriteItem: Identifiable, Codable, Equatable {
-    var id: UUID
-    var historyItem: TranslationHistoryItem
-    var createdAt: Date
-
-    init(
-        id: UUID = UUID(),
-        historyItem: TranslationHistoryItem,
-        createdAt: Date = Date()
-    ) {
-        self.id = id
-        self.historyItem = historyItem
-        self.createdAt = createdAt
-    }
-}
-
-struct VisionSegmentationConfig: Codable, Equatable {
-    var providerID: TranslationProviderID
-    var endpoint: URL?
-    var model: String
-
-    static let `default` = defaultConfig(for: .gemini)
-
-    static func defaultConfig(for providerID: TranslationProviderID) -> VisionSegmentationConfig {
-        switch providerID {
-        case .openAICompatible:
-            return VisionSegmentationConfig(
-                providerID: .openAICompatible,
-                endpoint: URL(string: "https://api.openai.com/v1/chat/completions"),
-                model: "gpt-4o-mini"
-            )
-        case .gemini:
-            return VisionSegmentationConfig(
-                providerID: .gemini,
-                endpoint: URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"),
-                model: "gemini-2.5-flash"
-            )
-        default:
-            return defaultConfig(for: .gemini)
-        }
-    }
-
-    func normalized() -> VisionSegmentationConfig {
-        let supportedProviderID: TranslationProviderID
-        switch providerID {
-        case .openAICompatible, .gemini:
-            supportedProviderID = providerID
-        default:
-            supportedProviderID = VisionSegmentationConfig.default.providerID
-        }
-
-        let defaults = VisionSegmentationConfig.defaultConfig(for: supportedProviderID)
-        let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        return VisionSegmentationConfig(
-            providerID: supportedProviderID,
-            endpoint: endpoint ?? defaults.endpoint,
-            model: trimmedModel.isEmpty ? defaults.model : trimmedModel
-        )
-    }
-}
-
 struct AppConfiguration: Codable, Equatable {
     var providerID: TranslationProviderID
     var openAICompatibleEndpoint: URL
@@ -529,9 +408,6 @@ struct AppConfiguration: Codable, Equatable {
     var fallbackProviderID: TranslationProviderID?
     var fallbackModel: String?
     var defaultTranslationMode: TranslationMode
-    var enableVisionSegmentation: Bool
-    var visionSegmentationConfig: VisionSegmentationConfig
-    var scenarioTranslationConfigs: [SimpleScenarioTranslationConfig]
 
     static let `default` = AppConfiguration(
         providerID: .myMemory,
@@ -544,14 +420,7 @@ struct AppConfiguration: Codable, Equatable {
         fallbackEnabled: false,
         fallbackProviderID: nil,
         fallbackModel: nil,
-        defaultTranslationMode: .accurate,
-        enableVisionSegmentation: false,
-        visionSegmentationConfig: .default,
-        scenarioTranslationConfigs: defaultScenarioConfigs(
-            defaultProviderID: .myMemory,
-            providerConfigs: [.openAICompatibleDefault, .myMemoryDefault],
-            openAICompatibleModel: "gpt-4o-mini"
-        )
+        defaultTranslationMode: .accurate
     )
 
     private enum CodingKeys: String, CodingKey {
@@ -566,9 +435,6 @@ struct AppConfiguration: Codable, Equatable {
         case fallbackProviderID
         case fallbackModel
         case defaultTranslationMode
-        case enableVisionSegmentation
-        case visionSegmentationConfig
-        case scenarioTranslationConfigs
     }
 
     init(
@@ -582,10 +448,7 @@ struct AppConfiguration: Codable, Equatable {
         fallbackEnabled: Bool,
         fallbackProviderID: TranslationProviderID?,
         fallbackModel: String?,
-        defaultTranslationMode: TranslationMode,
-        enableVisionSegmentation: Bool,
-        visionSegmentationConfig: VisionSegmentationConfig,
-        scenarioTranslationConfigs: [SimpleScenarioTranslationConfig]
+        defaultTranslationMode: TranslationMode
     ) {
         self.providerID = providerID
         self.openAICompatibleEndpoint = openAICompatibleEndpoint
@@ -597,10 +460,7 @@ struct AppConfiguration: Codable, Equatable {
         self.fallbackEnabled = fallbackEnabled
         self.fallbackProviderID = fallbackProviderID
         self.fallbackModel = fallbackModel
-        self.defaultTranslationMode = defaultTranslationMode
-        self.enableVisionSegmentation = enableVisionSegmentation
-        self.visionSegmentationConfig = visionSegmentationConfig.normalized()
-        self.scenarioTranslationConfigs = scenarioTranslationConfigs
+        self.defaultTranslationMode = defaultTranslationMode.userSelectableFallback
     }
 
     init(from decoder: Decoder) throws {
@@ -615,12 +475,9 @@ struct AppConfiguration: Codable, Equatable {
         fallbackEnabled = try container.decodeIfPresent(Bool.self, forKey: .fallbackEnabled) ?? false
         fallbackProviderID = try container.decodeIfPresent(TranslationProviderID.self, forKey: .fallbackProviderID)
         fallbackModel = try container.decodeIfPresent(String.self, forKey: .fallbackModel)
-        defaultTranslationMode = try container.decodeIfPresent(TranslationMode.self, forKey: .defaultTranslationMode) ?? .accurate
-        enableVisionSegmentation = try container.decodeIfPresent(Bool.self, forKey: .enableVisionSegmentation) ?? false
-        visionSegmentationConfig = (try container.decodeIfPresent(
-            VisionSegmentationConfig.self,
-            forKey: .visionSegmentationConfig
-        ) ?? .default).normalized()
+        defaultTranslationMode = (
+            try container.decodeIfPresent(TranslationMode.self, forKey: .defaultTranslationMode) ?? .accurate
+        ).userSelectableFallback
 
         let decodedConfigs = try container.decodeIfPresent([ProviderConfig].self, forKey: .providerConfigs) ?? []
         providerConfigs = AppConfiguration.normalizedConfigs(
@@ -629,17 +486,6 @@ struct AppConfiguration: Codable, Equatable {
             endpoint: openAICompatibleEndpoint,
             model: openAICompatibleModel
         )
-        let decodedScenarioConfigs = try container.decodeIfPresent(
-            [SimpleScenarioTranslationConfig].self,
-            forKey: .scenarioTranslationConfigs
-        ) ?? []
-        scenarioTranslationConfigs = AppConfiguration.normalizedScenarioConfigs(
-            decodedScenarioConfigs,
-            defaultProviderID: defaultProviderID,
-            providerConfigs: providerConfigs,
-            openAICompatibleModel: openAICompatibleModel
-        )
-
         if fallbackProviderID == defaultProviderID {
             fallbackProviderID = nil
             fallbackModel = nil
@@ -692,57 +538,4 @@ struct AppConfiguration: Codable, Equatable {
         return next.sorted { $0.priority < $1.priority }
     }
 
-    static func defaultScenarioConfigs(
-        defaultProviderID: TranslationProviderID,
-        providerConfigs: [ProviderConfig],
-        openAICompatibleModel: String
-    ) -> [SimpleScenarioTranslationConfig] {
-        normalizedScenarioConfigs(
-            [],
-            defaultProviderID: defaultProviderID,
-            providerConfigs: providerConfigs,
-            openAICompatibleModel: openAICompatibleModel
-        )
-    }
-
-    static func normalizedScenarioConfigs(
-        _ configs: [SimpleScenarioTranslationConfig],
-        defaultProviderID: TranslationProviderID,
-        providerConfigs: [ProviderConfig],
-        openAICompatibleModel: String
-    ) -> [SimpleScenarioTranslationConfig] {
-        let globalProviderID = defaultProviderID.rawValue
-        let globalModelName = globalModelName(
-            defaultProviderID: defaultProviderID,
-            providerConfigs: providerConfigs,
-            openAICompatibleModel: openAICompatibleModel
-        )
-
-        return TranslationScenario.allCases.map { scenario in
-            let existing = configs.first { $0.scenario == scenario }
-            let useGlobalDefault = existing?.useGlobalDefault ?? true
-
-            return SimpleScenarioTranslationConfig(
-                scenario: scenario,
-                useGlobalDefault: useGlobalDefault,
-                providerID: useGlobalDefault ? globalProviderID : (existing?.providerID ?? globalProviderID),
-                modelName: useGlobalDefault ? globalModelName : (existing?.modelName ?? globalModelName),
-                fallbackEnabled: existing?.fallbackEnabled ?? false,
-                fallbackProviderID: existing?.fallbackProviderID ?? "",
-                fallbackModelName: existing?.fallbackModelName ?? ""
-            )
-        }
-    }
-
-    private static func globalModelName(
-        defaultProviderID: TranslationProviderID,
-        providerConfigs: [ProviderConfig],
-        openAICompatibleModel: String
-    ) -> String {
-        if defaultProviderID == .openAICompatible {
-            return openAICompatibleModel
-        }
-
-        return providerConfigs.first(where: { $0.id == defaultProviderID })?.model ?? ""
-    }
 }

@@ -5,11 +5,28 @@ import ImageIO
 import UniformTypeIdentifiers
 
 enum ScreenshotCaptureMode {
+    case clipboard
     case translate
     case translateOverlay
+    case translateOverlayAPI
     case translateOverlayLocal
     case ocr
     case silentOCR
+
+    var coordinateTranslationEngine: ImageOverlayTranslationEngine? {
+        switch self {
+        case .translateOverlayAPI:
+            .configuredProvider
+        case .translateOverlayLocal:
+            .appleLocal
+        case .clipboard, .translate, .translateOverlay, .ocr, .silentOCR:
+            nil
+        }
+    }
+
+    var usesOverlayWindow: Bool {
+        self == .translateOverlay || coordinateTranslationEngine != nil
+    }
 }
 
 @MainActor
@@ -18,14 +35,15 @@ final class ScreenshotCaptureController {
     private let ocrService: OCRService
     private let ocrResultPanel: OCRResultPanel
     private let translationService: TranslationService
-    private let historyStore: HistoryStore
     private let floatingPanel: FloatingTranslatePanel
     private let toastPanel: ToastPanel
+    private let clipboardToastPanel: ToastPanel
     private let imageOverlayTranslationWindowController: ImageOverlayTranslationWindowController
     private let providerRegistry: ProviderRegistry
     private let policyStore: VolcengineImageTranslationPolicyStore
     private let settingsWindowController: SettingsWindowController
     private var overlayWindows: [ScreenshotOverlayWindow] = []
+    private var annotationWindow: ScreenshotAnnotationWindow?
     private var isCapturing = false
     private var didHideSystemCursor = false
     private var activeMode: ScreenshotCaptureMode = .translate
@@ -39,9 +57,9 @@ final class ScreenshotCaptureController {
         ocrService: OCRService,
         ocrResultPanel: OCRResultPanel,
         translationService: TranslationService,
-        historyStore: HistoryStore,
         floatingPanel: FloatingTranslatePanel,
         toastPanel: ToastPanel,
+        clipboardToastPanel: ToastPanel,
         imageOverlayTranslationWindowController: ImageOverlayTranslationWindowController,
         providerRegistry: ProviderRegistry,
         policyStore: VolcengineImageTranslationPolicyStore,
@@ -51,9 +69,9 @@ final class ScreenshotCaptureController {
         self.ocrService = ocrService
         self.ocrResultPanel = ocrResultPanel
         self.translationService = translationService
-        self.historyStore = historyStore
         self.floatingPanel = floatingPanel
         self.toastPanel = toastPanel
+        self.clipboardToastPanel = clipboardToastPanel
         self.imageOverlayTranslationWindowController = imageOverlayTranslationWindowController
         self.providerRegistry = providerRegistry
         self.policyStore = policyStore
@@ -65,8 +83,10 @@ final class ScreenshotCaptureController {
             return
         }
 
-        cancelActiveProcessing(showFeedback: false)
-        if mode == .translateOverlay || mode == .translateOverlayLocal {
+        if mode != .clipboard {
+            cancelActiveProcessing(showFeedback: false)
+        }
+        if mode.usesOverlayWindow {
             imageOverlayTranslationWindowController.cancelCurrentWork()
         }
 
@@ -77,7 +97,8 @@ final class ScreenshotCaptureController {
         guard permissionManager.isScreenRecordingTrusted else {
             permissionManager.requestScreenRecordingIfNeeded()
             permissionManager.openScreenRecordingSettings()
-            toastPanel.show("请允许 TTS 屏幕录制，授权后重启 TTS")
+            let feedbackPanel = mode == .clipboard ? clipboardToastPanel : toastPanel
+            feedbackPanel.show("请允许 TTS 屏幕录制，授权后重启 TTS")
             print("screenshot cancelled: screen recording permission required")
             return
         }
@@ -87,8 +108,15 @@ final class ScreenshotCaptureController {
         hideSystemCursor()
         overlayWindows = NSScreen.screens.map { screen in
             let window = ScreenshotOverlayWindow(screen: screen)
-            window.onFinished = { [weak self] selectionRect in
-                self?.finishCapture(selectionRect: selectionRect)
+            window.onFinished = { [weak self, weak window] selectionRect in
+                guard let window else {
+                    self?.cancelCapture()
+                    return
+                }
+                self?.finishCapture(
+                    selectionRect: selectionRect,
+                    belowWindowID: CGWindowID(window.windowNumber)
+                )
             }
             window.onCancelled = { [weak self] in
                 self?.cancelCapture()
@@ -116,7 +144,7 @@ final class ScreenshotCaptureController {
 
         let usage = policyStore.snapshot
         guard usage.remainingCount > 0 else {
-            toastPanel.show("火山图片翻译本月安全计数已达 \(usage.limit) 张上限；可从菜单使用本地坐标备用")
+            toastPanel.show("火山图片翻译本月安全计数已达 \(usage.limit) 张上限；可使用 API 或 Apple 坐标翻译")
             return false
         }
 
@@ -129,9 +157,9 @@ final class ScreenshotCaptureController {
         alert.alertStyle = .informational
         alert.messageText = "启用火山图片翻译 Beta？"
         alert.informativeText = """
-        Option + W 框选的完整截图会上传到火山引擎进行 OCR、翻译和整图回填。
+        从菜单或已配置的火山快捷键启动后，框选的完整截图会上传到火山引擎进行 OCR、翻译和整图回填。
 
-        你只需同意一次；之后快捷键会直接上传。每次提交前会同步火山账号当月图片用量，并与本机保守计数取较大值；免费 100 张用完后直接阻止。失败或超时也计入本机限额。
+        你只需同意一次；之后再次主动启动时会直接上传。每次提交前会同步火山账号当月图片用量，并与本机保守计数取较大值；免费 100 张用完后直接阻止。失败或超时也计入本机限额。
         """
         alert.addButton(withTitle: "同意并继续")
         alert.addButton(withTitle: "取消")
@@ -177,7 +205,7 @@ final class ScreenshotCaptureController {
         )
 
         let taskToken = UUID()
-        let task = Task { [ocrService, ocrResultPanel, historyStore] in
+        let task = Task { [ocrService, ocrResultPanel] in
             defer {
                 Task { @MainActor [weak self] in
                     self?.finishActiveProcessingTask(ifMatches: taskToken)
@@ -190,17 +218,6 @@ final class ScreenshotCaptureController {
                 guard !plainText.isEmpty else {
                     throw ScreenshotCaptureError.noRecognizedText
                 }
-
-                let item = TranslationHistoryItem(
-                    sourceText: plainText,
-                    translatedText: plainText,
-                    providerID: .localOCR,
-                    sourceLanguage: nil,
-                    targetLanguage: "",
-                    createdAt: Date(),
-                    mode: .ocr
-                )
-                try await historyStore.add(item)
 
                 await MainActor.run {
                     ocrResultPanel.showResult(result, imageURL: imageURL, near: anchorPoint)
@@ -224,12 +241,6 @@ final class ScreenshotCaptureController {
     }
 
     func cancelActiveWork() {
-        if isCapturing {
-            cancelCapture()
-            toastPanel.show("已取消截图选择", near: activeProcessingAnchorPoint)
-            return
-        }
-
         let hadProcessingTask = activeProcessingTask != nil
         let didCancel = cancelActiveProcessing(showFeedback: false)
         let didCancelWindow = hadProcessingTask
@@ -242,31 +253,55 @@ final class ScreenshotCaptureController {
         }
     }
 
-    private func finishCapture(selectionRect: CGRect) {
+    private func finishCapture(
+        selectionRect: CGRect,
+        belowWindowID: CGWindowID
+    ) {
         guard isCapturing else {
             return
         }
 
-        closeOverlays()
+        let mode = activeMode
 
         guard selectionRect.width >= 2, selectionRect.height >= 2 else {
+            closeOverlays()
             print("screenshot cancelled")
             return
         }
 
         do {
-            let fileURL = try saveScreenshot(
+            let image = try captureScreenshot(
                 selectionRect: selectionRect,
-                mode: activeMode
+                belowWindowID: belowWindowID
+            )
+            closeOverlays()
+            if mode == .clipboard {
+                presentAnnotationEditor(
+                    image: image,
+                    selectionRect: selectionRect
+                )
+                return
+            }
+
+            let fileURL = try saveScreenshot(
+                image: image,
+                mode: mode
             )
             print("screenshot saved: \(fileURL.path)")
             handleScreenshot(
                 imageURL: fileURL,
                 near: NSPoint(x: selectionRect.maxX, y: selectionRect.maxY),
-                mode: activeMode,
+                mode: mode,
                 captureDisplaySize: selectionRect.size
             )
         } catch {
+            closeOverlays()
+            if mode == .clipboard {
+                clipboardToastPanel.show(
+                    "截图失败：\(error.localizedDescription)",
+                    near: NSPoint(x: selectionRect.maxX, y: selectionRect.maxY)
+                )
+            }
             print("screenshot failed: \(error.localizedDescription)")
         }
     }
@@ -276,7 +311,11 @@ final class ScreenshotCaptureController {
             return
         }
 
-        closeOverlays()
+        if annotationWindow != nil {
+            closeAnnotationEditor()
+        } else {
+            closeOverlays()
+        }
         print("screenshot cancelled")
     }
 
@@ -311,6 +350,10 @@ final class ScreenshotCaptureController {
         mode: ScreenshotCaptureMode,
         captureDisplaySize: CGSize? = nil
     ) {
+        if mode == .clipboard {
+            return
+        }
+
         if mode == .translateOverlay {
             do {
                 let originalImage = try Self.loadImage(from: imageURL)
@@ -334,6 +377,8 @@ final class ScreenshotCaptureController {
 
         let presentationID: UUID?
         switch mode {
+        case .clipboard:
+            presentationID = nil
         case .translate:
             presentationID = floatingPanel.showLoading(
                 sourceText: "正在识别截图文字...",
@@ -344,10 +389,19 @@ final class ScreenshotCaptureController {
             )
         case .translateOverlay:
             presentationID = nil
+        case .translateOverlayAPI:
+            presentationID = nil
+            toastPanel.showLoading(
+                "正在准备 API 高质量坐标翻译...",
+                near: point,
+                onCancel: { [weak self] in
+                    self?.cancelActiveWork()
+                }
+            )
         case .translateOverlayLocal:
             presentationID = nil
             toastPanel.showLoading(
-                "正在准备本地坐标翻译...",
+                "正在准备 Apple 本地坐标翻译...",
                 near: point,
                 onCancel: { [weak self] in
                     self?.cancelActiveWork()
@@ -367,7 +421,7 @@ final class ScreenshotCaptureController {
         }
 
         let taskToken = UUID()
-        let task = Task { [ocrService, ocrResultPanel, translationService, historyStore, floatingPanel, toastPanel, imageOverlayTranslationWindowController] in
+        let task = Task { [ocrService, ocrResultPanel, translationService, floatingPanel, toastPanel, imageOverlayTranslationWindowController] in
             defer {
                 Task { @MainActor [weak self] in
                     self?.finishActiveProcessingTask(ifMatches: taskToken)
@@ -375,13 +429,21 @@ final class ScreenshotCaptureController {
             }
             do {
                 let startedAt = Date()
-                if mode == .translateOverlayLocal {
+                if let translationEngine = mode.coordinateTranslationEngine {
                     let originalImage = try Self.loadImage(from: imageURL)
+                    let windowTitle = translationEngine == .configuredProvider
+                        ? "API 高质量坐标翻译"
+                        : "Apple 本地坐标翻译"
                     await MainActor.run {
+                        guard self.activeProcessingToken == taskToken else {
+                            return
+                        }
                         toastPanel.hide()
                         imageOverlayTranslationWindowController.showProgress(
                             originalImage: originalImage,
                             message: "正在 OCR 版式识别...",
+                            title: windowTitle,
+                            translationEngine: translationEngine,
                             onCancel: { [weak self] in
                                 self?.cancelActiveWork()
                             }
@@ -406,6 +468,9 @@ final class ScreenshotCaptureController {
                     }
 
                     await MainActor.run {
+                        guard self.activeProcessingToken == taskToken else {
+                            return
+                        }
                         imageOverlayTranslationWindowController.show(
                             originalImage: originalImage,
                             ocrSnapshot: snapshot,
@@ -414,6 +479,8 @@ final class ScreenshotCaptureController {
                                 overlaySegments: segments
                             ),
                             stage: .accurate,
+                            title: windowTitle,
+                            translationEngine: translationEngine,
                             autoStart: true
                         )
                     }
@@ -429,7 +496,12 @@ final class ScreenshotCaptureController {
                 }
 
                 await MainActor.run {
+                    guard self.activeProcessingToken == taskToken else {
+                        return
+                    }
                     switch mode {
+                    case .clipboard:
+                        break
                     case .translate:
                         if let presentationID {
                             floatingPanel.updateLoading(
@@ -440,7 +512,7 @@ final class ScreenshotCaptureController {
                         }
                     case .translateOverlay:
                         break
-                    case .translateOverlayLocal:
+                    case .translateOverlayAPI, .translateOverlayLocal:
                         break
                     case .ocr:
                         ocrResultPanel.showResult(result, imageURL: imageURL, near: point)
@@ -451,6 +523,8 @@ final class ScreenshotCaptureController {
                 }
 
                 switch mode {
+                case .clipboard:
+                    break
                 case .translate:
                     let item = try await translationService.translate(
                         text: plainText,
@@ -460,6 +534,9 @@ final class ScreenshotCaptureController {
                     print("screenshot stage: translation elapsed=\(Self.elapsedSeconds(since: startedAt))s")
                     try Task.checkCancellation()
                     await MainActor.run {
+                        guard self.activeProcessingToken == taskToken else {
+                            return
+                        }
                         if let presentationID {
                             floatingPanel.showResult(
                                 item: item,
@@ -470,30 +547,26 @@ final class ScreenshotCaptureController {
                     }
                 case .translateOverlay:
                     break
-                case .translateOverlayLocal:
+                case .translateOverlayAPI, .translateOverlayLocal:
                     break
                 case .ocr:
-                    let item = TranslationHistoryItem(
-                        sourceText: plainText,
-                        translatedText: plainText,
-                        providerID: .localOCR,
-                        sourceLanguage: nil,
-                        targetLanguage: "",
-                        createdAt: Date(),
-                        mode: .ocr
-                    )
-                    try await historyStore.add(item)
+                    break
                 case .silentOCR:
                     break
                 }
             } catch is CancellationError {
                 await MainActor.run {
+                    guard self.activeProcessingToken == taskToken else {
+                        return
+                    }
                     switch mode {
+                    case .clipboard:
+                        break
                     case .translate:
                         floatingPanel.hide()
                     case .translateOverlay:
                         imageOverlayTranslationWindowController.showCancelled()
-                    case .translateOverlayLocal:
+                    case .translateOverlayAPI, .translateOverlayLocal:
                         toastPanel.hide()
                         imageOverlayTranslationWindowController.showCancelled()
                     case .ocr:
@@ -504,8 +577,13 @@ final class ScreenshotCaptureController {
                 }
             } catch {
                 await MainActor.run {
+                    guard self.activeProcessingToken == taskToken else {
+                        return
+                    }
                     let message = error.localizedDescription
                     switch mode {
+                    case .clipboard:
+                        toastPanel.show(message, near: point)
                     case .translate:
                         if let presentationID {
                             floatingPanel.showError(message, near: point, presentationID: presentationID)
@@ -513,7 +591,7 @@ final class ScreenshotCaptureController {
                     case .translateOverlay:
                         toastPanel.hide()
                         imageOverlayTranslationWindowController.showError(message)
-                    case .translateOverlayLocal:
+                    case .translateOverlayAPI, .translateOverlayLocal:
                         toastPanel.hide()
                         imageOverlayTranslationWindowController.showError(message)
                     case .ocr:
@@ -541,11 +619,13 @@ final class ScreenshotCaptureController {
 
         if let mode = activeProcessingMode {
             switch mode {
+            case .clipboard:
+                break
             case .translate:
                 floatingPanel.hide()
             case .translateOverlay:
                 imageOverlayTranslationWindowController.cancelCurrentWork()
-            case .translateOverlayLocal:
+            case .translateOverlayAPI, .translateOverlayLocal:
                 toastPanel.hide()
                 imageOverlayTranslationWindowController.showCancelled()
             case .ocr:
@@ -589,22 +669,28 @@ final class ScreenshotCaptureController {
         activeProcessingAnchorPoint = nil
     }
 
-    private func saveScreenshot(
+    private func captureScreenshot(
         selectionRect: CGRect,
-        mode: ScreenshotCaptureMode
-    ) throws -> URL {
+        belowWindowID: CGWindowID
+    ) throws -> CGImage {
         let displayRect = convertToDisplayRect(selectionRect)
         guard let image = CGWindowListCreateImage(
             displayRect,
-            .optionOnScreenOnly,
-            kCGNullWindowID,
+            .optionOnScreenBelowWindow,
+            belowWindowID,
             [.bestResolution]
         ) else {
             throw ScreenshotCaptureError.captureFailed
         }
+        return image
+    }
 
+    private func saveScreenshot(
+        image: CGImage,
+        mode: ScreenshotCaptureMode
+    ) throws -> URL {
         let directory: URL
-        if mode == .translateOverlay || mode == .translateOverlayLocal {
+        if mode.usesOverlayWindow {
             ScreenshotArtifactRetention.pruneExpiredOverlayArtifacts()
             directory = ScreenshotArtifactRetention.overlayScreenshotDirectory()
         } else {
@@ -631,6 +717,86 @@ final class ScreenshotCaptureController {
         }
 
         return fileURL
+    }
+
+    private func presentAnnotationEditor(
+        image: CGImage,
+        selectionRect: CGRect
+    ) {
+        let window = ScreenshotAnnotationWindow(
+            image: image,
+            selectionRect: selectionRect
+        )
+        let anchorPoint = NSPoint(x: selectionRect.maxX, y: selectionRect.maxY)
+        window.onCopiedImage = { [weak self] image, logicalSize in
+            guard let self else {
+                return
+            }
+            guard Self.copyImageToPasteboard(image, logicalSize: logicalSize) else {
+                self.clipboardToastPanel.show("复制截图失败，请重试", near: anchorPoint)
+                return
+            }
+            self.closeAnnotationEditor()
+            self.clipboardToastPanel.show("截图已复制", near: anchorPoint)
+        }
+        window.onCopyFailed = { [weak self] in
+            self?.clipboardToastPanel.show("生成标注截图失败，请重试", near: anchorPoint)
+        }
+        window.onCancelled = { [weak self] in
+            self?.closeAnnotationEditor()
+            self?.clipboardToastPanel.show("已取消截图", near: anchorPoint)
+        }
+        annotationWindow = window
+        isCapturing = true
+        window.orderFrontRegardless()
+    }
+
+    private func closeAnnotationEditor() {
+        annotationWindow?.dismissEditor()
+        annotationWindow = nil
+        isCapturing = false
+    }
+
+    static func pngData(
+        for image: CGImage,
+        logicalSize: CGSize
+    ) -> Data? {
+        let data = NSMutableData()
+        guard let destination = CGImageDestinationCreateWithData(
+            data,
+            UTType.png.identifier as CFString,
+            1,
+            nil
+        ) else {
+            return nil
+        }
+        let pointWidth = logicalSize.width.isFinite && logicalSize.width > 0
+            ? logicalSize.width
+            : CGFloat(image.width)
+        let pointHeight = logicalSize.height.isFinite && logicalSize.height > 0
+            ? logicalSize.height
+            : CGFloat(image.height)
+        let properties: [CFString: Any] = [
+            kCGImagePropertyDPIWidth: 72 * CGFloat(image.width) / pointWidth,
+            kCGImagePropertyDPIHeight: 72 * CGFloat(image.height) / pointHeight
+        ]
+        CGImageDestinationAddImage(destination, image, properties as CFDictionary)
+        guard CGImageDestinationFinalize(destination) else {
+            return nil
+        }
+        return data as Data
+    }
+
+    private static func copyImageToPasteboard(
+        _ image: CGImage,
+        logicalSize: CGSize
+    ) -> Bool {
+        guard let data = pngData(for: image, logicalSize: logicalSize) else {
+            return false
+        }
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
+        return pasteboard.setData(data, forType: .png)
     }
 
     private static func loadImage(from imageURL: URL) throws -> NSImage {

@@ -24,6 +24,7 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
     private static let requestTimeoutNanoseconds: UInt64 = 12_000_000_000
 
     @Published private(set) var requestID: UUID?
+    @Published private(set) var configuration: TranslationSession.Configuration?
 
     private struct PendingRequest {
         var id: UUID
@@ -37,13 +38,6 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
 
     private var pendingRequest: PendingRequest?
     private var requestTimeoutTask: Task<Void, Never>?
-
-    var languagePair: (source: Locale.Language?, target: Locale.Language)? {
-        guard let pendingRequest else {
-            return nil
-        }
-        return (pendingRequest.sourceLanguage, pendingRequest.targetLanguage)
-    }
 
     func translate(
         segments: [OverlaySegment],
@@ -65,6 +59,7 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
                 emittedCount: 0
             )
             requestID = id
+            refreshConfiguration()
             scheduleRequestTimeout(requestID: id)
 
             continuation.onTermination = { [weak self] _ in
@@ -150,6 +145,33 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
         }
     }
 
+    private func refreshConfiguration() {
+        guard let pendingRequest else {
+            return
+        }
+
+        if var current = configuration,
+           current.source == pendingRequest.sourceLanguage,
+           current.target == pendingRequest.targetLanguage {
+            current.invalidate()
+            configuration = current
+            return
+        }
+
+        if #available(macOS 26.4, *) {
+            configuration = TranslationSession.Configuration(
+                source: pendingRequest.sourceLanguage,
+                target: pendingRequest.targetLanguage,
+                preferredStrategy: .lowLatency
+            )
+        } else {
+            configuration = TranslationSession.Configuration(
+                source: pendingRequest.sourceLanguage,
+                target: pendingRequest.targetLanguage
+            )
+        }
+    }
+
     private func finish(requestID: UUID) {
         guard let request = pendingRequest,
               request.id == requestID else {
@@ -221,17 +243,10 @@ final class AppleOverlayTranslationCoordinator: ObservableObject {
 @available(macOS 15.0, *)
 struct AppleOverlayTranslationTaskModifier: ViewModifier {
     @ObservedObject var coordinator: AppleOverlayTranslationCoordinator
-    @State private var configuration: TranslationSession.Configuration?
 
     func body(content: Content) -> some View {
         content
-            .onAppear {
-                refreshConfiguration()
-            }
-            .onChange(of: coordinator.requestID) { _ in
-                refreshConfiguration()
-            }
-            .translationTask(configuration) { @Sendable session in
+            .translationTask(coordinator.configuration) { @Sendable session in
                 guard let request = await coordinator.currentWorkItem() else {
                     return
                 }
@@ -323,35 +338,6 @@ struct AppleOverlayTranslationTaskModifier: ViewModifier {
                     await coordinator.fail(reportedError, requestID: request.id)
                 }
             }
-    }
-
-    private func refreshConfiguration() {
-        guard coordinator.requestID != nil,
-              let pair = coordinator.languagePair else {
-            configuration = nil
-            return
-        }
-
-        if var current = configuration,
-           current.source == pair.source,
-           current.target == pair.target {
-            current.invalidate()
-            configuration = current
-            return
-        }
-
-        if #available(macOS 26.4, *) {
-            configuration = TranslationSession.Configuration(
-                source: pair.source,
-                target: pair.target,
-                preferredStrategy: .lowLatency
-            )
-        } else {
-            configuration = TranslationSession.Configuration(
-                source: pair.source,
-                target: pair.target
-            )
-        }
     }
 }
 

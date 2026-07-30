@@ -4,25 +4,15 @@ import Foundation
 import ImageIO
 import UniformTypeIdentifiers
 
-@_cdecl("runVolcengineImageTranslationRegressionChecks")
-public func runVolcengineImageTranslationRegressionChecks() {
+func runVolcengineImageTranslationRegressionChecks() async {
     checkVolcengineImagePayloadEncoderPreservesCompliantOriginalPNG()
     checkVolcengineImagePayloadEncoderReencodesDataOverFourMillionBytes()
     checkVolcengineImagePayloadEncoderScalesLongestEdgeTo4096()
     checkVolcengineImagePayloadEncoderConvertsOtherImageContainers()
-
-    let semaphore = DispatchSemaphore(value: 0)
-    Task.detached {
-        await checkVolcengineTranslateImageBuildsOfficialRequestAndParsesTopLevelResponse()
-        await checkVolcengineTranslateImageDoesNotRetryTransientFailure()
-        await checkVolcengineGetImageUsageBuildsOfficialRequestAndSumsPoints()
-        await checkVolcengineGetImageUsageDoesNotRetryFailure()
-        semaphore.signal()
-    }
-    precondition(
-        semaphore.wait(timeout: .now() + 15) == .success,
-        "Volcengine image translation regression checks timed out"
-    )
+    await checkVolcengineTranslateImageBuildsOfficialRequestAndParsesTopLevelResponse()
+    await checkVolcengineTranslateImageDoesNotRetryTransientFailure()
+    await checkVolcengineGetImageUsageBuildsOfficialRequestAndSumsPoints()
+    await checkVolcengineGetImageUsageDoesNotRetryFailure()
 }
 
 func checkVolcengineTranslateImageBuildsOfficialRequestAndParsesTopLevelResponse() async {

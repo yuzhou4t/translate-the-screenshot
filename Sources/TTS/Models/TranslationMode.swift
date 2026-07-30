@@ -13,6 +13,28 @@ enum TranslationMode: String, Codable, CaseIterable, Identifiable, Equatable {
 
     var id: String { rawValue }
 
+    /// Modes shown in ordinary translation controls.
+    ///
+    /// The remaining cases stay decodable so existing preferences and history
+    /// records remain compatible, while OCR cleanup and image overlay continue
+    /// to be selected internally by their dedicated workflows.
+    static let userSelectableCases: [TranslationMode] = [
+        .fast,
+        .accurate,
+        .natural
+    ]
+
+    var userSelectableFallback: TranslationMode {
+        switch self {
+        case .fast, .accurate, .natural:
+            self
+        case .polished:
+            .natural
+        case .academic, .technical, .ocrCleanup, .bilingual, .imageOverlay:
+            .accurate
+        }
+    }
+
     var displayName: String {
         switch self {
         case .fast:

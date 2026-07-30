@@ -33,13 +33,7 @@
 		200000000000000000000018 /* PermissionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000018 /* PermissionManager.swift */; };
 		200000000000000000000019 /* SelectionReader.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000019 /* SelectionReader.swift */; };
 		20000000000000000000001A /* AppConfigurationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001A /* AppConfigurationStore.swift */; };
-		20000000000000000000001B /* FavoriteStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001B /* FavoriteStore.swift */; };
-		20000000000000000000001C /* HistoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001C /* HistoryStore.swift */; };
-		20000000000000000000001D /* FavoritesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001D /* FavoritesView.swift */; };
-		20000000000000000000001E /* FavoritesWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001E /* FavoritesWindowController.swift */; };
 		20000000000000000000001F /* FloatingTranslatePanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000001F /* FloatingTranslatePanel.swift */; };
-		200000000000000000000020 /* HistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000020 /* HistoryView.swift */; };
-		200000000000000000000021 /* HistoryWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000021 /* HistoryWindowController.swift */; };
 		200000000000000000000022 /* InputTranslateView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000022 /* InputTranslateView.swift */; };
 		200000000000000000000023 /* InputTranslateWindowController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000023 /* InputTranslateWindowController.swift */; };
 		200000000000000000000024 /* OCRResultPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000024 /* OCRResultPanel.swift */; };
@@ -52,6 +46,28 @@
 		20000000000000000000002B /* Carbon.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002B /* Carbon.framework */; };
 		20000000000000000000002C /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002D /* AppIcon.icns */; };
 		20000000000000000000002D /* MenuBarIconTemplate.png in Resources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000002E /* MenuBarIconTemplate.png */; };
+		200000000000000000000030 /* PromptBuilder.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000030 /* PromptBuilder.swift */; };
+		200000000000000000000031 /* TranslationDirection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000031 /* TranslationDirection.swift */; };
+		200000000000000000000032 /* TranslationMode.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000032 /* TranslationMode.swift */; };
+		200000000000000000000033 /* AppleOCRLayoutEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000033 /* AppleOCRLayoutEngine.swift */; };
+		200000000000000000000034 /* OCRTextBlockGrouper.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000034 /* OCRTextBlockGrouper.swift */; };
+		200000000000000000000035 /* OCRTextPostProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000035 /* OCRTextPostProcessor.swift */; };
+		200000000000000000000036 /* AppleTranslationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000036 /* AppleTranslationProvider.swift */; };
+		200000000000000000000037 /* GeminiProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000037 /* GeminiProvider.swift */; };
+		200000000000000000000038 /* VolcengineImagePayload.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000038 /* VolcengineImagePayload.swift */; };
+		200000000000000000000039 /* AppleOverlayTranslationCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000039 /* AppleOverlayTranslationCoordinator.swift */; };
+		20000000000000000000003A /* ImageOverlayBatchTranslator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000003A /* ImageOverlayBatchTranslator.swift */; };
+		20000000000000000000003B /* ImageOverlaySession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000003B /* ImageOverlaySession.swift */; };
+		20000000000000000000003C /* ImageOverlayTranslationCache.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000003C /* ImageOverlayTranslationCache.swift */; };
+		20000000000000000000003D /* ImageOverlayTranslationWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000003D /* ImageOverlayTranslationWindow.swift */; };
+		20000000000000000000003E /* OverlayPipelineDebugWriter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000003E /* OverlayPipelineDebugWriter.swift */; };
+		20000000000000000000003F /* OverlayRegionPainter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000003F /* OverlayRegionPainter.swift */; };
+		200000000000000000000040 /* OverlaySegment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000040 /* OverlaySegment.swift */; };
+		200000000000000000000041 /* ScreenshotAnnotation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000041 /* ScreenshotAnnotation.swift */; };
+		200000000000000000000042 /* ScreenshotArtifactRetention.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000042 /* ScreenshotArtifactRetention.swift */; };
+		200000000000000000000043 /* ScreenshotTranslationOverlayRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000043 /* ScreenshotTranslationOverlayRenderer.swift */; };
+		200000000000000000000044 /* TextAtom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000044 /* TextAtom.swift */; };
+		200000000000000000000045 /* VolcengineImageTranslationPolicyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000045 /* VolcengineImageTranslationPolicyStore.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -105,13 +121,7 @@
 		100000000000000000000018 /* PermissionManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/PermissionManager.swift; sourceTree = "<group>"; };
 		100000000000000000000019 /* SelectionReader.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Services/SelectionReader.swift; sourceTree = "<group>"; };
 		10000000000000000000001A /* AppConfigurationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stores/AppConfigurationStore.swift; sourceTree = "<group>"; };
-		10000000000000000000001B /* FavoriteStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stores/FavoriteStore.swift; sourceTree = "<group>"; };
-		10000000000000000000001C /* HistoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stores/HistoryStore.swift; sourceTree = "<group>"; };
-		10000000000000000000001D /* FavoritesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/Favorites/FavoritesView.swift; sourceTree = "<group>"; };
-		10000000000000000000001E /* FavoritesWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/Favorites/FavoritesWindowController.swift; sourceTree = "<group>"; };
 		10000000000000000000001F /* FloatingTranslatePanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/Floating/FloatingTranslatePanel.swift; sourceTree = "<group>"; };
-		100000000000000000000020 /* HistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/History/HistoryView.swift; sourceTree = "<group>"; };
-		100000000000000000000021 /* HistoryWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/History/HistoryWindowController.swift; sourceTree = "<group>"; };
 		100000000000000000000022 /* InputTranslateView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/InputTranslate/InputTranslateView.swift; sourceTree = "<group>"; };
 		100000000000000000000023 /* InputTranslateWindowController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/InputTranslate/InputTranslateWindowController.swift; sourceTree = "<group>"; };
 		100000000000000000000024 /* OCRResultPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/OCR/OCRResultPanel.swift; sourceTree = "<group>"; };
@@ -125,6 +135,28 @@
 		10000000000000000000002C /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = App/Info.plist; sourceTree = SOURCE_ROOT; };
 		10000000000000000000002D /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = App/AppIcon.icns; sourceTree = SOURCE_ROOT; };
 		10000000000000000000002E /* MenuBarIconTemplate.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = App/Resources/MenuBarIconTemplate.png; sourceTree = SOURCE_ROOT; };
+		100000000000000000000030 /* PromptBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/PromptBuilder.swift; sourceTree = "<group>"; };
+		100000000000000000000031 /* TranslationDirection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/TranslationDirection.swift; sourceTree = "<group>"; };
+		100000000000000000000032 /* TranslationMode.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models/TranslationMode.swift; sourceTree = "<group>"; };
+		100000000000000000000033 /* AppleOCRLayoutEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCR/AppleOCRLayoutEngine.swift; sourceTree = "<group>"; };
+		100000000000000000000034 /* OCRTextBlockGrouper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCR/OCRTextBlockGrouper.swift; sourceTree = "<group>"; };
+		100000000000000000000035 /* OCRTextPostProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OCR/OCRTextPostProcessor.swift; sourceTree = "<group>"; };
+		100000000000000000000036 /* AppleTranslationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/AppleTranslationProvider.swift; sourceTree = "<group>"; };
+		100000000000000000000037 /* GeminiProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/GeminiProvider.swift; sourceTree = "<group>"; };
+		100000000000000000000038 /* VolcengineImagePayload.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/VolcengineImagePayload.swift; sourceTree = "<group>"; };
+		100000000000000000000039 /* AppleOverlayTranslationCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/AppleOverlayTranslationCoordinator.swift; sourceTree = "<group>"; };
+		10000000000000000000003A /* ImageOverlayBatchTranslator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/ImageOverlayBatchTranslator.swift; sourceTree = "<group>"; };
+		10000000000000000000003B /* ImageOverlaySession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/ImageOverlaySession.swift; sourceTree = "<group>"; };
+		10000000000000000000003C /* ImageOverlayTranslationCache.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/ImageOverlayTranslationCache.swift; sourceTree = "<group>"; };
+		10000000000000000000003D /* ImageOverlayTranslationWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/ImageOverlayTranslationWindow.swift; sourceTree = "<group>"; };
+		10000000000000000000003E /* OverlayPipelineDebugWriter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/OverlayPipelineDebugWriter.swift; sourceTree = "<group>"; };
+		10000000000000000000003F /* OverlayRegionPainter.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/OverlayRegionPainter.swift; sourceTree = "<group>"; };
+		100000000000000000000040 /* OverlaySegment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/OverlaySegment.swift; sourceTree = "<group>"; };
+		100000000000000000000041 /* ScreenshotAnnotation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/ScreenshotAnnotation.swift; sourceTree = "<group>"; };
+		100000000000000000000042 /* ScreenshotArtifactRetention.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/ScreenshotArtifactRetention.swift; sourceTree = "<group>"; };
+		100000000000000000000043 /* ScreenshotTranslationOverlayRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/ScreenshotTranslationOverlayRenderer.swift; sourceTree = "<group>"; };
+		100000000000000000000044 /* TextAtom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/TextAtom.swift; sourceTree = "<group>"; };
+		100000000000000000000045 /* VolcengineImageTranslationPolicyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stores/VolcengineImageTranslationPolicyStore.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -202,11 +234,19 @@
 				100000000000000000000004 /* SelectionTranslationController.swift */,
 				100000000000000000000005 /* TTSApp.swift */,
 				100000000000000000000006 /* TranslationService.swift */,
+				100000000000000000000030 /* PromptBuilder.swift */,
 				100000000000000000000007 /* TranslationModels.swift */,
+				100000000000000000000031 /* TranslationDirection.swift */,
+				100000000000000000000032 /* TranslationMode.swift */,
 				100000000000000000000008 /* OCRService.swift */,
+				100000000000000000000033 /* AppleOCRLayoutEngine.swift */,
+				100000000000000000000034 /* OCRTextBlockGrouper.swift */,
+				100000000000000000000035 /* OCRTextPostProcessor.swift */,
+				100000000000000000000036 /* AppleTranslationProvider.swift */,
 				100000000000000000000009 /* BaiduTranslateProvider.swift */,
 				10000000000000000000000A /* BingTranslateProvider.swift */,
 				10000000000000000000000B /* DeepLProvider.swift */,
+				100000000000000000000037 /* GeminiProvider.swift */,
 				10000000000000000000000C /* GoogleTranslateProvider.swift */,
 				10000000000000000000000D /* MyMemoryProvider.swift */,
 				10000000000000000000000E /* OpenAICompatibleProvider.swift */,
@@ -214,21 +254,29 @@
 				100000000000000000000010 /* SigningUtilities.swift */,
 				100000000000000000000011 /* TencentTranslateProvider.swift */,
 				100000000000000000000012 /* TranslationProvider.swift */,
+				100000000000000000000038 /* VolcengineImagePayload.swift */,
 				100000000000000000000013 /* VolcengineTranslateProvider.swift */,
+				100000000000000000000039 /* AppleOverlayTranslationCoordinator.swift */,
+				10000000000000000000003A /* ImageOverlayBatchTranslator.swift */,
+				10000000000000000000003B /* ImageOverlaySession.swift */,
+				10000000000000000000003C /* ImageOverlayTranslationCache.swift */,
+				10000000000000000000003D /* ImageOverlayTranslationWindow.swift */,
+				10000000000000000000003E /* OverlayPipelineDebugWriter.swift */,
+				10000000000000000000003F /* OverlayRegionPainter.swift */,
+				100000000000000000000040 /* OverlaySegment.swift */,
+				100000000000000000000041 /* ScreenshotAnnotation.swift */,
+				100000000000000000000042 /* ScreenshotArtifactRetention.swift */,
 				100000000000000000000014 /* ScreenshotCaptureController.swift */,
 				100000000000000000000015 /* ScreenshotOverlayWindow.swift */,
+				100000000000000000000043 /* ScreenshotTranslationOverlayRenderer.swift */,
+				100000000000000000000044 /* TextAtom.swift */,
 				100000000000000000000016 /* ClipboardManager.swift */,
 				100000000000000000000017 /* KeychainService.swift */,
 				100000000000000000000018 /* PermissionManager.swift */,
 				100000000000000000000019 /* SelectionReader.swift */,
 				10000000000000000000001A /* AppConfigurationStore.swift */,
-				10000000000000000000001B /* FavoriteStore.swift */,
-				10000000000000000000001C /* HistoryStore.swift */,
-				10000000000000000000001D /* FavoritesView.swift */,
-				10000000000000000000001E /* FavoritesWindowController.swift */,
+				100000000000000000000045 /* VolcengineImageTranslationPolicyStore.swift */,
 				10000000000000000000001F /* FloatingTranslatePanel.swift */,
-				100000000000000000000020 /* HistoryView.swift */,
-				100000000000000000000021 /* HistoryWindowController.swift */,
 				100000000000000000000022 /* InputTranslateView.swift */,
 				100000000000000000000023 /* InputTranslateWindowController.swift */,
 				100000000000000000000024 /* OCRResultPanel.swift */,
@@ -345,11 +393,19 @@
 				200000000000000000000004 /* SelectionTranslationController.swift in Sources */,
 				200000000000000000000005 /* TTSApp.swift in Sources */,
 				200000000000000000000006 /* TranslationService.swift in Sources */,
+				200000000000000000000030 /* PromptBuilder.swift in Sources */,
 				200000000000000000000007 /* TranslationModels.swift in Sources */,
+				200000000000000000000031 /* TranslationDirection.swift in Sources */,
+				200000000000000000000032 /* TranslationMode.swift in Sources */,
 				200000000000000000000008 /* OCRService.swift in Sources */,
+				200000000000000000000033 /* AppleOCRLayoutEngine.swift in Sources */,
+				200000000000000000000034 /* OCRTextBlockGrouper.swift in Sources */,
+				200000000000000000000035 /* OCRTextPostProcessor.swift in Sources */,
+				200000000000000000000036 /* AppleTranslationProvider.swift in Sources */,
 				200000000000000000000009 /* BaiduTranslateProvider.swift in Sources */,
 				20000000000000000000000A /* BingTranslateProvider.swift in Sources */,
 				20000000000000000000000B /* DeepLProvider.swift in Sources */,
+				200000000000000000000037 /* GeminiProvider.swift in Sources */,
 				20000000000000000000000C /* GoogleTranslateProvider.swift in Sources */,
 				20000000000000000000000D /* MyMemoryProvider.swift in Sources */,
 				20000000000000000000000E /* OpenAICompatibleProvider.swift in Sources */,
@@ -357,21 +413,29 @@
 				200000000000000000000010 /* SigningUtilities.swift in Sources */,
 				200000000000000000000011 /* TencentTranslateProvider.swift in Sources */,
 				200000000000000000000012 /* TranslationProvider.swift in Sources */,
+				200000000000000000000038 /* VolcengineImagePayload.swift in Sources */,
 				200000000000000000000013 /* VolcengineTranslateProvider.swift in Sources */,
+				200000000000000000000039 /* AppleOverlayTranslationCoordinator.swift in Sources */,
+				20000000000000000000003A /* ImageOverlayBatchTranslator.swift in Sources */,
+				20000000000000000000003B /* ImageOverlaySession.swift in Sources */,
+				20000000000000000000003C /* ImageOverlayTranslationCache.swift in Sources */,
+				20000000000000000000003D /* ImageOverlayTranslationWindow.swift in Sources */,
+				20000000000000000000003E /* OverlayPipelineDebugWriter.swift in Sources */,
+				20000000000000000000003F /* OverlayRegionPainter.swift in Sources */,
+				200000000000000000000040 /* OverlaySegment.swift in Sources */,
+				200000000000000000000041 /* ScreenshotAnnotation.swift in Sources */,
+				200000000000000000000042 /* ScreenshotArtifactRetention.swift in Sources */,
 				200000000000000000000014 /* ScreenshotCaptureController.swift in Sources */,
 				200000000000000000000015 /* ScreenshotOverlayWindow.swift in Sources */,
+				200000000000000000000043 /* ScreenshotTranslationOverlayRenderer.swift in Sources */,
+				200000000000000000000044 /* TextAtom.swift in Sources */,
 				200000000000000000000016 /* ClipboardManager.swift in Sources */,
 				200000000000000000000017 /* KeychainService.swift in Sources */,
 				200000000000000000000018 /* PermissionManager.swift in Sources */,
 				200000000000000000000019 /* SelectionReader.swift in Sources */,
 				20000000000000000000001A /* AppConfigurationStore.swift in Sources */,
-				20000000000000000000001B /* FavoriteStore.swift in Sources */,
-				20000000000000000000001C /* HistoryStore.swift in Sources */,
-				20000000000000000000001D /* FavoritesView.swift in Sources */,
-				20000000000000000000001E /* FavoritesWindowController.swift in Sources */,
+				200000000000000000000045 /* VolcengineImageTranslationPolicyStore.swift in Sources */,
 				20000000000000000000001F /* FloatingTranslatePanel.swift in Sources */,
-				200000000000000000000020 /* HistoryView.swift in Sources */,
-				200000000000000000000021 /* HistoryWindowController.swift in Sources */,
 				200000000000000000000022 /* InputTranslateView.swift in Sources */,
 				200000000000000000000023 /* InputTranslateWindowController.swift in Sources */,
 				200000000000000000000024 /* OCRResultPanel.swift in Sources */,

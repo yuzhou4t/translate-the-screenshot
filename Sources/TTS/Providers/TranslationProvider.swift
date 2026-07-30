@@ -1,4 +1,3 @@
-import AppKit
 import Foundation
 
 protocol TranslationProvider: Sendable {
@@ -30,17 +29,6 @@ protocol PromptCompletionProvider: TranslationProvider {
     func complete(
         systemPrompt: String,
         userPrompt: String,
-        temperature: Double
-    ) async throws -> String
-}
-
-protocol VisionSegmentationProvider: TranslationProvider {
-    var supportsVisionInput: Bool { get }
-
-    func completeVisionSegmentation(
-        systemPrompt: String,
-        userPrompt: String,
-        image: NSImage,
         temperature: Double
     ) async throws -> String
 }
@@ -110,39 +98,8 @@ final class TranslationProviderFactory {
         configurationStore.fallbackEnabled
     }
 
-    var fallbackProviderID: TranslationProviderID? {
-        configurationStore.fallbackProviderID
-    }
-
     var fallbackModel: String? {
         configurationStore.fallbackModel
-    }
-
-    var defaultProviderSupportsTranslationModePrompts: Bool {
-        configurationStore.defaultProviderID.supportsTranslationModePrompts
-    }
-
-    var enableVisionSegmentation: Bool {
-        configurationStore.enableVisionSegmentation
-    }
-
-    var visionSegmentationConfig: VisionSegmentationConfig {
-        configurationStore.visionSegmentationConfig
-    }
-
-    var configurationStoreRef: AppConfigurationStore {
-        configurationStore
-    }
-
-    var defaultModelName: String {
-        if defaultProviderID == .openAICompatible {
-            return configurationStore.configuration.openAICompatibleModel
-        }
-        return defaultProviderConfig()?.model ?? ""
-    }
-
-    func providerConfig(for id: TranslationProviderID) -> ProviderConfig? {
-        providerRegistry.providerConfig(for: id)
     }
 
     func supportsTranslationModePrompts(providerID: TranslationProviderID) -> Bool {
@@ -154,33 +111,16 @@ final class TranslationProviderFactory {
     }
 
     func fallbackProviderConfig() -> ProviderConfig? {
-        guard let id = configurationStore.fallbackProviderID else {
+        guard let id = configurationStore.fallbackProviderID,
+              let config = providerRegistry.providerConfig(for: id),
+              config.isEnabled else {
             return nil
         }
-        return providerRegistry.providerConfig(for: id)
+        return config
     }
 
     func makeProvider(config: ProviderConfig, modelOverride: String? = nil) throws -> any TranslationProvider {
         try providerRegistry.makeProvider(config: config, modelOverride: modelOverride)
     }
 
-    func makeVisionSegmentationProvider() throws -> any VisionSegmentationProvider {
-        try providerRegistry.makeVisionSegmentationProvider(
-            config: configurationStore.visionSegmentationConfig
-        )
-    }
-
-    func makeActiveProvider() throws -> any TranslationProvider {
-        try providerRegistry.makeDefaultProvider()
-    }
-
-    func providerAttempts() -> [ProviderAttempt] {
-        providerRegistry.providerAttempts()
-    }
-}
-
-struct ProviderAttempt: Identifiable {
-    var id: TranslationProviderID { config.id }
-    var config: ProviderConfig
-    var makeProvider: () throws -> any TranslationProvider
 }

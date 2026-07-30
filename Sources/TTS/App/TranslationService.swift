@@ -4,17 +4,13 @@ import Foundation
 @MainActor
 final class TranslationService {
     private let providerFactory: TranslationProviderFactory
-    private let historyStore: HistoryStore
-    private let scenarioResolver = ScenarioTranslationResolver()
     private let imageOverlayBatchTranslator: ImageOverlayBatchTranslator
 
     init(
         providerFactory: TranslationProviderFactory,
-        historyStore: HistoryStore,
         imageOverlayTranslationCache: ImageOverlayTranslationCache = ImageOverlayTranslationCache()
     ) {
         self.providerFactory = providerFactory
-        self.historyStore = historyStore
         self.imageOverlayBatchTranslator = ImageOverlayBatchTranslator(
             maximumSegmentsPerBatch: 6,
             cache: imageOverlayTranslationCache
@@ -91,7 +87,6 @@ final class TranslationService {
             translationMode: finalTranslationMode
         )
 
-        try await historyStore.add(item)
         return item
     }
 
@@ -108,32 +103,6 @@ final class TranslationService {
             output.append(contentsOf: event.results)
         }
         return output
-    }
-
-    func recordImageOverlayHistory(
-        sourceText: String,
-        translatedText: String,
-        providerID: TranslationProviderID? = nil
-    ) async throws -> TranslationHistoryItem {
-        let trimmedSource = sourceText.trimmingCharacters(in: .whitespacesAndNewlines)
-        let trimmedTranslation = translatedText.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedSource.isEmpty, !trimmedTranslation.isEmpty else {
-            throw TranslationServiceError.emptyText
-        }
-
-        let item = TranslationHistoryItem(
-            sourceText: trimmedSource,
-            translatedText: trimmedTranslation,
-            providerID: providerID ?? imageOverlayHistoryProviderID(),
-            sourceLanguage: nil,
-            targetLanguage: providerFactory.targetLanguage,
-            createdAt: Date(),
-            mode: .imageOverlay,
-            translationMode: .imageOverlay
-        )
-
-        try await historyStore.add(item)
-        return item
     }
 
     func translateImageOverlaySegmentsIncrementally(
@@ -390,64 +359,47 @@ final class TranslationService {
         scenario: TranslationScenario,
         translationMode: TranslationMode
     ) throws -> ResolvedScenarioProviderPlan {
-        let plan = scenarioResolver.resolve(
-            scenario: scenario,
-            configurationStore: providerFactory.configurationStoreRef,
-            globalDefaultProviderID: providerFactory.defaultProviderID.rawValue,
-            globalDefaultModelName: providerFactory.defaultModelName
-        )
-
-        print(
-            "translation scenario resolve: scenario=\(scenario.rawValue), provider=\(plan.primaryProviderID), model=\(plan.primaryModelName.isEmpty ? "-" : plan.primaryModelName), message=\(plan.message)"
-        )
-
-        let primaryProviderID = TranslationProviderID(rawValue: plan.primaryProviderID) ?? providerFactory.defaultProviderID
-
-        guard let globalDefaultConfig = providerFactory.defaultProviderConfig() else {
+        guard let primaryConfig = providerFactory.defaultProviderConfig() else {
             throw TranslationProviderError.providerMessage("没有已启用且已接入的翻译服务。")
         }
 
-        let primaryConfig: ProviderConfig
-        let primaryModelOverride: String?
-
-        if plan.usesGlobalDefault {
-            primaryConfig = globalDefaultConfig
-            primaryModelOverride = nil
-        } else if let config = providerFactory.providerConfig(for: primaryProviderID) {
-            primaryConfig = config
-            primaryModelOverride = plan.primaryModelName.isEmpty ? nil : plan.primaryModelName
-        } else {
-            primaryConfig = globalDefaultConfig
-            primaryModelOverride = nil
-        }
-
         let fallbackPlan: ResolvedScenarioProviderPlan.FallbackPlan? = {
-            if plan.usesGlobalDefault {
-                guard providerFactory.fallbackEnabled,
-                      let config = providerFactory.fallbackProviderConfig() else {
-                    return nil
-                }
-                return .init(config: config, modelOverride: providerFactory.fallbackModel)
-            }
-
-            guard plan.fallbackEnabled,
-                  let fallbackProviderID = TranslationProviderID(rawValue: plan.fallbackProviderID),
-                  fallbackProviderID != primaryConfig.id,
-                  let config = providerFactory.providerConfig(for: fallbackProviderID) else {
+            guard providerFactory.fallbackEnabled,
+                  let config = providerFactory.fallbackProviderConfig(),
+                  config.id != primaryConfig.id else {
                 return nil
             }
-
-            return .init(config: config, modelOverride: plan.fallbackModelName)
+            return .init(config: config, modelOverride: providerFactory.fallbackModel)
         }()
 
         if translationMode == .ocrCleanup,
            !providerFactory.supportsTranslationModePrompts(providerID: primaryConfig.id) {
-            throw TranslationProviderError.providerMessage("当前场景服务不支持 AI 修复，请切换到支持 Prompt 的 AI 模型。")
+            guard let fallbackPlan,
+                  providerFactory.supportsTranslationModePrompts(
+                      providerID: fallbackPlan.config.id
+                  ) else {
+                throw TranslationProviderError.providerMessage(
+                    "默认和备用翻译服务都不支持 OCR AI 修复，请选择支持 Prompt 的 AI 模型。"
+                )
+            }
+
+            print(
+                "translation provider resolve: scenario=\(scenario.rawValue), primary=\(fallbackPlan.config.id.rawValue), fallback=-, promotedFallback=true"
+            )
+            return ResolvedScenarioProviderPlan(
+                primaryConfig: fallbackPlan.config,
+                primaryModelOverride: fallbackPlan.modelOverride,
+                fallback: nil
+            )
         }
+
+        print(
+            "translation provider resolve: scenario=\(scenario.rawValue), primary=\(primaryConfig.id.rawValue), fallback=\(fallbackPlan?.config.id.rawValue ?? "-")"
+        )
 
         return ResolvedScenarioProviderPlan(
             primaryConfig: primaryConfig,
-            primaryModelOverride: primaryModelOverride,
+            primaryModelOverride: nil,
             fallback: fallbackPlan
         )
     }
@@ -499,17 +451,6 @@ final class TranslationService {
         }
     }
 
-    private func imageOverlayHistoryProviderID() -> TranslationProviderID {
-        do {
-            return try resolveProviderPlan(
-                scenario: .imageOverlay,
-                translationMode: .imageOverlay
-            ).primaryConfig.id
-        } catch {
-            return providerFactory.defaultProviderID
-        }
-    }
-
     private func tunedProviderConfig(
         _ config: ProviderConfig,
         for scenario: TranslationScenario
@@ -518,7 +459,7 @@ final class TranslationService {
 
         switch scenario {
         case .imageOverlay:
-            next.timeout = min(next.timeout, 12)
+            break
         case .screenshot:
             next.timeout = min(next.timeout, 15)
         case .selection, .input, .ocrCleanup:
@@ -534,18 +475,18 @@ final class TranslationService {
     ) -> String {
         if failureKinds.contains(.rateLimited) {
             return fallbackAttempted
-                ? "当前场景的翻译服务请求失败，备用服务也未成功。请检查服务商额度或限流状态。"
+                ? "主翻译服务请求失败，全局备用服务也未成功。请检查服务商额度或限流状态。"
                 : "当前服务商请求失败，请检查服务商额度或限流状态。"
         }
 
         if failureKinds.contains(.invalidAPIKey) {
             return fallbackAttempted
-                ? "当前场景的翻译服务请求失败，备用服务也未成功。请检查 API Key、模型名称、网络连接或服务商额度。"
+                ? "主翻译服务请求失败，全局备用服务也未成功。请检查 API Key、模型名称、网络连接或服务商额度。"
                 : "当前服务商请求失败，请检查 API Key、网络连接或服务商额度。"
         }
 
         return fallbackAttempted
-            ? "当前场景的翻译服务请求失败，备用服务也未成功。请检查 API Key、模型名称、网络连接或服务商额度。"
+            ? "主翻译服务请求失败，全局备用服务也未成功。请检查 API Key、模型名称、网络连接或服务商额度。"
             : "当前服务商请求失败。请检查 API Key、网络连接或服务商额度。"
     }
 

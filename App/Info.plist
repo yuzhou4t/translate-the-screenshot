@@ -29,7 +29,7 @@
 	<key>NSAppleEventsUsageDescription</key>
 	<string>TTS 在读取选中文字失败时会模拟复制操作，以便完成划词翻译。</string>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>TTS 需要屏幕录制权限来进行截图 OCR 和截图翻译，不会录制音频。</string>
+	<string>TTS 需要屏幕录制权限来框选截图并复制到剪贴板，以及进行截图 OCR 和截图翻译；不会录制音频。</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>

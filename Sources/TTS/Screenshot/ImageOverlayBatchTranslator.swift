@@ -16,6 +16,16 @@ struct ImageOverlayTranslationResult: Identifiable, Equatable, Sendable {
     var errorMessage: String?
 
     var id: String { segmentID }
+
+    var didFailTranslation: Bool {
+        if status == .failed {
+            return true
+        }
+        guard status == .originalKept else {
+            return false
+        }
+        return errorMessage?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+    }
 }
 
 struct SegmentLineTranslation: Identifiable, Codable, Equatable, Sendable {

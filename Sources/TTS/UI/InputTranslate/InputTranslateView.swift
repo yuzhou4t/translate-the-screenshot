@@ -136,17 +136,6 @@ struct InputTranslateView: View {
                         Label("复制原文", systemImage: "doc")
                     }
 
-                    Button {
-                        Task {
-                            await viewModel.toggleFavorite()
-                        }
-                    } label: {
-                        Label(
-                            viewModel.isResultFavorite ? "已收藏" : "收藏",
-                            systemImage: viewModel.isResultFavorite ? "star.fill" : "star"
-                        )
-                    }
-
                     Spacer()
                 }
                 .controlSize(.small)
@@ -165,16 +154,13 @@ final class InputTranslateViewModel: ObservableObject {
     @Published var targetLanguage: String
     @Published var translationDirection: TranslationDirection
     @Published var resultItem: TranslationHistoryItem?
-    @Published var isResultFavorite = false
     @Published var isTranslating = false
     @Published var errorMessage: String?
 
     private let translationService: TranslationService
-    private let favoriteStore: FavoriteStore
 
-    init(translationService: TranslationService, favoriteStore: FavoriteStore) {
+    init(translationService: TranslationService) {
         self.translationService = translationService
-        self.favoriteStore = favoriteStore
         targetLanguage = translationService.defaultTargetLanguage
         translationDirection = TranslationDirection.inferred(from: translationService.defaultTargetLanguage)
     }
@@ -195,7 +181,6 @@ final class InputTranslateViewModel: ObservableObject {
                 mode: .input
             )
             resultItem = item
-            isResultFavorite = try await favoriteStore.isFavorite(historyItemID: item.id)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -205,24 +190,5 @@ final class InputTranslateViewModel: ObservableObject {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-    }
-
-    func toggleFavorite() async {
-        guard let resultItem else {
-            return
-        }
-
-        do {
-            if isResultFavorite {
-                try await favoriteStore.removeFavorite(historyItemID: resultItem.id)
-                isResultFavorite = false
-            } else {
-                try await favoriteStore.addFavorite(resultItem)
-                isResultFavorite = true
-            }
-            errorMessage = nil
-        } catch {
-            errorMessage = error.localizedDescription
-        }
     }
 }

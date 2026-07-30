@@ -18,6 +18,12 @@ final class HotkeyManager {
     }
 
     func start() {
+        KeyboardShortcuts.onKeyUp(for: .screenshotClipboard) { [weak self] in
+            Task { @MainActor in
+                self?.screenshotCaptureController.startCapture(mode: .clipboard)
+            }
+        }
+
         KeyboardShortcuts.onKeyUp(for: .translateSelection) { [weak self] in
             Task { @MainActor in
                 self?.translationController.translateSelection()
@@ -36,11 +42,9 @@ final class HotkeyManager {
             }
         }
 
-        KeyboardShortcuts.onKeyUp(for: .screenshotTranslateOverlay) { [weak self] in
-            Task { @MainActor in
-                self?.screenshotCaptureController.startCapture(mode: .translateOverlay)
-            }
-        }
+        registerCoordinateTranslationShortcut(.screenshotTranslateOverlay)
+        registerCoordinateTranslationShortcut(.screenshotTranslateOverlayAPI)
+        registerCoordinateTranslationShortcut(.volcengineImageTranslation)
 
         KeyboardShortcuts.onKeyUp(for: .screenshotOCR) { [weak self] in
             Task { @MainActor in
@@ -55,12 +59,42 @@ final class HotkeyManager {
         }
     }
 
+    static func coordinateTranslationMode(
+        for name: KeyboardShortcuts.Name
+    ) -> ScreenshotCaptureMode? {
+        switch name.rawValue {
+        case KeyboardShortcuts.Name.screenshotTranslateOverlay.rawValue:
+            .translateOverlayLocal
+        case KeyboardShortcuts.Name.screenshotTranslateOverlayAPI.rawValue:
+            .translateOverlayAPI
+        case KeyboardShortcuts.Name.volcengineImageTranslation.rawValue:
+            .translateOverlay
+        default:
+            nil
+        }
+    }
+
+    private func registerCoordinateTranslationShortcut(_ name: KeyboardShortcuts.Name) {
+        guard let mode = Self.coordinateTranslationMode(for: name) else {
+            return
+        }
+
+        KeyboardShortcuts.onKeyUp(for: name) { [weak self] in
+            Task { @MainActor in
+                self?.screenshotCaptureController.startCapture(mode: mode)
+            }
+        }
+    }
+
 }
 
 extension KeyboardShortcuts.Name {
+    static let screenshotClipboard = Self("screenshotClipboard", initial: .init(.a, modifiers: [.control]))
     static let translateSelection = Self("translateSelection", initial: .init(.d, modifiers: [.option]))
     static let screenshotTranslate = Self("screenshotTranslate", initial: .init(.s, modifiers: [.option]))
     static let screenshotTranslateOverlay = Self("screenshotTranslateOverlay", initial: .init(.w, modifiers: [.option]))
+    static let screenshotTranslateOverlayAPI = Self("screenshotTranslateOverlayAPI")
+    static let volcengineImageTranslation = Self("volcengineImageTranslation")
     static let inputTranslate = Self("inputTranslate", initial: .init(.a, modifiers: [.option]))
     static let screenshotOCR = Self("screenshotOCR", initial: .init(.s, modifiers: [.shift, .option]))
     static let silentScreenshotOCR = Self("silentScreenshotOCR", initial: .init(.c, modifiers: [.option]))

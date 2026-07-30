@@ -75,6 +75,14 @@ public enum KeyboardShortcuts {
         }
     }
 
+    public struct RegistrationError: LocalizedError, Equatable, Sendable {
+        public let message: String
+
+        public var errorDescription: String? {
+            message
+        }
+    }
+
     @MainActor
     public static func onKeyUp(for name: Name, action: @escaping @MainActor () -> Void) {
         HotKeyCenter.shared.register(name: name, action: action)
@@ -86,8 +94,14 @@ public enum KeyboardShortcuts {
     }
 
     @MainActor
-    static func setShortcut(_ shortcut: Shortcut?, for name: Name) {
+    @discardableResult
+    static func setShortcut(_ shortcut: Shortcut?, for name: Name) -> RegistrationError? {
         HotKeyCenter.shared.setShortcut(shortcut, for: name)
+    }
+
+    @MainActor
+    static func registrationError(for name: Name) -> RegistrationError? {
+        HotKeyCenter.shared.registrationError(for: name)
     }
 }
 
@@ -97,6 +111,7 @@ extension KeyboardShortcuts {
         private let title: String
         private let name: Name
         @State private var shortcut: Shortcut?
+        @State private var registrationError: RegistrationError?
         @State private var isRecording = false
         @State private var monitor: Any?
 
@@ -104,24 +119,34 @@ extension KeyboardShortcuts {
             self.title = title
             self.name = name
             _shortcut = State(initialValue: KeyboardShortcuts.shortcut(for: name))
+            _registrationError = State(initialValue: KeyboardShortcuts.registrationError(for: name))
         }
 
         public var body: some View {
-            HStack {
-                Text(title)
-                Spacer()
-                Button(isRecording ? "请按快捷键" : (shortcut?.displayValue ?? "录制")) {
-                    beginRecording()
-                }
-                .frame(minWidth: 130)
-                .onDisappear {
-                    stopRecording()
+            VStack(alignment: .trailing, spacing: 4) {
+                HStack {
+                    Text(title)
+                    Spacer()
+                    Button(isRecording ? "请按快捷键" : (shortcut?.displayValue ?? "录制")) {
+                        beginRecording()
+                    }
+                    .frame(minWidth: 130)
+                    .onDisappear {
+                        stopRecording()
+                    }
+
+                    Button("清除") {
+                        updateShortcut(nil)
+                    }
+                    .disabled(shortcut == nil)
                 }
 
-                Button("清除") {
-                    updateShortcut(nil)
+                if let registrationError {
+                    Text(registrationError.localizedDescription)
+                        .font(.caption)
+                        .foregroundStyle(.red)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-                .disabled(shortcut == nil)
             }
         }
 
@@ -159,8 +184,13 @@ extension KeyboardShortcuts {
         }
 
         private func updateShortcut(_ next: Shortcut?) {
-            shortcut = next
-            KeyboardShortcuts.setShortcut(next, for: name)
+            registrationError = KeyboardShortcuts.setShortcut(next, for: name)
+            shortcut = registrationError == nil
+                ? next
+                : KeyboardShortcuts.shortcut(for: name)
+            if registrationError != nil {
+                NSSound.beep()
+            }
         }
     }
 }
@@ -172,6 +202,7 @@ private final class HotKeyCenter {
     private var actions: [KeyboardShortcuts.Name: @MainActor () -> Void] = [:]
     private var hotKeyRefs: [KeyboardShortcuts.Name: EventHotKeyRef] = [:]
     private var idsToNames: [UInt32: KeyboardShortcuts.Name] = [:]
+    private var registrationErrors: [KeyboardShortcuts.Name: KeyboardShortcuts.RegistrationError] = [:]
     private var installedHandler: EventHandlerRef?
     private let signature = OSType(0x5454_5348)
     private let userDefaults = UserDefaults.standard
@@ -181,11 +212,18 @@ private final class HotKeyCenter {
     func register(name: KeyboardShortcuts.Name, action: @escaping @MainActor () -> Void) {
         actions[name] = action
         installHandlerIfNeeded()
-        registerCarbonHotKey(for: name)
+        let error = registerCarbonHotKey(for: name)
+        registrationErrors[name] = error
+        if let error {
+            print("keyboard shortcut registration failed: \(name.rawValue): \(error.localizedDescription)")
+        }
     }
 
     func shortcut(for name: KeyboardShortcuts.Name) -> KeyboardShortcuts.Shortcut? {
         let key = storageKey(for: name)
+        if userDefaults.bool(forKey: disabledStorageKey(for: name)) {
+            return nil
+        }
         if let data = userDefaults.data(forKey: key),
            let decoded = try? JSONDecoder().decode(KeyboardShortcuts.Shortcut.self, from: data) {
             return decoded
@@ -193,15 +231,48 @@ private final class HotKeyCenter {
         return name.initial
     }
 
-    func setShortcut(_ shortcut: KeyboardShortcuts.Shortcut?, for name: KeyboardShortcuts.Name) {
-        let key = storageKey(for: name)
-        if let shortcut,
-           let data = try? JSONEncoder().encode(shortcut) {
-            userDefaults.set(data, forKey: key)
-        } else {
-            userDefaults.removeObject(forKey: key)
+    func setShortcut(
+        _ shortcut: KeyboardShortcuts.Shortcut?,
+        for name: KeyboardShortcuts.Name
+    ) -> KeyboardShortcuts.RegistrationError? {
+        let previousShortcut = self.shortcut(for: name)
+
+        guard let shortcut else {
+            unregisterCarbonHotKey(for: name)
+            persistShortcut(nil, for: name)
+            registrationErrors[name] = nil
+            return nil
         }
-        registerCarbonHotKey(for: name)
+
+        if let error = internalConflictError(for: shortcut, excluding: name) {
+            registrationErrors[name] = error
+            return error
+        }
+
+        unregisterCarbonHotKey(for: name)
+        let error = registerCarbonHotKey(shortcut, for: name)
+        if let error {
+            if let previousShortcut {
+                let restorationError = registerCarbonHotKey(previousShortcut, for: name)
+                if let restorationError {
+                    print(
+                        "keyboard shortcut restoration failed: \(name.rawValue): \(restorationError.localizedDescription)"
+                    )
+                }
+            }
+            registrationErrors[name] = error
+            return error
+        }
+
+        persistShortcut(shortcut, for: name)
+        registrationErrors[name] = error
+        return error
+    }
+
+    func registrationError(
+        for name: KeyboardShortcuts.Name
+    ) -> KeyboardShortcuts.RegistrationError? {
+        registrationErrors[name]
     }
 
     func handle(id: UInt32) {
@@ -211,14 +282,28 @@ private final class HotKeyCenter {
         actions[name]?()
     }
 
-    private func registerCarbonHotKey(for name: KeyboardShortcuts.Name) {
-        if let existingRef = hotKeyRefs[name] {
-            UnregisterEventHotKey(existingRef)
-            hotKeyRefs[name] = nil
-        }
+    private func registerCarbonHotKey(
+        for name: KeyboardShortcuts.Name
+    ) -> KeyboardShortcuts.RegistrationError? {
+        unregisterCarbonHotKey(for: name)
 
         guard let shortcut = shortcut(for: name), actions[name] != nil else {
-            return
+            return nil
+        }
+
+        return registerCarbonHotKey(shortcut, for: name)
+    }
+
+    private func registerCarbonHotKey(
+        _ shortcut: KeyboardShortcuts.Shortcut,
+        for name: KeyboardShortcuts.Name
+    ) -> KeyboardShortcuts.RegistrationError? {
+        guard actions[name] != nil else {
+            return nil
+        }
+
+        if let error = internalConflictError(for: shortcut, excluding: name) {
+            return error
         }
 
         let id = stableID(for: name)
@@ -234,11 +319,52 @@ private final class HotKeyCenter {
         )
 
         guard status == noErr, let hotKeyRef else {
-            return
+            return KeyboardShortcuts.RegistrationError(
+                message: "未更改：快捷键注册失败（\(status)），可能已被系统或其他应用占用。"
+            )
         }
 
         idsToNames[id] = name
         hotKeyRefs[name] = hotKeyRef
+        return nil
+    }
+
+    private func unregisterCarbonHotKey(for name: KeyboardShortcuts.Name) {
+        if let existingRef = hotKeyRefs.removeValue(forKey: name) {
+            UnregisterEventHotKey(existingRef)
+        }
+        idsToNames[stableID(for: name)] = nil
+    }
+
+    private func internalConflictError(
+        for shortcut: KeyboardShortcuts.Shortcut,
+        excluding name: KeyboardShortcuts.Name
+    ) -> KeyboardShortcuts.RegistrationError? {
+        guard hotKeyRefs.keys.contains(where: { registeredName in
+            registeredName.rawValue != name.rawValue &&
+                self.shortcut(for: registeredName) == shortcut
+        }) else {
+            return nil
+        }
+
+        return KeyboardShortcuts.RegistrationError(
+            message: "未更改：该快捷键已被 TTS 的其他功能占用。"
+        )
+    }
+
+    private func persistShortcut(
+        _ shortcut: KeyboardShortcuts.Shortcut?,
+        for name: KeyboardShortcuts.Name
+    ) {
+        let key = storageKey(for: name)
+        if let shortcut,
+           let data = try? JSONEncoder().encode(shortcut) {
+            userDefaults.set(data, forKey: key)
+            userDefaults.removeObject(forKey: disabledStorageKey(for: name))
+        } else {
+            userDefaults.removeObject(forKey: key)
+            userDefaults.set(true, forKey: disabledStorageKey(for: name))
+        }
     }
 
     private func installHandlerIfNeeded() {
@@ -289,6 +415,10 @@ private final class HotKeyCenter {
 
     private func storageKey(for name: KeyboardShortcuts.Name) -> String {
         "KeyboardShortcuts.\(name.rawValue)"
+    }
+
+    private func disabledStorageKey(for name: KeyboardShortcuts.Name) -> String {
+        "\(storageKey(for: name)).disabled"
     }
 }
 

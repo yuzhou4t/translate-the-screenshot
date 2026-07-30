@@ -2,10 +2,10 @@
 import CoreGraphics
 import Foundation
 
-private let _runAppleOCRLayoutEngineRegressionChecks: Void = {
+func runAppleOCRLayoutEngineRegressionChecks() {
     checkWechatBookSpreadKeepsLocalDiagramLabelsSeparate()
     checkDetachedSameBaselinePhrasesDoNotMergeAcrossDiagramCallouts()
-}()
+}
 
 private func checkWechatBookSpreadKeepsLocalDiagramLabelsSeparate() {
     let engine = AppleOCRLayoutEngine()
@@ -45,7 +45,13 @@ private func checkWechatBookSpreadKeepsLocalDiagramLabelsSeparate() {
     precondition(segments.contains { $0.sourceText.contains("2)") }, "expected list item 2 segment")
     precondition(segments.contains { $0.sourceText.contains("3)") }, "expected list item 3 segment")
     precondition(!segments.contains { $0.sourceText.contains("千年椒树") && $0.sourceText.contains("时间循环") }, "short labels must not merge into title/body text")
-    precondition(!segments.contains { $0.sourceText.contains("来自守护者") && $0.sourceText.contains("向日葵") }, "nearby inline label must not merge with sunflower box")
+    let mergedGuardianSegment = segments.first {
+        $0.sourceText.contains("来自守护者") && $0.sourceText.contains("向日葵")
+    }
+    precondition(
+        mergedGuardianSegment == nil,
+        "nearby inline label must not merge with sunflower box: \(mergedGuardianSegment?.sourceText ?? "-")"
+    )
     precondition(segments.contains { $0.sourceText.contains("向日葵") && $0.sourceText.contains("西莉亚") && $0.reflowPreferred }, "sunflower box should be its own bounded reflow segment")
     precondition(segments.filter(\.reflowPreferred).count >= 3, "long body/list sections should prefer reflow")
 }

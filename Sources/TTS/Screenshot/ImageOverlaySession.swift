@@ -75,6 +75,24 @@ struct ImageOverlaySegmentState: Identifiable, Equatable {
             return false
         }
     }
+
+    mutating func applyTranslationResult(_ result: ImageOverlayTranslationResult) {
+        if result.didFailTranslation,
+           let previousResult = translationResult,
+           !previousResult.didFailTranslation {
+            errorMessage = result.errorMessage
+            if !isExcluded {
+                phase = previousResult.status.livePhase
+            }
+            return
+        }
+
+        translationResult = result
+        errorMessage = result.errorMessage
+        if !isExcluded {
+            phase = result.status.livePhase
+        }
+    }
 }
 
 struct OverlayDisplayRegion: Identifiable, Equatable {

@@ -23,20 +23,14 @@ final class ProviderConfigStore: ObservableObject {
     func update(_ mutate: (inout AppConfiguration) -> Void) {
         var next = configuration
         mutate(&next)
-        next.enableVisionSegmentation = false
-        next.visionSegmentationConfig = next.visionSegmentationConfig.normalized()
+        next.defaultTranslationMode = next.defaultTranslationMode.userSelectableFallback
         next.providerConfigs = AppConfiguration.normalizedConfigs(
             next.providerConfigs,
             providerID: next.defaultProviderID,
             endpoint: next.openAICompatibleEndpoint,
             model: next.openAICompatibleModel
         )
-        next.scenarioTranslationConfigs = AppConfiguration.normalizedScenarioConfigs(
-            next.scenarioTranslationConfigs,
-            defaultProviderID: next.defaultProviderID,
-            providerConfigs: next.providerConfigs,
-            openAICompatibleModel: next.openAICompatibleModel
-        )
+        Self.normalizeFallbackState(in: &next)
         next.providerID = next.defaultProviderID
         configuration = next
         persist()
@@ -82,18 +76,6 @@ final class ProviderConfigStore: ObservableObject {
         configuration.defaultTranslationMode
     }
 
-    var enableVisionSegmentation: Bool {
-        configuration.enableVisionSegmentation
-    }
-
-    var visionSegmentationConfig: VisionSegmentationConfig {
-        configuration.visionSegmentationConfig
-    }
-
-    var scenarioTranslationConfigs: [SimpleScenarioTranslationConfig] {
-        configuration.scenarioTranslationConfigs
-    }
-
     func providerConfig(for id: TranslationProviderID) -> ProviderConfig? {
         configuration.providerConfigs.first { $0.id == id }
     }
@@ -109,25 +91,7 @@ final class ProviderConfigStore: ObservableObject {
 
     func setDefaultTranslationMode(_ mode: TranslationMode) {
         update { configuration in
-            configuration.defaultTranslationMode = mode
-        }
-    }
-
-    func setEnableVisionSegmentation(_ isEnabled: Bool) {
-        update { configuration in
-            configuration.enableVisionSegmentation = isEnabled
-        }
-    }
-
-    func setVisionSegmentationConfig(_ config: VisionSegmentationConfig) {
-        update { configuration in
-            configuration.visionSegmentationConfig = config.normalized()
-        }
-    }
-
-    func setScenarioTranslationConfigs(_ configs: [SimpleScenarioTranslationConfig]) {
-        update { configuration in
-            configuration.scenarioTranslationConfigs = configs
+            configuration.defaultTranslationMode = mode.userSelectableFallback
         }
     }
 
@@ -136,6 +100,7 @@ final class ProviderConfigStore: ObservableObject {
             configuration.defaultProviderID = id
             configuration.providerID = id
             if configuration.fallbackProviderID == id {
+                configuration.fallbackEnabled = false
                 configuration.fallbackProviderID = nil
                 configuration.fallbackModel = nil
             }
@@ -151,11 +116,15 @@ final class ProviderConfigStore: ObservableObject {
         model: String?
     ) {
         update { configuration in
-            configuration.fallbackEnabled = enabled
-            configuration.fallbackProviderID = providerID == configuration.defaultProviderID ? nil : providerID
+            let validProviderID = providerID == configuration.defaultProviderID ? nil : providerID
+            configuration.fallbackEnabled = enabled && validProviderID != nil
+            configuration.fallbackProviderID = configuration.fallbackEnabled ? validProviderID : nil
             configuration.fallbackModel = model?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
                 ? model?.trimmingCharacters(in: .whitespacesAndNewlines)
                 : nil
+            if !configuration.fallbackEnabled {
+                configuration.fallbackModel = nil
+            }
 
             if let providerID = configuration.fallbackProviderID,
                let index = configuration.providerConfigs.firstIndex(where: { $0.id == providerID }) {
@@ -181,8 +150,7 @@ final class ProviderConfigStore: ObservableObject {
 
     private func repairDefaultProviderState() {
         update { configuration in
-            configuration.enableVisionSegmentation = false
-            configuration.visionSegmentationConfig = configuration.visionSegmentationConfig.normalized()
+            configuration.defaultTranslationMode = configuration.defaultTranslationMode.userSelectableFallback
             configuration.providerConfigs = AppConfiguration.normalizedConfigs(
                 configuration.providerConfigs,
                 providerID: configuration.defaultProviderID,
@@ -203,16 +171,24 @@ final class ProviderConfigStore: ObservableObject {
                 configuration.fallbackProviderID.map({ id in
                     !configuration.providerConfigs.contains(where: { $0.id == id })
                 }) == true {
+                configuration.fallbackEnabled = false
                 configuration.fallbackProviderID = nil
                 configuration.fallbackModel = nil
             }
+        }
+    }
 
-            configuration.scenarioTranslationConfigs = AppConfiguration.normalizedScenarioConfigs(
-                configuration.scenarioTranslationConfigs,
-                defaultProviderID: configuration.defaultProviderID,
-                providerConfigs: configuration.providerConfigs,
-                openAICompatibleModel: configuration.openAICompatibleModel
-            )
+    private static func normalizeFallbackState(in configuration: inout AppConfiguration) {
+        guard configuration.fallbackEnabled,
+              let fallbackProviderID = configuration.fallbackProviderID,
+              fallbackProviderID != configuration.defaultProviderID,
+              configuration.providerConfigs.contains(where: {
+                  $0.id == fallbackProviderID && $0.isEnabled
+              }) else {
+            configuration.fallbackEnabled = false
+            configuration.fallbackProviderID = nil
+            configuration.fallbackModel = nil
+            return
         }
     }
 

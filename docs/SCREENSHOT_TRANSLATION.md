@@ -1,6 +1,6 @@
 # 截图翻译实现说明
 
-本文档用于理解 TTS 的截图翻译、截图 OCR 和图片翻译。它按当前代码状态书写，优先解释火山整图主链路与本地坐标备用链路的边界。
+本文档用于理解 TTS 的截图到剪贴板、截图翻译、截图 OCR 和图片翻译。它按当前代码状态书写，优先解释各条链路的数据与隐私边界。
 
 ## 先看什么
 
@@ -14,17 +14,35 @@
 如果要理解截图覆盖翻译实现，建议按这个顺序读代码：
 
 1. `Sources/TTS/Screenshot/ScreenshotCaptureController.swift`
-2. `Sources/TTS/OCR/OCRService.swift`
-3. `Sources/TTS/OCR/AppleOCRLayoutEngine.swift`
-4. `Sources/TTS/Screenshot/TextAtom.swift`
-5. `Sources/TTS/Screenshot/ImageOverlaySession.swift`
-6. `Sources/TTS/Screenshot/ImageOverlayTranslationWindow.swift`
-7. `Sources/TTS/Screenshot/ImageOverlayBatchTranslator.swift`
-8. `Sources/TTS/App/PromptBuilder.swift`
-9. `Sources/TTS/Screenshot/ScreenshotTranslationOverlayRenderer.swift`
-10. `Sources/TTS/Screenshot/OverlayPipelineDebugWriter.swift`
+2. `Sources/TTS/Screenshot/ScreenshotOverlayWindow.swift`
+3. `Sources/TTS/Screenshot/ScreenshotAnnotation.swift`
+4. `Sources/TTS/OCR/OCRService.swift`
+5. `Sources/TTS/OCR/AppleOCRLayoutEngine.swift`
+6. `Sources/TTS/Screenshot/TextAtom.swift`
+7. `Sources/TTS/Screenshot/ImageOverlaySession.swift`
+8. `Sources/TTS/Screenshot/ImageOverlayTranslationWindow.swift`
+9. `Sources/TTS/Screenshot/ImageOverlayBatchTranslator.swift`
+10. `Sources/TTS/App/PromptBuilder.swift`
+11. `Sources/TTS/Screenshot/ScreenshotTranslationOverlayRenderer.swift`
+12. `Sources/TTS/Screenshot/OverlayPipelineDebugWriter.swift`
 
-## 三条截图相关链路
+## 六条截图相关链路
+
+### 截图到剪贴板
+
+默认快捷键是 `Ctrl + A`。用户拖动框选后进入轻量标注界面，可使用矩形、箭头、文字和马赛克，并可撤销、取消或复制。
+
+数据流：
+
+```text
+ScreenshotCaptureController
+-> ScreenshotOverlayWindow 框选区域
+-> 内存中的冻结截图
+-> ScreenshotAnnotationWindow / ScreenshotAnnotationRenderer
+-> NSPasteboard
+```
+
+这条链路不创建截图文件，不运行 OCR 或翻译，也不发起网络请求。取消时不会改动剪贴板；复制成功后只把最终图片写入系统剪贴板。
 
 ### 截图文字翻译（辅助入口）
 
@@ -36,7 +54,7 @@
 ScreenshotCaptureController
 -> OCRService.recognizeText
 -> OCRTextPostProcessor
--> TranslationService.translate(scenario: .screenshot)
+-> TranslationService.translate
 -> FloatingTranslatePanel
 ```
 
@@ -66,9 +84,26 @@ ScreenshotCaptureController
 - `OCRTextPostProcessor`
 - `TranslationMode.ocrCleanup`，它只做 OCR 修复，不做翻译。
 
+### API 高质量坐标翻译
+
+可在快捷键设置中录制独立快捷键。主路径在本机完成 Apple Vision OCR、版式分析和坐标生成，只把 OCR 分段文字和必要的段落结构信息交给全局默认翻译服务，并将返回译文按原坐标回填。默认翻译服务失败时，失败段最多尝试一次全局备用服务。
+
+数据流：
+
+```text
+ScreenshotCaptureController
+-> OCRService.recognizeOverlaySnapshot(.accurate)
+-> AppleOCRLayoutEngine
+-> TranslationService.translateImageOverlaySegmentsIncrementally
+-> OverlayCanvasView 实时绘制
+-> ScreenshotTranslationOverlayRenderer 导出图片
+```
+
+截图像素与坐标不会发送给默认文字翻译 API。结果窗口中的“API 高质量重译”按钮会复用相同配置重新翻译全部可翻译分段；失败时保留已有可用结果或原文。
+
 ### 火山图片翻译 Beta
 
-图片翻译是单独链路。默认快捷键为 `Option + W`，主路径直接调用火山 `TranslateImage` 整图翻译接口，不先运行本地 OCR。
+火山图片翻译是单独链路，可从菜单或已配置的独立快捷键启动。它直接调用火山 `TranslateImage` 整图翻译接口，不先运行本地 OCR。
 
 数据流：
 
@@ -89,11 +124,11 @@ ScreenshotCaptureController
 - 账号用量查询失败时停止，不冒险提交完整截图。
 - 完整截图固定发送到火山官方 HTTPS 域名，不使用可编辑的文字翻译 Endpoint。
 - 原截图立即显示，整图结果只保留在当前窗口内存中，除非用户主动保存。
-- 火山失败时不静默上传到其他服务，也不自动降级；用户可手动选择本地备用。
+- 火山失败时不静默上传到其他服务，也不自动降级；用户可手动选择 Apple 本地坐标翻译。
 
-### 本地坐标翻译（备用）
+### Apple 本地坐标翻译
 
-本地备用链路使用 Apple Vision OCR + Swift 版 OCR layout engine。它不再是 `Option + W` 的默认路径，可从菜单栏或火山结果窗口手动进入。
+Apple 本地链路默认使用 `Option + W`，并可在设置中修改。它使用 Apple Vision OCR + Swift 版 OCR layout engine，也可从菜单栏或火山结果窗口手动进入。
 
 数据流：
 
@@ -122,7 +157,7 @@ ScreenshotCaptureController
 - macOS 15 及以上不会在本地失败或用户取消下载后静默上传文字；错误保留在当前覆盖窗口。
 - macOS 13–14 的云端兼容路径最多同时处理两批，任一批完成后立即回填。
 - `nativeReplace` 尝试先擦除原文，再按原位回填译文。
-- 火山图片翻译和本地备用翻译的历史、应用临时截图和 overlay debug 目录保留 3 天后自动清理；用户手动保存的 PNG 和显式收藏不受影响。
+- 火山图片翻译和坐标翻译产生的应用临时截图与 overlay debug 目录保留 3 天后自动清理；用户手动保存的 PNG 不受影响。
 
 ## 关键数据结构
 
@@ -337,25 +372,23 @@ TTS_DEBUG_OVERLAY_PIPELINE=1 swift run
 - `averageLinesPerSegment`
 - `singleLineSegmentRatio`
 - `eraseBoxCount`
-- `usedVisionModel`
 - `scaleFactor`
 - `ocrScaleFactor`
 - `originalImageSize`
 - `ocrImageSize`
 - `boxDebugInfo`
 
-`usedVisionModel` 在当前主链路中应为 `false`。
-
 ## 当前路线边界
 
 当前产品决策是：
 
-- `Option + W` 直接使用火山整图翻译，不自行生成或校正坐标。
-- 本地备用不让 Gemini / OpenAI Vision 参与版面分块，也不让大模型生成坐标。
-- 本地备用的 OCR 与定位只由 Apple Vision 和本地算法负责。
+- `Option + W` 默认使用 Apple 本地坐标翻译；macOS 15 及以上不把 OCR 文字交给已配置的第三方翻译服务，macOS 13–14 使用默认服务兼容翻译。
+- API 高质量坐标翻译与火山图片翻译各有独立快捷键槽，可在设置中录制或清除。
+- API 与 Apple 两条坐标翻译路径都不让远端 Vision 模型生成坐标。
+- 坐标翻译的 OCR 与定位只由 Apple Vision 和本地算法负责。
 - 火山失败不自动重试，也不静默切换其他云服务或本地链路。
 
-这样将复杂版面的整图效果交给专用云端接口，同时保留可控、透明的本地备用。
+这样可以保留本地坐标稳定性，同时让用户按需选择默认 API 的翻译质量或火山整图能力。
 
 ## 维护判断
 
@@ -368,4 +401,4 @@ TTS_DEBUG_OVERLAY_PIPELINE=1 swift run
 - 翻译行数不稳：看 `PromptBuilder` 和 `ImageOverlayBatchTranslator` 的 `lineTranslations` 解析。
 - 白块感明显：看 `ScreenshotTranslationOverlayRenderer` 的 `nativeReplace` 擦除和逐行绘制逻辑。
 - 火山主路径速度慢：先区分本地图片编码与单次 `TranslateImage` 网络耗时。
-- 本地备用速度慢：看日志中的 `ocr / segmentation / translation` 阶段耗时。
+- 坐标翻译速度慢：看日志中的 `ocr / segmentation / translation` 阶段耗时。

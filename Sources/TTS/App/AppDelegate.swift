@@ -11,9 +11,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         configureStatusItem()
         services.hotkeyManager.start()
         ScreenshotArtifactRetention.pruneExpiredOverlayArtifacts()
-        Task {
-            try? await services.historyStore.pruneExpiredItems()
-        }
     }
 
     private func configureStatusItem() {
@@ -33,6 +30,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let menu = NSMenu()
         menu.addItem(NSMenuItem(
+            title: "截图到剪贴板",
+            action: #selector(startScreenshotClipboard),
+            keyEquivalent: ""
+        ))
+        menu.addItem(.separator())
+        menu.addItem(NSMenuItem(
             title: "翻译选中文字",
             action: #selector(translateSelection),
             keyEquivalent: ""
@@ -48,13 +51,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             keyEquivalent: ""
         ))
         menu.addItem(NSMenuItem(
-            title: "火山图片翻译 Beta",
-            action: #selector(startScreenshotOverlayTranslate),
+            title: "Apple 本地坐标翻译",
+            action: #selector(startLocalScreenshotOverlayTranslate),
             keyEquivalent: ""
         ))
         menu.addItem(NSMenuItem(
-            title: "本地坐标翻译（备用）",
-            action: #selector(startLocalScreenshotOverlayTranslate),
+            title: "API 高质量坐标翻译",
+            action: #selector(startAPIScreenshotOverlayTranslate),
+            keyEquivalent: ""
+        ))
+        menu.addItem(NSMenuItem(
+            title: "火山图片翻译 Beta",
+            action: #selector(startScreenshotOverlayTranslate),
             keyEquivalent: ""
         ))
         menu.addItem(NSMenuItem(
@@ -78,16 +86,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             action: #selector(openSettings),
             keyEquivalent: ","
         ))
-        menu.addItem(NSMenuItem(
-            title: "历史记录",
-            action: #selector(openHistory),
-            keyEquivalent: "h"
-        ))
-        menu.addItem(NSMenuItem(
-            title: "收藏夹",
-            action: #selector(openFavorites),
-            keyEquivalent: "f"
-        ))
         menu.addItem(.separator())
         menu.addItem(NSMenuItem(
             title: "退出 TTS",
@@ -107,6 +105,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         services.translationController.translateSelection()
     }
 
+    @objc private func startScreenshotClipboard() {
+        services.screenshotCaptureController.startCapture(mode: .clipboard)
+    }
+
     @objc private func openInputTranslate() {
         NSApp.activate(ignoringOtherApps: true)
         services.inputTranslateWindowController.show()
@@ -118,6 +120,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func startScreenshotOverlayTranslate() {
         services.screenshotCaptureController.startCapture(mode: .translateOverlay)
+    }
+
+    @objc private func startAPIScreenshotOverlayTranslate() {
+        services.screenshotCaptureController.startCapture(mode: .translateOverlayAPI)
     }
 
     @objc private func startLocalScreenshotOverlayTranslate() {
@@ -139,16 +145,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func openSettings() {
         NSApp.activate(ignoringOtherApps: true)
         services.settingsWindowController.show()
-    }
-
-    @objc private func openHistory() {
-        NSApp.activate(ignoringOtherApps: true)
-        services.historyWindowController.show()
-    }
-
-    @objc private func openFavorites() {
-        NSApp.activate(ignoringOtherApps: true)
-        services.favoritesWindowController.show()
     }
 
     @objc private func quit() {
