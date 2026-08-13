@@ -2,10 +2,20 @@ import AppKit
 import CoreGraphics
 
 enum ScreenshotAnnotationTool: CaseIterable, Hashable {
+    case move
     case rectangle
     case arrow
     case text
     case mosaic
+}
+
+struct ScreenshotSelectionResizeEdges: OptionSet, Hashable {
+    let rawValue: Int
+
+    static let minX = Self(rawValue: 1 << 0)
+    static let maxX = Self(rawValue: 1 << 1)
+    static let minY = Self(rawValue: 1 << 2)
+    static let maxY = Self(rawValue: 1 << 3)
 }
 
 enum ScreenshotAnnotation: Equatable {

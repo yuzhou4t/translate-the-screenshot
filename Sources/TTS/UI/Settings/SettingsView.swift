@@ -6,42 +6,144 @@ enum SettingsTab: Hashable {
     case shortcuts
     case translationService
     case privacy
+
+    var title: String {
+        switch self {
+        case .general:
+            "通用"
+        case .shortcuts:
+            "快捷键"
+        case .translationService:
+            "翻译服务"
+        case .privacy:
+            "权限与隐私"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .general:
+            "gearshape"
+        case .shortcuts:
+            "keyboard"
+        case .translationService:
+            "network"
+        case .privacy:
+            "lock.shield"
+        }
+    }
 }
 
 struct SettingsView: View {
     @StateObject var viewModel: SettingsViewModel
 
     var body: some View {
-        TabView(selection: $viewModel.selectedTab) {
-            generalSettings
-                .tag(SettingsTab.general)
-                .tabItem {
-                    Label("通用", systemImage: "gearshape")
-                }
+        ZStack {
+            TTSWindowBackground()
 
-            shortcutSettings
-                .tag(SettingsTab.shortcuts)
-                .tabItem {
-                    Label("快捷键", systemImage: "keyboard")
-                }
+            HStack(spacing: 14) {
+                settingsSidebar
+                    .frame(width: 190)
+                    .ttsGlassSurface(cornerRadius: TTSVisualStyle.windowRadius)
 
-            translationServiceSettings
-                .tag(SettingsTab.translationService)
-                .tabItem {
-                    Label("翻译服务", systemImage: "network")
+                Group {
+                    switch viewModel.selectedTab {
+                    case .general:
+                        generalSettings
+                    case .shortcuts:
+                        shortcutSettings
+                    case .translationService:
+                        translationServiceSettings
+                    case .privacy:
+                        permissionPrivacySettings
+                    }
                 }
-
-            permissionPrivacySettings
-                .tag(SettingsTab.privacy)
-                .tabItem {
-                    Label("权限与隐私", systemImage: "lock.shield")
-                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ttsGlassSurface(cornerRadius: TTSVisualStyle.windowRadius, elevated: true)
+            }
+            .padding(16)
         }
         .frame(minWidth: 960, idealWidth: 1000, minHeight: 680, idealHeight: 720)
-        .background(.background)
+        .tint(TTSVisualStyle.accent)
         .onAppear {
             viewModel.reload()
         }
+    }
+
+    private var settingsSidebar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "character.textbox")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: 34, height: 34)
+                    .background(
+                        LinearGradient(
+                            colors: [TTSVisualStyle.accent, TTSVisualStyle.accentStrong],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("TTS 设置")
+                        .font(.headline)
+                    Text("轻量翻译工具")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 14)
+            .padding(.bottom, 10)
+
+            Text("设置")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 14)
+
+            ForEach(
+                [SettingsTab.general, .shortcuts, .translationService, .privacy],
+                id: \.self
+            ) { tab in
+                Button {
+                    viewModel.selectedTab = tab
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: tab.systemImage)
+                            .frame(width: 18)
+                        Text(tab.title)
+                        Spacer()
+                    }
+                    .font(.system(size: 13, weight: viewModel.selectedTab == tab ? .semibold : .medium))
+                    .foregroundStyle(viewModel.selectedTab == tab ? TTSVisualStyle.accentStrong : Color.secondary)
+                    .padding(.horizontal, 12)
+                    .frame(height: 38)
+                    .background(
+                        viewModel.selectedTab == tab
+                            ? TTSVisualStyle.accent.opacity(0.13)
+                            : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    )
+                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 8)
+            }
+
+            Spacer()
+
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 7, height: 7)
+                Text("菜单栏服务运行中")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+        }
+        .background(TTSVisualStyle.raisedSurface.opacity(0.34))
     }
 
     private var generalSettings: some View {
@@ -66,7 +168,7 @@ struct SettingsView: View {
                     Button("保存") {
                         viewModel.saveTranslationDirection()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TTSPrimaryButtonStyle())
                     Spacer()
                 }
 
@@ -84,7 +186,7 @@ struct SettingsView: View {
                     Button("保存") {
                         viewModel.saveDefaultTranslationMode()
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TTSPrimaryButtonStyle())
                     Spacer()
                 }
 
@@ -123,6 +225,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
         .padding()
     }
 
@@ -137,7 +241,7 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(.quaternary, in: Capsule())
+                    .background(TTSVisualStyle.accent.opacity(0.11), in: Capsule())
 
                 Spacer()
 
@@ -149,7 +253,7 @@ struct SettingsView: View {
             }
             .padding(.horizontal, 18)
             .padding(.vertical, 12)
-            .background(.bar)
+            .background(TTSVisualStyle.raisedSurface.opacity(0.55))
 
             Divider()
 
@@ -199,7 +303,7 @@ struct SettingsView: View {
             .scrollContentBackground(.hidden)
         }
         .frame(maxHeight: .infinity)
-        .background(.background)
+        .background(TTSVisualStyle.raisedSurface.opacity(0.24))
     }
 
     private func providerRow(_ config: ProviderConfig) -> some View {
@@ -352,6 +456,8 @@ struct SettingsView: View {
                 }
             }
             .formStyle(.grouped)
+            .scrollContentBackground(.hidden)
+            .background(Color.clear)
         } else {
             Text("请选择一个服务商")
                 .foregroundStyle(.secondary)
@@ -391,6 +497,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
         .padding()
     }
 
@@ -461,6 +569,8 @@ struct SettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .scrollContentBackground(.hidden)
+        .background(Color.clear)
         .padding()
         .onAppear {
             viewModel.refreshPermissions()
@@ -593,10 +703,10 @@ private struct ProviderConfigRow: View {
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
         .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(TTSVisualStyle.controlSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(TTSVisualStyle.subtleBorder, lineWidth: 1)
         )
         .padding(.vertical, 3)
     }

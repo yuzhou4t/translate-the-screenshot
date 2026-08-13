@@ -30,14 +30,14 @@
 
 ### 截图到剪贴板
 
-默认快捷键是 `Ctrl + A`。用户拖动框选后进入轻量标注界面，可使用矩形、箭头、文字和马赛克，并可撤销、取消或复制。
+默认快捷键是 `Ctrl + A`。快捷键触发后会先在内存中冻结每块显示器的当前画面，用户再在静态画面上拖动框选；框选期间会显示实时尺寸。进入轻量标注界面后默认使用移动工具：拖动选区内部可整体换位置，拖动四边或四角可重新调整尺寸，方向键可按 1 pt 微调、`Shift + 方向键` 可按 10 pt 微调；macOS 已开启“三指拖移”时会按普通拖拽事件工作。切换到矩形、箭头或马赛克工具后，原地长按约 0.32 秒也可临时移动选区。标注工具栏优先位于选区下方，空间不足时才回退到选区内或上方。
 
 数据流：
 
 ```text
-ScreenshotCaptureController
--> ScreenshotOverlayWindow 框选区域
--> 内存中的冻结截图
+ScreenshotCaptureController 预抓取各显示器画面
+-> ScreenshotOverlayWindow 在冻结画面上框选区域
+-> 从对应显示器快照裁切选区
 -> ScreenshotAnnotationWindow / ScreenshotAnnotationRenderer
 -> NSPasteboard
 ```

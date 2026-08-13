@@ -221,12 +221,14 @@ private struct OCRResultView: View {
         }
         .padding(16)
         .frame(width: 480, height: 360, alignment: .topLeading)
-        .background(.regularMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(TTSWindowBackground())
+        .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(TTSVisualStyle.border, lineWidth: 1)
         )
+        .shadow(color: Color.black.opacity(0.16), radius: 20, y: 10)
+        .tint(TTSVisualStyle.accent)
         .onChange(of: resultIdentity) { _ in
             displayedTextMode = .processed
             aiCleanedText = nil
@@ -246,6 +248,8 @@ private struct OCRResultView: View {
                 onClose()
             } label: {
                 Image(systemName: "xmark")
+                    .frame(width: 26, height: 26)
+                    .background(TTSVisualStyle.controlSurface, in: Circle())
             }
             .buttonStyle(.plain)
             .help("关闭")
@@ -265,6 +269,7 @@ private struct OCRResultView: View {
                 } label: {
                     Label("停止任务", systemImage: "stop.fill")
                 }
+                .buttonStyle(TTSSecondaryButtonStyle())
                 .controlSize(.small)
             }
         }
@@ -309,6 +314,13 @@ private struct OCRResultView: View {
                     .textSelection(.enabled)
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
+            .padding(10)
+            .background(TTSVisualStyle.raisedSurface.opacity(0.72))
+            .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(TTSVisualStyle.subtleBorder, lineWidth: 1)
+            }
 
             HStack(spacing: 8) {
                 Button {
@@ -316,6 +328,7 @@ private struct OCRResultView: View {
                 } label: {
                     Label(copyButtonTitle, systemImage: "doc.on.doc")
                 }
+                .buttonStyle(TTSSecondaryButtonStyle())
                 .disabled(preferredCopyText(for: result).isEmpty)
 
                 Button {
@@ -329,6 +342,7 @@ private struct OCRResultView: View {
                         Label("AI 修复", systemImage: "sparkles")
                     }
                 }
+                .buttonStyle(TTSSecondaryButtonStyle())
                 .disabled(isAICleaning || isTranslating || preferredCleanupInput(for: result).isEmpty)
 
                 Button {
@@ -342,6 +356,7 @@ private struct OCRResultView: View {
                         Label("继续翻译", systemImage: "arrow.right.circle")
                     }
                 }
+                .buttonStyle(TTSPrimaryButtonStyle())
                 .disabled(isAICleaning || isTranslating || preferredTranslationInput(for: result).isEmpty)
 
                 Text(imageURL.lastPathComponent)

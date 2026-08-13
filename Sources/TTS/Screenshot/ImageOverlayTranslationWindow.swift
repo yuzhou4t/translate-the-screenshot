@@ -123,9 +123,11 @@ final class ImageOverlayTranslationWindowController: NSObject, NSWindowDelegate 
             let controller = NSHostingController(rootView: rootView)
             let newWindow = NSWindow(contentViewController: controller)
             newWindow.title = title
-            newWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable]
+            newWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            newWindow.titleVisibility = .hidden
             newWindow.titlebarAppearsTransparent = true
             newWindow.toolbarStyle = .unifiedCompact
+            newWindow.backgroundColor = .clear
             newWindow.setContentSize(NSSize(width: 1120, height: 820))
             newWindow.minSize = NSSize(width: 860, height: 580)
             newWindow.center()
@@ -1197,10 +1199,16 @@ private struct ImageOverlayTranslationView: View {
             header
                 .padding(.horizontal, 16)
                 .padding(.vertical, 12)
-            Divider()
             toolbar
+                .padding(8)
+                .background(TTSVisualStyle.raisedSurface.opacity(0.5))
+                .clipShape(RoundedRectangle(cornerRadius: 13, style: .continuous))
+                .overlay {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .stroke(TTSVisualStyle.subtleBorder, lineWidth: 1)
+                }
                 .padding(.horizontal, 16)
-                .padding(.vertical, 10)
+                .padding(.bottom, 10)
             content
                 .padding(.horizontal, 16)
                 .padding(.bottom, 12)
@@ -1210,7 +1218,8 @@ private struct ImageOverlayTranslationView: View {
                 .padding(.vertical, 10)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        .background(.regularMaterial)
+        .background(TTSWindowBackground())
+        .tint(TTSVisualStyle.accent)
     }
 
     private var header: some View {
@@ -1226,7 +1235,7 @@ private struct ImageOverlayTranslationView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.primary.opacity(0.06), in: Capsule())
+                .background(TTSVisualStyle.accent.opacity(0.12), in: Capsule())
 
             if viewModel.isVolcengineWorkflow {
                 Text(viewModel.monthlyUsageText)
@@ -1243,7 +1252,7 @@ private struct ImageOverlayTranslationView: View {
                 .foregroundStyle(.secondary)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 4)
-                .background(Color.primary.opacity(0.06), in: Capsule())
+                .background(TTSVisualStyle.controlSurface, in: Capsule())
 
             if viewModel.isProcessing {
                 ProgressView()
@@ -1263,6 +1272,8 @@ private struct ImageOverlayTranslationView: View {
                 onClose()
             } label: {
                 Image(systemName: "xmark")
+                    .frame(width: 26, height: 26)
+                    .background(TTSVisualStyle.controlSurface, in: Circle())
             }
             .buttonStyle(.plain)
             .help("关闭")
@@ -1277,21 +1288,21 @@ private struct ImageOverlayTranslationView: View {
                 } label: {
                     Label("停止", systemImage: "stop.fill")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(TTSSecondaryButtonStyle())
             } else if viewModel.isVolcengineWorkflow && viewModel.canRetryVolcengine {
                 Button {
                     viewModel.startTranslation()
                 } label: {
                     Label("重试火山", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(TTSPrimaryButtonStyle())
             } else if viewModel.canStartTranslation {
                 Button {
                     viewModel.startTranslation()
                 } label: {
                     Label("继续翻译", systemImage: "arrow.clockwise")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(TTSSecondaryButtonStyle())
             }
 
             if !viewModel.isVolcengineWorkflow {
@@ -1300,7 +1311,7 @@ private struct ImageOverlayTranslationView: View {
                 } label: {
                     Label("API 高质量重译", systemImage: "sparkles")
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(TTSPrimaryButtonStyle())
                 .disabled(!viewModel.canStartHighQualityTranslation)
             }
 
@@ -1310,7 +1321,7 @@ private struct ImageOverlayTranslationView: View {
                 } label: {
                     Label("Apple 本地坐标", systemImage: "desktopcomputer")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(TTSSecondaryButtonStyle())
                 .disabled(!viewModel.canUseLocalFallback)
 
                 Button {
@@ -1318,7 +1329,7 @@ private struct ImageOverlayTranslationView: View {
                 } label: {
                     Label("火山设置", systemImage: "gearshape")
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(TTSSecondaryButtonStyle())
             }
 
             Button {
@@ -1326,7 +1337,7 @@ private struct ImageOverlayTranslationView: View {
             } label: {
                 Label("复制 OCR", systemImage: "doc.on.doc")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(TTSSecondaryButtonStyle())
             .disabled(!viewModel.canCopyOCRText)
 
             Button {
@@ -1334,7 +1345,7 @@ private struct ImageOverlayTranslationView: View {
             } label: {
                 Label("复制图片", systemImage: "photo.on.rectangle")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(TTSSecondaryButtonStyle())
             .disabled(!viewModel.canExportImage)
 
             Button {
@@ -1342,7 +1353,7 @@ private struct ImageOverlayTranslationView: View {
             } label: {
                 Label("保存 PNG", systemImage: "square.and.arrow.down")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(TTSSecondaryButtonStyle())
             .disabled(!viewModel.canExportImage)
 
             Button {
@@ -1350,7 +1361,7 @@ private struct ImageOverlayTranslationView: View {
             } label: {
                 Label("Debug", systemImage: "folder.badge.gearshape")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(TTSSecondaryButtonStyle())
             .disabled(!viewModel.canOpenDebugDirectory)
 
             Spacer()
@@ -1447,11 +1458,11 @@ private struct ImageOverlayTranslationView: View {
             Spacer(minLength: 0)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(Color.primary.opacity(0.035))
-        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(TTSVisualStyle.raisedSurface.opacity(0.55))
+        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(TTSVisualStyle.border, lineWidth: 1)
         )
     }
 
@@ -1488,11 +1499,11 @@ private struct ImageOverlayTranslationView: View {
                     alignment: .topLeading
                 )
             }
-            .background(Color(NSColor.controlBackgroundColor))
-            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+            .background(TTSVisualStyle.controlSurface)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(TTSVisualStyle.border, lineWidth: 1)
             )
             .overlay {
                 if viewModel.isVolcengineWorkflow && viewModel.isTranslating {
@@ -1560,7 +1571,7 @@ private struct ImageOverlayTranslationView: View {
                     } label: {
                         Label("重试", systemImage: "arrow.clockwise")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TTSSecondaryButtonStyle())
                     .disabled(!viewModel.canRetrySelected)
 
                     Button {
@@ -1568,7 +1579,7 @@ private struct ImageOverlayTranslationView: View {
                     } label: {
                         Label(state.isExcluded ? "恢复" : "排除", systemImage: state.isExcluded ? "eye" : "eye.slash")
                     }
-                    .buttonStyle(.bordered)
+                    .buttonStyle(TTSSecondaryButtonStyle())
                 }
             } else {
                 Text("点击图片中的 OCR 区域查看详情。")
@@ -1579,10 +1590,10 @@ private struct ImageOverlayTranslationView: View {
             Spacer()
         }
         .padding(12)
-        .background(Color.primary.opacity(0.035), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .background(TTSVisualStyle.raisedSurface.opacity(0.55), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                .stroke(TTSVisualStyle.border, lineWidth: 1)
         )
     }
 
@@ -1633,7 +1644,7 @@ private struct ImageOverlayTranslationView: View {
             .foregroundStyle(.secondary)
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
-            .background(Color.primary.opacity(0.06), in: Capsule())
+            .background(TTSVisualStyle.accent.opacity(0.1), in: Capsule())
     }
 }
 

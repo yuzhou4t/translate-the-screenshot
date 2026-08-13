@@ -103,19 +103,43 @@ final class ScreenshotCaptureController {
             return
         }
 
+        let screens = NSScreen.screens
+        guard !screens.isEmpty else {
+            let feedbackPanel = mode == .clipboard ? clipboardToastPanel : toastPanel
+            feedbackPanel.show("没有找到可截图的显示器")
+            return
+        }
+
+        let frozenScreens: [(screen: NSScreen, image: CGImage)]
+        do {
+            frozenScreens = try screens.map { screen in
+                (
+                    screen: screen,
+                    image: try captureScreenSnapshot(for: screen)
+                )
+            }
+        } catch {
+            let feedbackPanel = mode == .clipboard ? clipboardToastPanel : toastPanel
+            feedbackPanel.show("无法冻结屏幕画面，请重试")
+            print("screenshot freeze failed: \(error.localizedDescription)")
+            return
+        }
+
         isCapturing = true
         activeMode = mode
         hideSystemCursor()
-        overlayWindows = NSScreen.screens.map { screen in
-            let window = ScreenshotOverlayWindow(screen: screen)
-            window.onFinished = { [weak self, weak window] selectionRect in
-                guard let window else {
-                    self?.cancelCapture()
-                    return
-                }
+        overlayWindows = frozenScreens.map { frozenScreen in
+            let screen = frozenScreen.screen
+            let image = frozenScreen.image
+            let window = ScreenshotOverlayWindow(
+                screen: screen,
+                frozenImage: image
+            )
+            window.onFinished = { [weak self] selectionRect in
                 self?.finishCapture(
                     selectionRect: selectionRect,
-                    belowWindowID: CGWindowID(window.windowNumber)
+                    frozenImage: image,
+                    screenFrame: screen.frame
                 )
             }
             window.onCancelled = { [weak self] in
@@ -255,7 +279,8 @@ final class ScreenshotCaptureController {
 
     private func finishCapture(
         selectionRect: CGRect,
-        belowWindowID: CGWindowID
+        frozenImage: CGImage,
+        screenFrame: CGRect
     ) {
         guard isCapturing else {
             return
@@ -270,15 +295,18 @@ final class ScreenshotCaptureController {
         }
 
         do {
-            let image = try captureScreenshot(
-                selectionRect: selectionRect,
-                belowWindowID: belowWindowID
+            let image = try cropFrozenScreenshot(
+                frozenImage,
+                screenFrame: screenFrame,
+                selectionRect: selectionRect
             )
             closeOverlays()
             if mode == .clipboard {
                 presentAnnotationEditor(
                     image: image,
-                    selectionRect: selectionRect
+                    selectionRect: selectionRect,
+                    frozenImage: frozenImage,
+                    screenFrame: screenFrame
                 )
                 return
             }
@@ -669,20 +697,164 @@ final class ScreenshotCaptureController {
         activeProcessingAnchorPoint = nil
     }
 
-    private func captureScreenshot(
-        selectionRect: CGRect,
-        belowWindowID: CGWindowID
-    ) throws -> CGImage {
-        let displayRect = convertToDisplayRect(selectionRect)
+    private func captureScreenSnapshot(for screen: NSScreen) throws -> CGImage {
+        let displayRect = convertToDisplayRect(screen.frame)
         guard let image = CGWindowListCreateImage(
             displayRect,
-            .optionOnScreenBelowWindow,
-            belowWindowID,
+            .optionOnScreenOnly,
+            kCGNullWindowID,
             [.bestResolution]
         ) else {
             throw ScreenshotCaptureError.captureFailed
         }
         return image
+    }
+
+    private func cropFrozenScreenshot(
+        _ image: CGImage,
+        screenFrame: CGRect,
+        selectionRect: CGRect
+    ) throws -> CGImage {
+        guard let croppedImage = Self.croppedFrozenScreenshot(
+            image,
+            screenFrame: screenFrame,
+            selectionRect: selectionRect
+        ) else {
+            throw ScreenshotCaptureError.captureFailed
+        }
+        return croppedImage
+    }
+
+    static func croppedFrozenScreenshot(
+        _ image: CGImage,
+        screenFrame: CGRect,
+        selectionRect: CGRect
+    ) -> CGImage? {
+        guard let cropRect = frozenScreenshotCropRect(
+            imagePixelSize: CGSize(width: image.width, height: image.height),
+            screenFrame: screenFrame,
+            selectionRect: selectionRect
+        ) else {
+            return nil
+        }
+        return image.cropping(to: cropRect)
+    }
+
+    static func frozenScreenshotCropRect(
+        imagePixelSize: CGSize,
+        screenFrame: CGRect,
+        selectionRect: CGRect
+    ) -> CGRect? {
+        let normalizedScreen = screenFrame.standardized
+        let normalizedSelection = selectionRect.standardized
+        guard imagePixelSize.width.isFinite,
+              imagePixelSize.height.isFinite,
+              imagePixelSize.width > 0,
+              imagePixelSize.height > 0,
+              normalizedScreen.width.isFinite,
+              normalizedScreen.height.isFinite,
+              normalizedScreen.width > 0,
+              normalizedScreen.height > 0 else {
+            return nil
+        }
+
+        let clippedSelection = normalizedSelection.intersection(normalizedScreen)
+        guard !clippedSelection.isNull,
+              clippedSelection.width >= 1,
+              clippedSelection.height >= 1 else {
+            return nil
+        }
+
+        let scaleX = imagePixelSize.width / normalizedScreen.width
+        let scaleY = imagePixelSize.height / normalizedScreen.height
+        let rawMinX = (clippedSelection.minX - normalizedScreen.minX) * scaleX
+        let rawMaxX = (clippedSelection.maxX - normalizedScreen.minX) * scaleX
+        let rawMinY = (normalizedScreen.maxY - clippedSelection.maxY) * scaleY
+        let rawMaxY = (normalizedScreen.maxY - clippedSelection.minY) * scaleY
+
+        let minX = max(0, floor(rawMinX))
+        let minY = max(0, floor(rawMinY))
+        let maxX = min(imagePixelSize.width, ceil(rawMaxX))
+        let maxY = min(imagePixelSize.height, ceil(rawMaxY))
+        guard maxX > minX, maxY > minY else {
+            return nil
+        }
+
+        return CGRect(
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY
+        )
+    }
+
+    static func movedSelectionRect(
+        _ selectionRect: CGRect,
+        by delta: CGPoint,
+        within screenFrame: CGRect
+    ) -> CGRect {
+        let selection = selectionRect.standardized
+        let screen = screenFrame.standardized
+        guard selection.width > 0,
+              selection.height > 0,
+              screen.width > 0,
+              screen.height > 0 else {
+            return selection
+        }
+
+        let maximumX = max(screen.minX, screen.maxX - selection.width)
+        let maximumY = max(screen.minY, screen.maxY - selection.height)
+        return CGRect(
+            x: min(max(selection.minX + delta.x, screen.minX), maximumX),
+            y: min(max(selection.minY + delta.y, screen.minY), maximumY),
+            width: selection.width,
+            height: selection.height
+        )
+    }
+
+    static func resizedSelectionRect(
+        _ selectionRect: CGRect,
+        edges: ScreenshotSelectionResizeEdges,
+        by delta: CGPoint,
+        within screenFrame: CGRect,
+        minimumSize: CGSize = CGSize(width: 40, height: 40)
+    ) -> CGRect {
+        let selection = selectionRect.standardized
+        let screen = screenFrame.standardized
+        guard !edges.isEmpty,
+              selection.width > 0,
+              selection.height > 0,
+              screen.width > 0,
+              screen.height > 0 else {
+            return selection
+        }
+
+        let minimumWidth = min(max(minimumSize.width, 1), screen.width)
+        let minimumHeight = min(max(minimumSize.height, 1), screen.height)
+        var minX = max(selection.minX, screen.minX)
+        var maxX = min(selection.maxX, screen.maxX)
+        var minY = max(selection.minY, screen.minY)
+        var maxY = min(selection.maxY, screen.maxY)
+
+        if edges.contains(.minX) {
+            minX = min(max(minX + delta.x, screen.minX), maxX - minimumWidth)
+        }
+        if edges.contains(.maxX) {
+            maxX = max(min(maxX + delta.x, screen.maxX), minX + minimumWidth)
+        }
+        if edges.contains(.minY) {
+            minY = min(max(minY + delta.y, screen.minY), maxY - minimumHeight)
+        }
+        if edges.contains(.maxY) {
+            maxY = max(min(maxY + delta.y, screen.maxY), minY + minimumHeight)
+        }
+
+        return CGRect(
+            x: minX,
+            y: minY,
+            width: maxX - minX,
+            height: maxY - minY
+        )
     }
 
     private func saveScreenshot(
@@ -721,17 +893,25 @@ final class ScreenshotCaptureController {
 
     private func presentAnnotationEditor(
         image: CGImage,
-        selectionRect: CGRect
+        selectionRect: CGRect,
+        frozenImage: CGImage,
+        screenFrame: CGRect
     ) {
         let window = ScreenshotAnnotationWindow(
             image: image,
-            selectionRect: selectionRect
+            selectionRect: selectionRect,
+            frozenImage: frozenImage,
+            screenFrame: screenFrame
         )
-        let anchorPoint = NSPoint(x: selectionRect.maxX, y: selectionRect.maxY)
-        window.onCopiedImage = { [weak self] image, logicalSize in
+        let initialAnchorPoint = NSPoint(x: selectionRect.maxX, y: selectionRect.maxY)
+        window.onCopiedImage = { [weak self] image, logicalSize, finalSelectionRect in
             guard let self else {
                 return
             }
+            let anchorPoint = NSPoint(
+                x: finalSelectionRect.maxX,
+                y: finalSelectionRect.maxY
+            )
             guard Self.copyImageToPasteboard(image, logicalSize: logicalSize) else {
                 self.clipboardToastPanel.show("复制截图失败，请重试", near: anchorPoint)
                 return
@@ -740,11 +920,11 @@ final class ScreenshotCaptureController {
             self.clipboardToastPanel.show("截图已复制", near: anchorPoint)
         }
         window.onCopyFailed = { [weak self] in
-            self?.clipboardToastPanel.show("生成标注截图失败，请重试", near: anchorPoint)
+            self?.clipboardToastPanel.show("生成标注截图失败，请重试", near: initialAnchorPoint)
         }
         window.onCancelled = { [weak self] in
             self?.closeAnnotationEditor()
-            self?.clipboardToastPanel.show("已取消截图", near: anchorPoint)
+            self?.clipboardToastPanel.show("已取消截图", near: initialAnchorPoint)
         }
         annotationWindow = window
         isCapturing = true
