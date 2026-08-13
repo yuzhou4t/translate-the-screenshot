@@ -191,6 +191,8 @@ open /Applications/TTS.app
 scripts/create_local_codesign_identity.sh
 ```
 
+`scripts/build_app.sh` 默认要求稳定签名身份；如果找不到会直接停止，避免覆盖安装后反复丢失辅助功能和屏幕录制权限。只有制作无需保留权限的临时包时，才显式使用 `TTS_CODESIGN_IDENTITY=- scripts/build_app.sh`。
+
 也可以使用 Xcode 构建：
 
 ```sh
