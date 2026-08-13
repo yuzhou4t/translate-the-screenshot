@@ -22,22 +22,19 @@ struct TTSWindowBackground: View {
         ZStack {
             LinearGradient(
                 colors: colorScheme == .dark
-                    ? [Color(red: 0.035, green: 0.082, blue: 0.145), Color(red: 0.055, green: 0.145, blue: 0.245)]
-                    : [Color(red: 0.945, green: 0.975, blue: 1), Color(red: 0.835, green: 0.915, blue: 1)],
+                    ? [Color(red: 0.025, green: 0.065, blue: 0.12), Color(red: 0.045, green: 0.12, blue: 0.22)]
+                    : [Color(red: 0.965, green: 0.985, blue: 1), Color(red: 0.90, green: 0.95, blue: 1)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
 
             RadialGradient(
-                colors: [TTSVisualStyle.accent.opacity(colorScheme == .dark ? 0.18 : 0.14), .clear],
+                colors: [TTSVisualStyle.accent.opacity(colorScheme == .dark ? 0.16 : 0.09), .clear],
                 center: .bottomTrailing,
                 startRadius: 20,
                 endRadius: 520
             )
 
-            Rectangle()
-                .fill(.ultraThinMaterial)
-                .opacity(colorScheme == .dark ? 0.48 : 0.6)
         }
         .ignoresSafeArea()
     }
@@ -49,7 +46,6 @@ private struct TTSGlassSurfaceModifier: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .background(.thinMaterial)
             .background(TTSVisualStyle.surface)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay {
@@ -57,10 +53,10 @@ private struct TTSGlassSurfaceModifier: ViewModifier {
                     .stroke(TTSVisualStyle.border, lineWidth: 1)
             }
             .shadow(
-                color: Color.black.opacity(elevated ? 0.16 : 0.08),
-                radius: elevated ? 22 : 10,
+                color: Color.black.opacity(elevated ? 0.12 : 0.05),
+                radius: elevated ? 18 : 8,
                 x: 0,
-                y: elevated ? 12 : 5
+                y: elevated ? 9 : 3
             )
     }
 }
@@ -140,28 +136,48 @@ extension NSColor {
     )
 
     static let ttsGlassSurface = ttsDynamic(
-        light: NSColor(calibratedWhite: 1, alpha: 0.76),
-        dark: NSColor(calibratedRed: 0.065, green: 0.13, blue: 0.22, alpha: 0.78)
+        light: NSColor(calibratedWhite: 1, alpha: 0.94),
+        dark: NSColor(calibratedRed: 0.055, green: 0.12, blue: 0.21, alpha: 0.94)
     )
 
     static let ttsRaisedSurface = ttsDynamic(
-        light: NSColor(calibratedRed: 0.965, green: 0.985, blue: 1, alpha: 0.78),
-        dark: NSColor(calibratedRed: 0.085, green: 0.17, blue: 0.28, alpha: 0.82)
+        light: NSColor(calibratedWhite: 1, alpha: 0.96),
+        dark: NSColor(calibratedRed: 0.075, green: 0.16, blue: 0.27, alpha: 0.96)
     )
 
     static let ttsControlSurface = ttsDynamic(
-        light: NSColor(calibratedRed: 0.93, green: 0.965, blue: 1, alpha: 0.82),
-        dark: NSColor(calibratedRed: 0.10, green: 0.21, blue: 0.35, alpha: 0.86)
+        light: NSColor(calibratedRed: 0.965, green: 0.98, blue: 1, alpha: 0.98),
+        dark: NSColor(calibratedRed: 0.10, green: 0.21, blue: 0.35, alpha: 0.98)
     )
 
     static let ttsGlassBorder = ttsDynamic(
-        light: NSColor(calibratedRed: 0.68, green: 0.80, blue: 0.94, alpha: 0.62),
-        dark: NSColor(calibratedRed: 0.40, green: 0.65, blue: 1, alpha: 0.26)
+        light: NSColor(calibratedRed: 0.70, green: 0.82, blue: 0.96, alpha: 0.48),
+        dark: NSColor(calibratedRed: 0.40, green: 0.65, blue: 1, alpha: 0.32)
     )
 
     static let ttsSubtleBorder = ttsDynamic(
-        light: NSColor(calibratedRed: 0.68, green: 0.78, blue: 0.89, alpha: 0.48),
-        dark: NSColor(calibratedRed: 0.48, green: 0.65, blue: 0.84, alpha: 0.26)
+        light: NSColor(calibratedRed: 0.76, green: 0.84, blue: 0.94, alpha: 0.44),
+        dark: NSColor(calibratedRed: 0.48, green: 0.65, blue: 0.84, alpha: 0.30)
+    )
+
+    static let ttsToolbarSurface = ttsDynamic(
+        light: NSColor(calibratedWhite: 1, alpha: 0.96),
+        dark: NSColor(calibratedRed: 0.045, green: 0.10, blue: 0.18, alpha: 0.96)
+    )
+
+    static let ttsToolbarControl = ttsDynamic(
+        light: NSColor(calibratedRed: 0.93, green: 0.965, blue: 1, alpha: 1),
+        dark: NSColor(calibratedRed: 0.10, green: 0.22, blue: 0.37, alpha: 1)
+    )
+
+    static let ttsToolbarDivider = ttsDynamic(
+        light: NSColor(calibratedRed: 0.36, green: 0.61, blue: 0.94, alpha: 0.52),
+        dark: NSColor(calibratedRed: 0.42, green: 0.70, blue: 1, alpha: 0.56)
+    )
+
+    static let ttsSelectionAccent = ttsDynamic(
+        light: NSColor(calibratedRed: 0.08, green: 0.53, blue: 1, alpha: 1),
+        dark: NSColor(calibratedRed: 0.20, green: 0.68, blue: 1, alpha: 1)
     )
 
     private static func ttsDynamic(light: NSColor, dark: NSColor) -> NSColor {
@@ -172,7 +188,7 @@ extension NSColor {
 }
 
 @MainActor
-final class TTSGlassEffectView: NSVisualEffectView {
+final class TTSGlassEffectView: NSView {
     var ttsCornerRadius: CGFloat = TTSVisualStyle.panelRadius {
         didSet {
             updateTTSAppearance()
@@ -195,9 +211,6 @@ final class TTSGlassEffectView: NSVisualEffectView {
     }
 
     private func configure() {
-        material = .popover
-        blendingMode = .behindWindow
-        state = .active
         wantsLayer = true
         updateTTSAppearance()
     }
@@ -207,7 +220,11 @@ final class TTSGlassEffectView: NSVisualEffectView {
         layer?.cornerCurve = .continuous
         layer?.masksToBounds = true
         layer?.borderWidth = 1
-        layer?.borderColor = NSColor.ttsGlassBorder.cgColor
-        layer?.backgroundColor = NSColor.ttsGlassSurface.cgColor
+        layer?.borderColor = NSColor.ttsToolbarDivider.cgColor
+        layer?.backgroundColor = NSColor.ttsToolbarSurface.cgColor
+        layer?.shadowColor = NSColor.black.cgColor
+        layer?.shadowOpacity = 0.18
+        layer?.shadowRadius = 18
+        layer?.shadowOffset = CGSize(width: 0, height: -7)
     }
 }

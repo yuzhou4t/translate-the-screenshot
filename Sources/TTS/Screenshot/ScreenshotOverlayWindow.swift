@@ -311,14 +311,14 @@ private final class ScreenshotOverlayView: NSView {
     }
 
     private func drawSelectionBorder(in selection: CGRect) {
-        NSColor.white.withAlphaComponent(0.94).setStroke()
+        NSColor.black.withAlphaComponent(0.36).setStroke()
         let outerOutline = NSBezierPath(rect: selection)
-        outerOutline.lineWidth = 3
+        outerOutline.lineWidth = 5
         outerOutline.stroke()
 
-        NSColor.ttsAccent.setStroke()
-        let accentOutline = NSBezierPath(rect: selection.insetBy(dx: 0.75, dy: 0.75))
-        accentOutline.lineWidth = 1.5
+        NSColor.ttsSelectionAccent.setStroke()
+        let accentOutline = NSBezierPath(rect: selection.insetBy(dx: 1, dy: 1))
+        accentOutline.lineWidth = 2.5
         accentOutline.stroke()
 
         let handleSize: CGFloat = 7
@@ -335,9 +335,9 @@ private final class ScreenshotOverlayView: NSView {
                 width: handleSize,
                 height: handleSize
             )
-            NSColor.white.setFill()
+            NSColor.ttsSelectionAccent.setFill()
             NSBezierPath(ovalIn: handleRect).fill()
-            NSColor.ttsAccent.setStroke()
+            NSColor.white.setStroke()
             let handleOutline = NSBezierPath(ovalIn: handleRect.insetBy(dx: 0.75, dy: 0.75))
             handleOutline.lineWidth = 1.5
             handleOutline.stroke()
@@ -377,7 +377,7 @@ private final class ScreenshotOverlayView: NSView {
             xRadius: 7,
             yRadius: 7
         ).fill()
-        NSColor.ttsAccent.withAlphaComponent(0.9).setStroke()
+        NSColor.ttsSelectionAccent.setStroke()
         let badgeOutline = NSBezierPath(
             roundedRect: badgeRect.insetBy(dx: 0.5, dy: 0.5),
             xRadius: 6.5,
@@ -413,7 +413,7 @@ private final class ScreenshotOverlayView: NSView {
 
         let accentPath = whitePath.copy() as! NSBezierPath
         accentPath.lineWidth = 1.5
-        NSColor.ttsAccent.setStroke()
+        NSColor.ttsSelectionAccent.setStroke()
         accentPath.stroke()
     }
 
@@ -765,15 +765,22 @@ private final class ScreenshotAnnotationShieldView: NSView {
 
 @MainActor
 private final class ScreenshotAnnotationToolbarPanel: NSPanel {
-    static let preferredSize = NSSize(width: 598, height: 58)
+    static let preferredSize = NSSize(width: 634, height: 60)
+    private static let toolButtonWidth: CGFloat = 72
+    private static let buttonHeight: CGFloat = 36
 
     var onToolSelected: ((ScreenshotAnnotationTool) -> Void)?
     var onUndo: (() -> Void)?
     var onCancel: (() -> Void)?
     var onCopy: (() -> Void)?
 
-    private var toolButtons: [ScreenshotAnnotationTool: NSButton] = [:]
-    private let undoButton = NSButton(title: "", target: nil, action: nil)
+    private var toolButtons: [ScreenshotAnnotationTool: ScreenshotAnnotationToolButton] = [:]
+    private let undoButton = ScreenshotToolbarButton(
+        title: "",
+        kind: .icon,
+        target: nil,
+        action: nil
+    )
 
     init() {
         super.init(
@@ -798,32 +805,27 @@ private final class ScreenshotAnnotationToolbarPanel: NSPanel {
         let move = makeToolButton(
             title: "移动",
             symbolName: "hand.draw",
-            width: 66,
             tool: .move
         )
         move.toolTip = "拖动选区；拖动边缘可调整尺寸"
         let rectangle = makeToolButton(
             title: "矩形",
             symbolName: "rectangle",
-            width: 66,
             tool: .rectangle
         )
         let arrow = makeToolButton(
             title: "箭头",
             symbolName: "arrow.up.right",
-            width: 66,
             tool: .arrow
         )
         let text = makeToolButton(
             title: "文字",
             symbolName: "textformat",
-            width: 62,
             tool: .text
         )
         let mosaic = makeToolButton(
             title: "马赛克",
             symbolName: "square.grid.3x3.fill",
-            width: 76,
             tool: .mosaic
         )
         let toolStack = NSStackView(views: [move, rectangle, arrow, text, mosaic])
@@ -841,7 +843,12 @@ private final class ScreenshotAnnotationToolbarPanel: NSPanel {
         undoButton.action = #selector(undoPressed)
         undoButton.isEnabled = false
 
-        let cancel = NSButton(title: "取消", target: self, action: #selector(cancelPressed))
+        let cancel = ScreenshotToolbarButton(
+            title: "取消",
+            kind: .secondary,
+            target: self,
+            action: #selector(cancelPressed)
+        )
         configureActionButton(
             cancel,
             symbolName: "xmark",
@@ -850,7 +857,12 @@ private final class ScreenshotAnnotationToolbarPanel: NSPanel {
         )
         cancel.toolTip = "取消截图（Esc）"
 
-        let copy = NSButton(title: "复制", target: self, action: #selector(copyPressed))
+        let copy = ScreenshotToolbarButton(
+            title: "复制",
+            kind: .primary,
+            target: self,
+            action: #selector(copyPressed)
+        )
         configureActionButton(
             copy,
             symbolName: "doc.on.doc.fill",
@@ -894,9 +906,8 @@ private final class ScreenshotAnnotationToolbarPanel: NSPanel {
     private func makeToolButton(
         title: String,
         symbolName: String,
-        width: CGFloat,
         tool: ScreenshotAnnotationTool
-    ) -> NSButton {
+    ) -> ScreenshotAnnotationToolButton {
         let button = ScreenshotAnnotationToolButton(
             title: title,
             tool: tool,
@@ -904,49 +915,51 @@ private final class ScreenshotAnnotationToolbarPanel: NSPanel {
             action: #selector(toolPressed(_:))
         )
         button.setButtonType(.toggle)
-        button.bezelStyle = .rounded
+        button.isBordered = false
         button.controlSize = .regular
         button.font = .systemFont(ofSize: 12, weight: .medium)
         button.image = symbolImage(named: symbolName, description: title)
         button.imagePosition = .imageLeading
-        button.imageScaling = .scaleProportionallyDown
+        button.imageScaling = .scaleNone
+        button.imageHugsTitle = true
+        button.alignment = .center
         button.toolTip = title
-        constrain(button, width: width)
+        constrain(button, width: Self.toolButtonWidth)
         toolButtons[tool] = button
         return button
     }
 
     private func configureIconButton(
-        _ button: NSButton,
+        _ button: ScreenshotToolbarButton,
         symbolName: String,
         toolTip: String,
         width: CGFloat
     ) {
-        button.bezelStyle = .recessed
+        button.isBordered = false
         button.controlSize = .regular
         button.image = symbolImage(named: symbolName, description: toolTip)
         button.imagePosition = .imageOnly
-        button.imageScaling = .scaleProportionallyDown
+        button.imageScaling = .scaleNone
+        button.alignment = .center
         button.toolTip = toolTip
         constrain(button, width: width)
     }
 
     private func configureActionButton(
-        _ button: NSButton,
+        _ button: ScreenshotToolbarButton,
         symbolName: String,
         width: CGFloat,
         isPrimary: Bool
     ) {
-        button.bezelStyle = .rounded
+        button.isBordered = false
         button.controlSize = .regular
         button.font = .systemFont(ofSize: 12, weight: isPrimary ? .semibold : .medium)
         button.image = symbolImage(named: symbolName, description: button.title)
         button.imagePosition = .imageLeading
-        button.imageScaling = .scaleProportionallyDown
-        if isPrimary {
-            button.bezelColor = .ttsAccent
-            button.contentTintColor = .white
-        }
+        button.imageScaling = .scaleNone
+        button.imageHugsTitle = true
+        button.alignment = .center
+        button.refreshToolbarAppearance()
         constrain(button, width: width)
     }
 
@@ -954,13 +967,12 @@ private final class ScreenshotAnnotationToolbarPanel: NSPanel {
         button.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             button.widthAnchor.constraint(equalToConstant: width),
-            button.heightAnchor.constraint(equalToConstant: 34)
+            button.heightAnchor.constraint(equalToConstant: Self.buttonHeight)
         ])
     }
 
-    private func makeSeparator() -> NSBox {
-        let separator = NSBox()
-        separator.boxType = .separator
+    private func makeSeparator() -> NSView {
+        let separator = ScreenshotToolbarSeparator()
         separator.translatesAutoresizingMaskIntoConstraints = false
         NSLayoutConstraint.activate([
             separator.widthAnchor.constraint(equalToConstant: 1),
@@ -970,16 +982,45 @@ private final class ScreenshotAnnotationToolbarPanel: NSPanel {
     }
 
     private func symbolImage(named name: String, description: String) -> NSImage? {
-        NSImage(systemSymbolName: name, accessibilityDescription: description)?
-            .withSymbolConfiguration(.init(pointSize: 13, weight: .medium))
+        guard let symbol = NSImage(
+            systemSymbolName: name,
+            accessibilityDescription: description
+        )?.withSymbolConfiguration(.init(pointSize: 13, weight: .medium)) else {
+            return nil
+        }
+
+        let canvasSize = NSSize(width: 18, height: 18)
+        let canvas = NSImage(size: canvasSize, flipped: false) { rect in
+            let symbolSize = symbol.size
+            guard symbolSize.width > 0, symbolSize.height > 0 else { return false }
+            let scale = min(16 / symbolSize.width, 16 / symbolSize.height, 1)
+            let drawSize = NSSize(
+                width: symbolSize.width * scale,
+                height: symbolSize.height * scale
+            )
+            let drawRect = NSRect(
+                x: rect.midX - drawSize.width / 2,
+                y: rect.midY - drawSize.height / 2,
+                width: drawSize.width,
+                height: drawSize.height
+            )
+            symbol.draw(
+                in: drawRect,
+                from: .zero,
+                operation: .sourceOver,
+                fraction: 1
+            )
+            return true
+        }
+        canvas.isTemplate = true
+        return canvas
     }
 
     private func updateSelectedTool(_ tool: ScreenshotAnnotationTool) {
         for (candidate, button) in toolButtons {
             let isSelected = candidate == tool
             button.state = isSelected ? .on : .off
-            button.bezelColor = isSelected ? .ttsAccent : nil
-            button.contentTintColor = isSelected ? .white : .labelColor
+            button.isToolbarSelected = isSelected
         }
     }
 
@@ -1001,7 +1042,123 @@ private final class ScreenshotAnnotationToolbarPanel: NSPanel {
     }
 }
 
-private final class ScreenshotAnnotationToolButton: NSButton {
+private enum ScreenshotToolbarButtonKind: Equatable {
+    case tool
+    case icon
+    case secondary
+    case primary
+}
+
+private class ScreenshotToolbarButton: NSButton {
+    let kind: ScreenshotToolbarButtonKind
+    var isToolbarSelected = false {
+        didSet { refreshToolbarAppearance() }
+    }
+
+    init(
+        title: String,
+        kind: ScreenshotToolbarButtonKind,
+        target: AnyObject?,
+        action: Selector?
+    ) {
+        self.kind = kind
+        super.init(frame: .zero)
+        self.title = title
+        self.target = target
+        self.action = action
+        isBordered = false
+        wantsLayer = true
+        refreshToolbarAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var isEnabled: Bool {
+        didSet { refreshToolbarAppearance() }
+    }
+
+    override func highlight(_ flag: Bool) {
+        super.highlight(flag)
+        refreshToolbarAppearance(isPressed: flag)
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        refreshToolbarAppearance()
+    }
+
+    func refreshToolbarAppearance(isPressed: Bool = false) {
+        guard let layer else { return }
+        let usesAccent = kind == .primary || isToolbarSelected
+        let backgroundColor: NSColor
+        let borderColor: NSColor
+        let foregroundColor: NSColor
+
+        if usesAccent {
+            backgroundColor = NSColor.ttsAccent.withAlphaComponent(isPressed ? 0.78 : 1)
+            borderColor = .ttsAccentStrong
+            foregroundColor = .white
+        } else {
+            switch kind {
+            case .tool:
+                backgroundColor = isPressed ? .ttsToolbarControl : .clear
+                borderColor = .clear
+            case .icon, .secondary:
+                backgroundColor = isPressed
+                    ? NSColor.ttsAccent.withAlphaComponent(0.14)
+                    : .ttsToolbarControl
+                borderColor = .ttsToolbarDivider
+            case .primary:
+                backgroundColor = .ttsAccent
+                borderColor = .ttsAccentStrong
+            }
+            foregroundColor = .labelColor
+        }
+
+        layer.cornerRadius = 9
+        layer.cornerCurve = .continuous
+        layer.backgroundColor = backgroundColor.cgColor
+        layer.borderColor = borderColor.cgColor
+        layer.borderWidth = usesAccent || kind == .secondary || kind == .icon ? 1 : 0
+        alphaValue = isEnabled ? 1 : 0.34
+        contentTintColor = foregroundColor
+        if !title.isEmpty {
+            attributedTitle = NSAttributedString(
+                string: title,
+                attributes: [
+                    .font: font ?? NSFont.systemFont(ofSize: 12, weight: .medium),
+                    .foregroundColor: foregroundColor
+                ]
+            )
+        }
+    }
+}
+
+private final class ScreenshotToolbarSeparator: NSView {
+    override init(frame frameRect: NSRect) {
+        super.init(frame: frameRect)
+        wantsLayer = true
+        updateAppearance()
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override func viewDidChangeEffectiveAppearance() {
+        super.viewDidChangeEffectiveAppearance()
+        updateAppearance()
+    }
+
+    private func updateAppearance() {
+        layer?.backgroundColor = NSColor.ttsToolbarDivider.cgColor
+        layer?.cornerRadius = 0.5
+    }
+}
+
+private final class ScreenshotAnnotationToolButton: ScreenshotToolbarButton {
     let tool: ScreenshotAnnotationTool
 
     init(
@@ -1011,10 +1168,7 @@ private final class ScreenshotAnnotationToolButton: NSButton {
         action: Selector?
     ) {
         self.tool = tool
-        super.init(frame: .zero)
-        self.title = title
-        self.target = target
-        self.action = action
+        super.init(title: title, kind: .tool, target: target, action: action)
     }
 
     required init?(coder: NSCoder) {
@@ -1106,7 +1260,7 @@ private final class ScreenshotAnnotationView: NSView {
         )
 
         drawDraftIfNeeded()
-        NSColor.ttsAccent.setStroke()
+        NSColor.ttsSelectionAccent.setStroke()
         let border = NSBezierPath(rect: bounds.insetBy(dx: 1, dy: 1))
         border.lineWidth = 2
         border.stroke()
@@ -1511,9 +1665,9 @@ private final class ScreenshotAnnotationView: NSView {
                 width: handleSize,
                 height: handleSize
             )
-            NSColor.white.setFill()
+            NSColor.ttsSelectionAccent.setFill()
             NSBezierPath(roundedRect: handleRect, xRadius: 2, yRadius: 2).fill()
-            NSColor.ttsAccent.setStroke()
+            NSColor.white.setStroke()
             let outline = NSBezierPath(
                 roundedRect: handleRect.insetBy(dx: 0.75, dy: 0.75),
                 xRadius: 1.5,
