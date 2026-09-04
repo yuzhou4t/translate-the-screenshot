@@ -10,7 +10,20 @@ func runScreenshotAnnotationRegressionChecks() {
     checkScreenshotAnnotationRendererDrawsAllV1Tools()
     checkScreenshotClipboardPNGPreservesLogicalSize()
     checkFrozenScreenshotCropUsesDisplayCoordinates()
+    checkScreenshotOverlayAcceptsFirstMouse()
     checkMovableResizableSelectionStaysWithinScreen()
+}
+
+@MainActor
+private func checkScreenshotOverlayAcceptsFirstMouse() {
+    let view = ScreenshotOverlayView(
+        frame: CGRect(x: 0, y: 0, width: 8, height: 8),
+        frozenImage: makeAnnotationTestImage(width: 8, height: 8)
+    )
+    precondition(
+        view.acceptsFirstMouse(for: nil),
+        "every display overlay must accept the first drag before becoming key"
+    )
 }
 
 @MainActor

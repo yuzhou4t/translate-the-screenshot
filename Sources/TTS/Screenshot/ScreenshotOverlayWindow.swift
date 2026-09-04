@@ -61,7 +61,7 @@ final class ScreenshotOverlayWindow: NSPanel {
 }
 
 @MainActor
-private final class ScreenshotOverlayView: NSView {
+final class ScreenshotOverlayView: NSView {
     var onFinished: ((CGRect) -> Void)?
     var onCancelled: (() -> Void)?
 
@@ -74,6 +74,10 @@ private final class ScreenshotOverlayView: NSView {
     private var trackingArea: NSTrackingArea?
 
     override var acceptsFirstResponder: Bool {
+        true
+    }
+
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool {
         true
     }
 
