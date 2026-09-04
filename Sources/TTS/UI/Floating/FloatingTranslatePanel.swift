@@ -274,29 +274,26 @@ struct FloatingTranslateView: View {
         }
         .padding(14)
         .frame(width: isComparisonVisible ? 780 : 540, height: isComparisonVisible ? 580 : 520, alignment: .topLeading)
-        .background(panelBackground)
+        .background(TTSWindowBackground())
         .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 18, style: .continuous)
-                .stroke(Color(NSColor.separatorColor).opacity(0.42), lineWidth: 1)
+                .stroke(TTSVisualStyle.border, lineWidth: 1)
         )
-        .shadow(color: Color.black.opacity(0.14), radius: 18, x: 0, y: 10)
+        .shadow(color: Color.black.opacity(0.17), radius: 22, x: 0, y: 12)
         .background(WindowDragView())
+        .tint(TTSVisualStyle.accent)
         .task(id: resultTaskID) {
             syncResultState()
         }
     }
 
-    private var panelBackground: some ShapeStyle {
-        .background
-    }
-
     private var floatingSurfaceColor: Color {
-        Color(NSColor.windowBackgroundColor).opacity(0.96)
+        TTSVisualStyle.surface
     }
 
     private var floatingControlColor: Color {
-        Color(NSColor.textBackgroundColor).opacity(0.94)
+        TTSVisualStyle.controlSurface
     }
 
     private var contentArea: some View {
@@ -353,7 +350,7 @@ struct FloatingTranslateView: View {
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(Color(NSColor.controlBackgroundColor), in: Capsule())
+                    .background(TTSVisualStyle.controlSurface, in: Capsule())
             }
 
             if isPinHovered {
@@ -365,7 +362,7 @@ struct FloatingTranslateView: View {
                     .background(floatingSurfaceColor, in: Capsule())
                     .overlay(
                         Capsule()
-                            .stroke(Color(NSColor.separatorColor).opacity(0.22), lineWidth: 1)
+                            .stroke(TTSVisualStyle.subtleBorder, lineWidth: 1)
                     )
                     .transition(.opacity.combined(with: .scale(scale: 0.96, anchor: .trailing)))
             }
@@ -375,9 +372,9 @@ struct FloatingTranslateView: View {
             } label: {
                 Image(systemName: isPinned ? "pin.fill" : "pin")
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(isPinned ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(isPinned ? TTSVisualStyle.accent : Color.secondary)
                     .frame(width: 26, height: 26)
-                    .background(Color(NSColor.controlBackgroundColor), in: Circle())
+                    .background(TTSVisualStyle.controlSurface, in: Circle())
                     .scaleEffect(isPinned ? 1.08 : 1)
                     .rotationEffect(.degrees(isPinned ? -18 : 0))
                     .animation(.spring(response: 0.28, dampingFraction: 0.68), value: isPinned)
@@ -417,7 +414,7 @@ struct FloatingTranslateView: View {
     private var headerTint: Color {
         switch state {
         case .loading:
-            .accentColor
+            TTSVisualStyle.accent
         case .result:
             .green
         case .error:
@@ -455,7 +452,7 @@ struct FloatingTranslateView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 5)
-        .background(Color(NSColor.controlBackgroundColor), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .background(TTSVisualStyle.controlSurface, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
     }
 
     @ViewBuilder
@@ -511,7 +508,7 @@ struct FloatingTranslateView: View {
                     HStack(spacing: 8) {
                         Image(systemName: selectedTranslationMode.systemImage)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(Color.accentColor)
+                            .foregroundStyle(TTSVisualStyle.accent)
 
                         Text(selectedTranslationMode.displayName)
                             .font(.system(size: 13))
@@ -533,7 +530,7 @@ struct FloatingTranslateView: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 8, style: .continuous)
-                            .stroke(Color(NSColor.separatorColor).opacity(0.24), lineWidth: 1)
+                            .stroke(TTSVisualStyle.subtleBorder, lineWidth: 1)
                     )
                 }
                 .buttonStyle(.plain)
@@ -615,7 +612,7 @@ struct FloatingTranslateView: View {
                     HStack(spacing: 8) {
                         Image(systemName: mode.systemImage)
                             .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(mode == item.translationMode ? Color.accentColor : Color.secondary)
+                            .foregroundStyle(mode == item.translationMode ? TTSVisualStyle.accent : Color.secondary)
                             .frame(width: 14)
 
                         Text(mode.displayName)
@@ -627,7 +624,7 @@ struct FloatingTranslateView: View {
                         if mode == item.translationMode {
                             Image(systemName: "checkmark")
                                 .font(.system(size: 11, weight: .semibold))
-                                .foregroundStyle(Color.accentColor)
+                                .foregroundStyle(TTSVisualStyle.accent)
                         }
                     }
                     .padding(.horizontal, 10)
@@ -647,13 +644,13 @@ struct FloatingTranslateView: View {
         .background(floatingSurfaceColor, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .stroke(Color(NSColor.separatorColor).opacity(0.24), lineWidth: 1)
+                .stroke(TTSVisualStyle.subtleBorder, lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.12), radius: 12, x: 0, y: 6)
     }
 
     private func menuRowBackground(for mode: TranslationMode) -> Color {
-        hoveredTranslationMode == mode ? Color.accentColor.opacity(0.12) : .clear
+        hoveredTranslationMode == mode ? TTSVisualStyle.accent.opacity(0.12) : .clear
     }
 
     private func sourceSection(text: String?, placeholder: String) -> some View {
@@ -708,7 +705,7 @@ struct FloatingTranslateView: View {
                 comparisonCard(
                     title: "当前",
                     item: current,
-                    tint: .accentColor
+                    tint: TTSVisualStyle.accent
                 )
             }
             .frame(maxWidth: .infinity, maxHeight: 286, alignment: .top)
@@ -729,7 +726,7 @@ struct FloatingTranslateView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding(11)
-        .background(Color(NSColor.controlBackgroundColor).opacity(0.82), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .background(TTSVisualStyle.controlSurface, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
 
     private func comparisonCard(
@@ -775,7 +772,7 @@ struct FloatingTranslateView: View {
         .background(comparisonCardBackground(isCurrent: isCurrent, tint: tint), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(isCurrent ? tint.opacity(0.55) : Color(NSColor.separatorColor).opacity(0.35), lineWidth: isCurrent ? 1.4 : 1)
+                .stroke(isCurrent ? tint.opacity(0.55) : TTSVisualStyle.subtleBorder, lineWidth: isCurrent ? 1.4 : 1)
         )
     }
 
@@ -783,7 +780,7 @@ struct FloatingTranslateView: View {
         if isCurrent {
             return tint.opacity(0.08)
         }
-        return Color(NSColor.controlBackgroundColor).opacity(0.82)
+        return TTSVisualStyle.controlSurface
     }
 
     private func textSection(
@@ -818,7 +815,7 @@ struct FloatingTranslateView: View {
             .background(sectionBackground(isEmphasized: isEmphasized), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color(NSColor.separatorColor).opacity(isEmphasized ? 0.45 : 0.25), lineWidth: 1)
+                    .stroke(TTSVisualStyle.subtleBorder.opacity(isEmphasized ? 1 : 0.72), lineWidth: 1)
             )
         }
     }
@@ -852,9 +849,9 @@ struct FloatingTranslateView: View {
 
     private func sectionBackground(isEmphasized: Bool) -> Color {
         if isEmphasized {
-            return Color(NSColor.textBackgroundColor).opacity(0.72)
+            return TTSVisualStyle.raisedSurface
         }
-        return Color(NSColor.controlBackgroundColor).opacity(0.9)
+        return TTSVisualStyle.controlSurface
     }
 
     private func displayText(_ text: String?, placeholder: String) -> String {

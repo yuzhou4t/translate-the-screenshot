@@ -6,100 +6,198 @@ enum SettingsTab: Hashable {
     case shortcuts
     case translationService
     case privacy
+
+    var title: String {
+        switch self {
+        case .general:
+            "通用"
+        case .shortcuts:
+            "快捷键"
+        case .translationService:
+            "翻译服务"
+        case .privacy:
+            "权限与隐私"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .general:
+            "gearshape"
+        case .shortcuts:
+            "keyboard"
+        case .translationService:
+            "network"
+        case .privacy:
+            "lock.shield"
+        }
+    }
 }
 
 struct SettingsView: View {
     @StateObject var viewModel: SettingsViewModel
 
     var body: some View {
-        TabView(selection: $viewModel.selectedTab) {
-            generalSettings
-                .tag(SettingsTab.general)
-                .tabItem {
-                    Label("通用", systemImage: "gearshape")
-                }
+        ZStack {
+            TTSWindowBackground()
 
-            shortcutSettings
-                .tag(SettingsTab.shortcuts)
-                .tabItem {
-                    Label("快捷键", systemImage: "keyboard")
-                }
+            HStack(spacing: 12) {
+                settingsSidebar
+                    .frame(width: 172)
+                    .ttsGlassSurface(cornerRadius: 18)
 
-            translationServiceSettings
-                .tag(SettingsTab.translationService)
-                .tabItem {
-                    Label("翻译服务", systemImage: "network")
+                Group {
+                    switch viewModel.selectedTab {
+                    case .general:
+                        generalSettings
+                    case .shortcuts:
+                        shortcutSettings
+                    case .translationService:
+                        translationServiceSettings
+                    case .privacy:
+                        permissionPrivacySettings
+                    }
                 }
-
-            permissionPrivacySettings
-                .tag(SettingsTab.privacy)
-                .tabItem {
-                    Label("权限与隐私", systemImage: "lock.shield")
-                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .ttsGlassSurface(cornerRadius: 18, elevated: true)
+            }
+            .padding(14)
         }
-        .frame(minWidth: 960, idealWidth: 1000, minHeight: 680, idealHeight: 720)
-        .background(.background)
+        .frame(minWidth: 900, idealWidth: 980, minHeight: 620, idealHeight: 680)
+        .tint(TTSVisualStyle.accent)
         .onAppear {
             viewModel.reload()
         }
     }
 
-    private var generalSettings: some View {
-        Form {
-            Section("基础设置") {
-                LabeledContent("默认翻译服务") {
-                    Text(viewModel.defaultProviderID.displayName)
+    private var settingsSidebar: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 10) {
+                Image(systemName: "character.textbox")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(Color.white)
+                    .frame(width: 32, height: 32)
+                    .background(
+                        LinearGradient(
+                            colors: [TTSVisualStyle.accent, TTSVisualStyle.accentStrong],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    )
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("TTS 设置")
+                        .font(.headline)
+                    Text("轻量翻译工具")
+                        .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
+            }
+            .padding(.horizontal, 12)
+            .padding(.top, 12)
+            .padding(.bottom, 8)
 
-                HStack {
-                    Picker("翻译方向", selection: $viewModel.translationDirection) {
-                        ForEach(TranslationDirection.allCases) { direction in
-                            Text(direction.displayName)
-                                .tag(direction)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .buttonStyle(.bordered)
-                    .frame(width: 280)
+            Text("设置")
+                .font(.caption2.weight(.semibold))
+                .foregroundStyle(.tertiary)
+                .padding(.horizontal, 14)
 
-                    Button("保存") {
-                        viewModel.saveTranslationDirection()
+            ForEach(
+                [SettingsTab.general, .shortcuts, .translationService, .privacy],
+                id: \.self
+            ) { tab in
+                Button {
+                    viewModel.selectedTab = tab
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: tab.systemImage)
+                            .frame(width: 18)
+                        Text(tab.title)
+                        Spacer()
                     }
-                    .buttonStyle(.bordered)
-                    Spacer()
+                    .font(.system(size: 13, weight: viewModel.selectedTab == tab ? .semibold : .medium))
+                    .foregroundStyle(viewModel.selectedTab == tab ? TTSVisualStyle.accentStrong : Color.secondary)
+                    .padding(.horizontal, 12)
+                    .frame(height: 36)
+                    .background(
+                        viewModel.selectedTab == tab
+                            ? TTSVisualStyle.accent.opacity(0.13)
+                            : Color.clear,
+                        in: RoundedRectangle(cornerRadius: 11, style: .continuous)
+                    )
                 }
-
-                HStack {
-                    Picker("默认翻译模式", selection: $viewModel.defaultTranslationMode) {
-                        ForEach(TranslationMode.userSelectableCases) { mode in
-                            Text(mode.displayName)
-                                .tag(mode)
-                        }
-                    }
-                    .pickerStyle(.menu)
-                    .buttonStyle(.bordered)
-                    .frame(width: 280)
-
-                    Button("保存") {
-                        viewModel.saveDefaultTranslationMode()
-                    }
-                    .buttonStyle(.bordered)
-                    Spacer()
-                }
-
-                Text(viewModel.defaultTranslationMode.description)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                if !viewModel.statusMessage.isEmpty {
-                    Text(viewModel.statusMessage)
-                        .font(.caption)
-                        .foregroundStyle(viewModel.statusIsError ? Color.red : Color.secondary)
-                }
+                .buttonStyle(.plain)
+                .padding(.horizontal, 8)
             }
 
-            Section("核心工作流") {
+            Spacer()
+
+            HStack(spacing: 7) {
+                Circle()
+                    .fill(Color.green)
+                    .frame(width: 7, height: 7)
+                Text("菜单栏服务运行中")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            }
+            .padding(14)
+        }
+        .background(TTSVisualStyle.raisedSurface.opacity(0.58))
+    }
+
+    private var generalSettings: some View {
+        SettingsPage(
+            title: "通用",
+            subtitle: "管理默认翻译方向、模式与核心工作流",
+            systemImage: "gearshape"
+        ) {
+            SettingsSectionCard(title: "基础设置", systemImage: "slider.horizontal.3") {
+                SettingsValueRow(title: "默认翻译服务", value: viewModel.defaultProviderID.displayName)
+                settingsDivider
+
+                HStack(spacing: 10) {
+                    Text("翻译方向")
+                        .font(.subheadline.weight(.medium))
+                    Spacer()
+                    Picker("翻译方向", selection: $viewModel.translationDirection) {
+                        ForEach(TranslationDirection.allCases) { direction in
+                            Text(direction.displayName).tag(direction)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 170)
+                    Button("保存") { viewModel.saveTranslationDirection() }
+                        .buttonStyle(TTSPrimaryButtonStyle())
+                }
+                settingsDivider
+
+                HStack(spacing: 10) {
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("默认翻译模式")
+                            .font(.subheadline.weight(.medium))
+                        Text(viewModel.defaultTranslationMode.description)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Picker("默认翻译模式", selection: $viewModel.defaultTranslationMode) {
+                        ForEach(TranslationMode.userSelectableCases) { mode in
+                            Text(mode.displayName).tag(mode)
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 150)
+                    Button("保存") { viewModel.saveDefaultTranslationMode() }
+                        .buttonStyle(TTSPrimaryButtonStyle())
+                }
+
+                statusMessage
+            }
+
+            SettingsSectionCard(title: "核心工作流", systemImage: "point.3.connected.trianglepath.dotted") {
                 SettingsInfoRow(
                     title: "划词翻译",
                     message: "读取选中文字后直接使用默认服务翻译。",
@@ -122,22 +220,20 @@ struct SettingsView: View {
                 )
             }
         }
-        .formStyle(.grouped)
-        .padding()
     }
 
     private var translationServiceSettings: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 10) {
                 Label("翻译服务", systemImage: "network")
-                    .font(.headline)
+                    .font(.title3.weight(.semibold))
 
                 Text("\(viewModel.enabledProviderCount) 个已启用")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
-                    .background(.quaternary, in: Capsule())
+                    .background(TTSVisualStyle.accent.opacity(0.11), in: Capsule())
 
                 Spacer()
 
@@ -147,59 +243,65 @@ struct SettingsView: View {
                         .foregroundStyle(viewModel.statusIsError ? Color.red : Color.secondary)
                 }
             }
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(.bar)
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 12)
 
-            Divider()
-
-            HStack(alignment: .top, spacing: 0) {
+            HStack(alignment: .top, spacing: 14) {
                 providerList
-                    .frame(minWidth: 300, idealWidth: 330, maxWidth: 360)
-
-                Divider()
+                    .frame(width: 292)
 
                 providerDetails
                     .frame(maxWidth: .infinity, alignment: .topLeading)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 12)
             }
             .frame(maxHeight: .infinity)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 16)
         }
     }
 
     private var providerList: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Text("服务商")
-                    .font(.headline)
+                    .font(.subheadline.weight(.semibold))
                 Spacer()
-                Text("\(viewModel.providerConfigs.count)")
+                Text("\(viewModel.providerConfigs.count) 个")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
+            .padding(.horizontal, 4)
 
-            List(selection: $viewModel.selectedProviderID) {
-                Section("AI 大模型") {
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 6) {
+                    providerGroupTitle("AI 大模型")
                     ForEach(viewModel.aiProviderConfigs) { config in
                         providerRow(config)
                     }
-                }
-
-                Section("传统翻译") {
+                    providerGroupTitle("传统翻译")
+                        .padding(.top, 8)
                     ForEach(viewModel.traditionalProviderConfigs) { config in
                         providerRow(config)
                     }
                 }
+                .padding(8)
             }
-            .listStyle(.inset)
-            .frame(maxHeight: .infinity)
-            .scrollContentBackground(.hidden)
+            .background(TTSVisualStyle.raisedSurface.opacity(0.8))
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(TTSVisualStyle.subtleBorder, lineWidth: 1)
+            }
         }
         .frame(maxHeight: .infinity)
-        .background(.background)
+    }
+
+    private func providerGroupTitle(_ title: String) -> some View {
+        Text(title.uppercased())
+            .font(.caption2.weight(.semibold))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 7)
+            .padding(.top, 4)
     }
 
     private func providerRow(_ config: ProviderConfig) -> some View {
@@ -207,172 +309,238 @@ struct SettingsView: View {
             config: config,
             isDefault: config.id == viewModel.defaultProviderID,
             isImplemented: viewModel.isImplemented(config.id),
+            isSelected: config.id == viewModel.selectedProviderID,
             onSelect: {
                 viewModel.selectProvider(config.id)
             },
             onToggleEnabled: { isEnabled in
                 viewModel.setEnabled(isEnabled, for: config.id)
-            },
-            onSetDefault: {
-                viewModel.setDefaultProvider(config.id)
             }
         )
-        .tag(config.id)
-        .listRowSeparator(.hidden)
     }
 
     @ViewBuilder
     private var providerDetails: some View {
         if let config = viewModel.selectedProviderConfig {
-            Form {
-                Section("Fallback") {
-                    Toggle("自动 fallback", isOn: $viewModel.fallbackEnabled)
-
-                    Picker("备用服务商", selection: $viewModel.fallbackProviderID) {
-                        Text("不使用备用服务")
-                            .tag(Optional<TranslationProviderID>.none)
-
-                        ForEach(viewModel.availableFallbackProviderConfigs) { fallbackConfig in
-                            Text(fallbackConfig.displayName)
-                                .tag(Optional(fallbackConfig.id))
-                        }
-                    }
-                    .disabled(!viewModel.fallbackEnabled)
-
-                    if let fallbackProviderID = viewModel.fallbackProviderID {
-                        TextField("备用模型", text: $viewModel.fallbackModel)
-                            .textFieldStyle(.roundedBorder)
-                            .disabled(!viewModel.fallbackEnabled)
-
-                        ModelSuggestionPicker(
-                            title: "备用模型建议",
-                            providerID: fallbackProviderID,
-                            modelName: $viewModel.fallbackModel
-                        )
-                    }
-
-                    Button("保存 fallback 设置") {
-                        viewModel.saveFallbackSettings()
-                    }
-                    .disabled(!viewModel.fallbackEnabled && viewModel.fallbackProviderID == nil && viewModel.fallbackModel.isEmpty)
-
-                    Text("默认先使用主翻译服务和模型；失败后最多尝试一次全局备用服务，不做场景路由或多级重试。")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+            ScrollView {
+                VStack(spacing: 14) {
+                    fallbackCard
+                    providerConfigurationCard(config)
+                    statusMessage
                 }
-
-                Section("当前服务商") {
-                    Text(config.displayName)
-                        .font(.headline)
-
-                    LabeledContent("类型") {
-                        Text(config.type.displayName)
-                    }
-
-                    LabeledContent("接入状态") {
-                        Text(viewModel.isImplemented(config.id) ? "已接入" : "待接入")
-                            .foregroundStyle(viewModel.isImplemented(config.id) ? Color.green : Color.secondary)
-                    }
-
-                    TextField("Endpoint", text: $viewModel.endpoint)
-                        .textFieldStyle(.roundedBorder)
-
-                    TextField(
-                        config.id == .volcengine ? "Region（默认 cn-north-1）" : "模型 / 区域",
-                        text: $viewModel.model
-                    )
-                        .textFieldStyle(.roundedBorder)
-
-                    ModelSuggestionPicker(
-                        title: "常用模型",
-                        providerID: config.id,
-                        modelName: $viewModel.model
-                    )
-
-                    TextField(
-                        config.id == .volcengine ? "AccessKey ID" : "App ID / SecretId / AccessKeyId",
-                        text: $viewModel.appID
-                    )
-                        .textFieldStyle(.roundedBorder)
-
-                    if config.id != .volcengine {
-                        SecureField("API Key", text: $viewModel.apiKey)
-                            .textFieldStyle(.roundedBorder)
-                    }
-
-                    SecureField(
-                        config.id == .volcengine ? "Secret Access Key" : "Secret Key",
-                        text: $viewModel.secretKey
-                    )
-                        .textFieldStyle(.roundedBorder)
-
-                    HStack {
-                        Text("超时")
-                        TextField("秒", value: $viewModel.timeout, format: .number)
-                            .textFieldStyle(.roundedBorder)
-                            .frame(width: 80)
-                        Text("秒")
-                            .foregroundStyle(.secondary)
-                    }
-
-                    if config.id == .volcengine {
-                        Divider()
-
-                        Text("安全说明：上面的 Endpoint 只用于火山文字翻译；从菜单或已配置的“火山图片翻译 Beta”快捷键主动启动时，完整截图才会固定发送到 https://translate.volcengineapi.com。")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        LabeledContent("图片翻译 Beta 安全计数") {
-                            Text(viewModel.volcengineImageUsageText)
-                                .monospacedDigit()
-                        }
-
-                        Text("从菜单或已配置快捷键启动火山图片翻译时会上传完整截图。提交前会查询火山账号当月图片用量，并与本机计数取较大值；达到免费 100 张后阻止。请求一旦发出，即使失败或超时也不会返还本机计数。用量查询失败时会停止，不冒险继续提交。")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        if viewModel.hasVolcengineUploadConsent {
-                            Button("撤销火山整图自动上传同意") {
-                                viewModel.revokeVolcengineUploadConsent()
-                            }
-                        } else {
-                            Text("首次从菜单或已配置快捷键启动火山图片翻译时会说明上传范围，并只询问一次。")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    Button("保存当前服务商配置") {
-                        viewModel.saveSelectedProvider()
-                    }
-                    .keyboardShortcut(.defaultAction)
-                }
+                .padding(.trailing, 4)
             }
-            .formStyle(.grouped)
         } else {
             Text("请选择一个服务商")
                 .foregroundStyle(.secondary)
         }
     }
 
+    private var fallbackCard: some View {
+        SettingsSectionCard(title: "备用服务", systemImage: "arrow.triangle.branch") {
+            HStack {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("自动 fallback")
+                        .font(.subheadline.weight(.medium))
+                    Text("主服务失败后最多切换一次")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Toggle("自动 fallback", isOn: $viewModel.fallbackEnabled)
+                    .labelsHidden()
+                    .toggleStyle(.switch)
+                    .controlSize(.small)
+            }
+
+            if viewModel.fallbackEnabled {
+                settingsDivider
+
+                SettingsControlRow(title: "备用服务商") {
+                    Picker("备用服务商", selection: $viewModel.fallbackProviderID) {
+                        Text("不使用备用服务")
+                            .tag(Optional<TranslationProviderID>.none)
+                        ForEach(viewModel.availableFallbackProviderConfigs) { fallbackConfig in
+                            Text(fallbackConfig.displayName)
+                                .tag(Optional(fallbackConfig.id))
+                        }
+                    }
+                    .labelsHidden()
+                    .pickerStyle(.menu)
+                    .frame(width: 190)
+                }
+
+                if let fallbackProviderID = viewModel.fallbackProviderID {
+                    SettingsField(
+                        title: "备用模型",
+                        placeholder: "例如 deepseek-ai/DeepSeek-V3.2",
+                        text: $viewModel.fallbackModel
+                    )
+                    ModelSuggestionPicker(
+                        title: "备用模型建议",
+                        providerID: fallbackProviderID,
+                        modelName: $viewModel.fallbackModel
+                    )
+                }
+            }
+
+            HStack(alignment: .center, spacing: 12) {
+                Text("不做场景路由或多级重试。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Button("保存备用设置") {
+                    viewModel.saveFallbackSettings()
+                }
+                .buttonStyle(TTSSecondaryButtonStyle())
+            }
+        }
+    }
+
+    private func providerConfigurationCard(_ config: ProviderConfig) -> some View {
+        SettingsSectionCard(title: "当前服务商", systemImage: "server.rack") {
+            HStack(alignment: .center, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(config.displayName)
+                        .font(.headline)
+                    HStack(spacing: 6) {
+                        StatusPill(
+                            text: config.type.displayName,
+                            systemImage: "square.stack.3d.up",
+                            tint: .secondary
+                        )
+                        StatusPill(
+                            text: viewModel.isImplemented(config.id) ? "已接入" : "待接入",
+                            systemImage: viewModel.isImplemented(config.id) ? "checkmark.circle.fill" : "clock",
+                            tint: viewModel.isImplemented(config.id) ? .green : .secondary
+                        )
+                    }
+                }
+                Spacer()
+                if config.id == viewModel.defaultProviderID {
+                    StatusPill(text: "默认服务", systemImage: "checkmark.seal.fill", tint: TTSVisualStyle.accent)
+                } else {
+                    Button("设为默认") {
+                        viewModel.setDefaultProvider(config.id)
+                    }
+                    .buttonStyle(TTSSecondaryButtonStyle())
+                }
+            }
+
+            settingsDivider
+
+            SettingsField(title: "Endpoint", placeholder: "https://...", text: $viewModel.endpoint)
+            SettingsField(
+                title: config.id == .volcengine ? "Region" : "模型 / 区域",
+                placeholder: config.id == .volcengine ? "cn-north-1" : "模型名称",
+                text: $viewModel.model
+            )
+
+            ModelSuggestionPicker(
+                title: "常用模型",
+                providerID: config.id,
+                modelName: $viewModel.model
+            )
+
+            SettingsField(
+                title: config.id == .volcengine ? "AccessKey ID" : "App ID / SecretId / AccessKeyId",
+                placeholder: "可选",
+                text: $viewModel.appID
+            )
+
+            if config.id != .volcengine {
+                SettingsSecureField(title: "API Key", placeholder: "保存在 macOS Keychain", text: $viewModel.apiKey)
+            }
+
+            SettingsSecureField(
+                title: config.id == .volcengine ? "Secret Access Key" : "Secret Key",
+                placeholder: "保存在 macOS Keychain",
+                text: $viewModel.secretKey
+            )
+
+            SettingsControlRow(title: "请求超时") {
+                HStack(spacing: 6) {
+                    TextField("秒", value: $viewModel.timeout, format: .number)
+                        .textFieldStyle(.plain)
+                        .multilineTextAlignment(.trailing)
+                        .padding(.horizontal, 10)
+                        .frame(width: 74, height: 32)
+                        .ttsTintedControl()
+                    Text("秒")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if config.id == .volcengine {
+                settingsDivider
+                Text("火山整图翻译只在你从菜单或独立快捷键主动启动时上传完整截图，并固定使用官方接口。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                SettingsValueRow(title: "图片翻译 Beta 安全计数", value: viewModel.volcengineImageUsageText)
+                if viewModel.hasVolcengineUploadConsent {
+                    Button("撤销整图自动上传同意") {
+                        viewModel.revokeVolcengineUploadConsent()
+                    }
+                    .buttonStyle(TTSSecondaryButtonStyle())
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("保存当前服务商") {
+                    viewModel.saveSelectedProvider()
+                }
+                .buttonStyle(TTSPrimaryButtonStyle())
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var statusMessage: some View {
+        if !viewModel.statusMessage.isEmpty {
+            Text(viewModel.statusMessage)
+                .font(.caption)
+                .foregroundStyle(viewModel.statusIsError ? Color.red : TTSVisualStyle.accentStrong)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var settingsDivider: some View {
+        Rectangle()
+            .fill(TTSVisualStyle.subtleBorder)
+            .frame(height: 1)
+    }
+
     private var shortcutSettings: some View {
-        Form {
-            Section("快捷键") {
+        SettingsPage(
+            title: "快捷键",
+            subtitle: "每条流程保持独立，按你的使用习惯自由调整",
+            systemImage: "keyboard"
+        ) {
+            SettingsSectionCard(title: "全局快捷键", systemImage: "command") {
                 KeyboardShortcuts.Recorder("截图到剪贴板", name: .screenshotClipboard)
+                settingsDivider
                 KeyboardShortcuts.Recorder("划词翻译", name: .translateSelection)
+                settingsDivider
                 KeyboardShortcuts.Recorder("输入翻译", name: .inputTranslate)
+                settingsDivider
                 KeyboardShortcuts.Recorder("截图翻译", name: .screenshotTranslate)
+                settingsDivider
                 KeyboardShortcuts.Recorder("Apple 本地坐标翻译", name: .screenshotTranslateOverlay)
+                settingsDivider
                 KeyboardShortcuts.Recorder("API 高质量坐标翻译", name: .screenshotTranslateOverlayAPI)
+                settingsDivider
                 KeyboardShortcuts.Recorder("火山图片翻译 Beta", name: .volcengineImageTranslation)
+                settingsDivider
                 KeyboardShortcuts.Recorder("截图 OCR", name: .screenshotOCR)
+                settingsDivider
                 KeyboardShortcuts.Recorder("静默截图 OCR", name: .silentScreenshotOCR)
             }
 
-            Section("说明") {
+            SettingsSectionCard(title: "使用说明", systemImage: "info.circle") {
                 SettingsInfoRow(
                     title: "全局快捷键",
                     message: "这些快捷键由系统监听，TTS 在菜单栏常驻时即可触发对应操作。",
@@ -390,39 +558,47 @@ struct SettingsView: View {
                 )
             }
         }
-        .formStyle(.grouped)
-        .padding()
     }
 
     private var permissionPrivacySettings: some View {
-        Form {
-            Section("权限状态") {
-                LabeledContent("辅助功能") {
-                    Text(viewModel.accessibilityStatus)
-                        .foregroundStyle(viewModel.isAccessibilityTrusted ? Color.green : Color.red)
-                }
+        SettingsPage(
+            title: "权限与隐私",
+            subtitle: "清楚查看本机权限与每条流程的数据边界",
+            systemImage: "lock.shield"
+        ) {
+            SettingsSectionCard(title: "权限状态", systemImage: "checkmark.shield") {
+                SettingsPermissionRow(
+                    title: "辅助功能",
+                    status: viewModel.accessibilityStatus,
+                    isGranted: viewModel.isAccessibilityTrusted
+                )
+                settingsDivider
+                SettingsPermissionRow(
+                    title: "屏幕录制",
+                    status: viewModel.screenRecordingStatus,
+                    isGranted: viewModel.isScreenRecordingTrusted
+                )
+                settingsDivider
 
-                LabeledContent("屏幕录制") {
-                    Text(viewModel.screenRecordingStatus)
-                        .foregroundStyle(viewModel.isScreenRecordingTrusted ? Color.green : Color.red)
-                }
-
-                HStack {
+                HStack(spacing: 8) {
                     Button("请求辅助功能权限") {
                         viewModel.requestAccessibility()
                     }
+                    .buttonStyle(TTSSecondaryButtonStyle())
 
                     Button("请求屏幕录制权限") {
                         viewModel.requestScreenRecording()
                     }
+                    .buttonStyle(TTSSecondaryButtonStyle())
 
                     Button("刷新状态") {
                         viewModel.refreshPermissions()
                     }
+                    .buttonStyle(TTSPrimaryButtonStyle())
                 }
             }
 
-            Section("隐私说明") {
+            SettingsSectionCard(title: "隐私说明", systemImage: "hand.raised") {
                 SettingsInfoRow(
                     title: "截图 OCR",
                     message: "截图 OCR 与 Option + S 先在本机使用 Apple Vision；Option + S 再把识别文字交给启用的翻译服务。",
@@ -460,13 +636,179 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .formStyle(.grouped)
-        .padding()
         .onAppear {
             viewModel.refreshPermissions()
         }
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             viewModel.refreshPermissions()
+        }
+    }
+}
+
+private struct SettingsPage<Content: View>: View {
+    var title: String
+    var subtitle: String
+    var systemImage: String
+    @ViewBuilder var content: Content
+
+    init(
+        title: String,
+        subtitle: String,
+        systemImage: String,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.subtitle = subtitle
+        self.systemImage = systemImage
+        self.content = content()
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 14) {
+                HStack(spacing: 11) {
+                    Image(systemName: systemImage)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundStyle(TTSVisualStyle.accentStrong)
+                        .frame(width: 36, height: 36)
+                        .background(TTSVisualStyle.accent.opacity(0.12), in: RoundedRectangle(cornerRadius: 11, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(title)
+                            .font(.title3.weight(.semibold))
+                        Text(subtitle)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .padding(.bottom, 2)
+
+                content
+            }
+            .padding(20)
+        }
+    }
+}
+
+private struct SettingsSectionCard<Content: View>: View {
+    var title: String
+    var systemImage: String
+    @ViewBuilder var content: Content
+
+    init(
+        title: String,
+        systemImage: String,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.systemImage = systemImage
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Label(title, systemImage: systemImage)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(TTSVisualStyle.accentStrong)
+            content
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(TTSVisualStyle.raisedSurface)
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .overlay {
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(TTSVisualStyle.subtleBorder, lineWidth: 1)
+        }
+    }
+}
+
+private struct SettingsValueRow: View {
+    var title: String
+    var value: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+            Spacer()
+            Text(value)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct SettingsControlRow<Control: View>: View {
+    var title: String
+    @ViewBuilder var control: Control
+
+    init(title: String, @ViewBuilder control: () -> Control) {
+        self.title = title
+        self.control = control()
+    }
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+            Spacer()
+            control
+        }
+    }
+}
+
+private struct SettingsField: View {
+    var title: String
+    var placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 11)
+                .frame(height: 34)
+                .ttsTintedControl()
+        }
+    }
+}
+
+private struct SettingsSecureField: View {
+    var title: String
+    var placeholder: String
+    @Binding var text: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.secondary)
+            SecureField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .padding(.horizontal, 11)
+                .frame(height: 34)
+                .ttsTintedControl()
+        }
+    }
+}
+
+private struct SettingsPermissionRow: View {
+    var title: String
+    var status: String
+    var isGranted: Bool
+
+    var body: some View {
+        HStack {
+            Text(title)
+                .font(.subheadline.weight(.medium))
+            Spacer()
+            Label(status, systemImage: isGranted ? "checkmark.circle.fill" : "exclamationmark.circle.fill")
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(isGranted ? Color.green : Color.orange)
         }
     }
 }
@@ -480,8 +822,9 @@ private struct SettingsInfoRow: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: systemImage)
                 .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(.secondary)
-                .frame(width: 22)
+                .foregroundStyle(TTSVisualStyle.accentStrong)
+                .frame(width: 28, height: 28)
+                .background(TTSVisualStyle.accent.opacity(0.10), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
 
             VStack(alignment: .leading, spacing: 3) {
                 Text(title)
@@ -492,7 +835,7 @@ private struct SettingsInfoRow: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
     }
 }
 
@@ -507,18 +850,22 @@ private struct ModelSuggestionPicker: View {
 
     var body: some View {
         if !suggestions.isEmpty {
-            Picker(title, selection: selection) {
-                if isCustomModel {
-                    Text("自定义：\(modelName)")
-                        .tag(modelName)
-                }
+            SettingsControlRow(title: title) {
+                Picker(title, selection: selection) {
+                    if isCustomModel {
+                        Text("自定义：\(modelName)")
+                            .tag(modelName)
+                    }
 
-                ForEach(suggestions) { model in
-                    Text(model.label)
-                        .tag(model.value)
+                    ForEach(suggestions) { model in
+                        Text(model.label)
+                            .tag(model.value)
+                    }
                 }
+                .labelsHidden()
+                .pickerStyle(.menu)
+                .frame(width: 220)
             }
-            .pickerStyle(.menu)
         }
     }
 
@@ -545,60 +892,77 @@ private struct ProviderConfigRow: View {
     var config: ProviderConfig
     var isDefault: Bool
     var isImplemented: Bool
+    var isSelected: Bool
     var onSelect: () -> Void
     var onToggleEnabled: (Bool) -> Void
-    var onSetDefault: () -> Void
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 9) {
-            HStack {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(config.displayName)
-                        .font(.subheadline.weight(.semibold))
-                    HStack(spacing: 6) {
-                        StatusPill(
-                            text: isImplemented ? "已接入" : "待接入",
-                            systemImage: isImplemented ? "checkmark.circle.fill" : "clock",
-                            tint: isImplemented ? .green : .secondary
-                        )
-                        if config.isEnabled {
-                            StatusPill(text: "启用", systemImage: "bolt.fill", tint: .accentColor)
-                        }
+        HStack(spacing: 10) {
+            Image(systemName: providerSystemImage)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(isSelected ? TTSVisualStyle.accentStrong : Color.secondary)
+                .frame(width: 30, height: 30)
+                .background(
+                    isSelected ? TTSVisualStyle.accent.opacity(0.14) : TTSVisualStyle.controlSurface,
+                    in: RoundedRectangle(cornerRadius: 9, style: .continuous)
+                )
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(config.displayName)
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+                HStack(spacing: 5) {
+                    Circle()
+                        .fill(isImplemented ? Color.green : Color.secondary)
+                        .frame(width: 6, height: 6)
+                    Text(isImplemented ? "已接入" : "待接入")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                    if isDefault {
+                        Text("默认")
+                            .font(.caption2.weight(.semibold))
+                            .foregroundStyle(TTSVisualStyle.accentStrong)
                     }
                 }
-
-                Spacer()
-
-                if isDefault {
-                    StatusPill(text: "默认", systemImage: "checkmark.seal.fill", tint: .accentColor)
-                }
             }
 
-            Toggle("启用", isOn: Binding(
-                get: { config.isEnabled },
-                set: { onToggleEnabled($0) }
-            ))
-            .disabled(isDefault)
+            Spacer()
 
-            HStack {
-                Button("设为默认") {
-                    onSetDefault()
-                }
-                .disabled(isDefault)
-
-                Spacer()
+            if isDefault {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundStyle(TTSVisualStyle.accent)
+                    .help("默认服务保持启用")
+            } else {
+                Toggle("启用", isOn: Binding(
+                    get: { config.isEnabled },
+                    set: { onToggleEnabled($0) }
+                ))
+                .labelsHidden()
+                .toggleStyle(.switch)
+                .controlSize(.mini)
             }
-            .controlSize(.small)
         }
         .contentShape(Rectangle())
         .onTapGesture(perform: onSelect)
-        .padding(10)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+        .padding(.horizontal, 9)
+        .frame(height: 56)
+        .background(
+            isSelected ? TTSVisualStyle.accent.opacity(0.10) : Color.clear,
+            in: RoundedRectangle(cornerRadius: 11, style: .continuous)
         )
-        .padding(.vertical, 3)
+        .overlay(
+            RoundedRectangle(cornerRadius: 11, style: .continuous)
+                .stroke(isSelected ? TTSVisualStyle.accent.opacity(0.46) : Color.clear, lineWidth: 1)
+        )
+    }
+
+    private var providerSystemImage: String {
+        switch config.type {
+        case .openAICompatible, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
+            "sparkles"
+        default:
+            "globe.asia.australia"
+        }
     }
 }
 

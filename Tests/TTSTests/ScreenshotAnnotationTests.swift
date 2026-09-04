@@ -9,6 +9,72 @@ func runScreenshotAnnotationRegressionChecks() {
     checkScreenshotAnnotationRendererPreservesPixelsAndDimensions()
     checkScreenshotAnnotationRendererDrawsAllV1Tools()
     checkScreenshotClipboardPNGPreservesLogicalSize()
+    checkFrozenScreenshotCropUsesDisplayCoordinates()
+    checkScreenshotOverlayAcceptsFirstMouse()
+    checkMovableResizableSelectionStaysWithinScreen()
+}
+
+@MainActor
+private func checkScreenshotOverlayAcceptsFirstMouse() {
+    let view = ScreenshotOverlayView(
+        frame: CGRect(x: 0, y: 0, width: 8, height: 8),
+        frozenImage: makeAnnotationTestImage(width: 8, height: 8)
+    )
+    precondition(
+        view.acceptsFirstMouse(for: nil),
+        "every display overlay must accept the first drag before becoming key"
+    )
+}
+
+@MainActor
+private func checkFrozenScreenshotCropUsesDisplayCoordinates() {
+    let screenFrame = CGRect(x: -1_000, y: 0, width: 1_000, height: 800)
+    let cropRect = ScreenshotCaptureController.frozenScreenshotCropRect(
+        imagePixelSize: CGSize(width: 2_000, height: 1_600),
+        screenFrame: screenFrame,
+        selectionRect: CGRect(x: -900, y: 100, width: 200, height: 300)
+    )
+    precondition(
+        cropRect == CGRect(x: 200, y: 800, width: 400, height: 600),
+        "frozen screenshot crop must convert AppKit display points to top-origin image pixels"
+    )
+
+    let clippedCropRect = ScreenshotCaptureController.frozenScreenshotCropRect(
+        imagePixelSize: CGSize(width: 2_000, height: 1_600),
+        screenFrame: screenFrame,
+        selectionRect: CGRect(x: -1_050, y: 750, width: 100, height: 100)
+    )
+    precondition(
+        clippedCropRect == CGRect(x: 0, y: 0, width: 100, height: 100),
+        "frozen screenshot crop must stay inside its source display"
+    )
+}
+
+@MainActor
+private func checkMovableResizableSelectionStaysWithinScreen() {
+    let screenFrame = CGRect(x: -1_000, y: 0, width: 1_000, height: 800)
+    let selectionRect = CGRect(x: -900, y: 100, width: 200, height: 300)
+
+    let movedRect = ScreenshotCaptureController.movedSelectionRect(
+        selectionRect,
+        by: CGPoint(x: -500, y: 700),
+        within: screenFrame
+    )
+    precondition(
+        movedRect == CGRect(x: -1_000, y: 500, width: 200, height: 300),
+        "moving a frozen selection must preserve its size and clamp to the display"
+    )
+
+    let resizedRect = ScreenshotCaptureController.resizedSelectionRect(
+        selectionRect,
+        edges: [.minX, .maxY],
+        by: CGPoint(x: 500, y: 1_000),
+        within: screenFrame
+    )
+    precondition(
+        resizedRect == CGRect(x: -740, y: 100, width: 40, height: 700),
+        "resizing a frozen selection must honor minimum size and display bounds"
+    )
 }
 
 @MainActor

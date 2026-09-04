@@ -42,9 +42,13 @@ final class SettingsWindowController {
             )
             let newWindow = NSWindow(contentViewController: hostingController)
             newWindow.title = "TTS 设置"
-            newWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable]
-            newWindow.setContentSize(NSSize(width: 1000, height: 720))
-            newWindow.minSize = NSSize(width: 960, height: 680)
+            newWindow.styleMask = [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView]
+            newWindow.titleVisibility = .hidden
+            newWindow.titlebarAppearsTransparent = true
+            newWindow.isMovableByWindowBackground = true
+            newWindow.backgroundColor = .clear
+            newWindow.setContentSize(NSSize(width: 980, height: 680))
+            newWindow.minSize = NSSize(width: 900, height: 620)
             newWindow.center()
             newWindow.isReleasedWhenClosed = false
             window = newWindow

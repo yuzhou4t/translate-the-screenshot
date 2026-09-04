@@ -22,6 +22,8 @@ final class InputTranslateWindowController {
             panel.titleVisibility = .hidden
             panel.titlebarAppearsTransparent = true
             panel.isMovableByWindowBackground = true
+            panel.backgroundColor = .clear
+            panel.isOpaque = false
             panel.level = .floating
             panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
             panel.isReleasedWhenClosed = false

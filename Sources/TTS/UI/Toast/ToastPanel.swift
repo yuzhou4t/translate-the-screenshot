@@ -124,16 +124,18 @@ private struct ToastView: View {
                     Label("停止任务", systemImage: "stop.fill")
                         .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.bordered)
+                .buttonStyle(TTSSecondaryButtonStyle())
                 .controlSize(.small)
             }
         }
             .frame(width: onCancel == nil ? 220 : 260, height: onCancel == nil ? 56 : 86, alignment: .leading)
-            .background(.regularMaterial)
-            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .background(TTSWindowBackground())
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(TTSVisualStyle.border, lineWidth: 1)
             )
+            .shadow(color: Color.black.opacity(0.14), radius: 14, y: 7)
+            .tint(TTSVisualStyle.accent)
     }
 }

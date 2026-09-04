@@ -8,31 +8,38 @@ struct InputTranslateView: View {
     @FocusState private var isInputFocused: Bool
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            header
+        ZStack {
+            TTSWindowBackground()
 
-            TextEditor(text: $viewModel.inputText)
-                .font(.system(size: 16))
-                .scrollContentBackground(.hidden)
-                .padding(8)
-                .frame(minHeight: 120, maxHeight: 180)
-                .background(Color(NSColor.textBackgroundColor).opacity(0.85))
-                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 8, style: .continuous)
-                        .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-                )
-                .focused($isInputFocused)
+            VStack(alignment: .leading, spacing: 14) {
+                header
 
-            controls
+                TextEditor(text: $viewModel.inputText)
+                    .font(.system(size: 16))
+                    .scrollContentBackground(.hidden)
+                    .padding(10)
+                    .frame(minHeight: 120, maxHeight: 180)
+                    .background(TTSVisualStyle.raisedSurface.opacity(0.72))
+                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(TTSVisualStyle.border, lineWidth: 1)
+                    )
+                    .focused($isInputFocused)
 
-            Divider()
+                controls
 
-            resultArea
+                Divider()
+
+                resultArea
+                    .padding(12)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                    .ttsGlassSurface(cornerRadius: 14)
+            }
+            .padding(18)
         }
-        .padding(18)
         .frame(width: 640, height: 520, alignment: .topLeading)
-        .background(.regularMaterial)
+        .tint(TTSVisualStyle.accent)
         .onAppear {
             isInputFocused = true
         }
@@ -91,6 +98,7 @@ struct InputTranslateView: View {
             } label: {
                 Label("翻译", systemImage: "arrow.right.circle")
             }
+            .buttonStyle(TTSPrimaryButtonStyle())
             .keyboardShortcut(.return, modifiers: [.command])
             .disabled(viewModel.isTranslating)
         }
@@ -129,12 +137,14 @@ struct InputTranslateView: View {
                     } label: {
                         Label("复制译文", systemImage: "doc.on.doc")
                     }
+                    .buttonStyle(TTSPrimaryButtonStyle())
 
                     Button {
                         viewModel.copyToPasteboard(item.sourceText)
                     } label: {
                         Label("复制原文", systemImage: "doc")
                     }
+                    .buttonStyle(TTSSecondaryButtonStyle())
 
                     Spacer()
                 }
