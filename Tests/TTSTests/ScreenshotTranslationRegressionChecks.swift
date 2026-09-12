@@ -31,6 +31,8 @@ func runTTSPackageRegressionChecks() async {
     checkLegacyConfigurationDecodesAfterSimplification()
     announceRegressionCheck("fallback configuration invariants")
     checkFallbackConfigurationStaysValid()
+    announceRegressionCheck("translation output quality and bounded retry")
+    await runTranslationQualityRegressionChecks()
     #if canImport(Translation)
     if #available(macOS 15.0, *) {
         announceRegressionCheck("Apple overlay repeated request lifecycle")

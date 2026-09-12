@@ -27,6 +27,7 @@ public enum KeyboardShortcuts {
         public static let d = Key(keyCode: 2, display: "D")
         public static let c = Key(keyCode: 8, display: "C")
         public static let w = Key(keyCode: 13, display: "W")
+        public static let z = Key(keyCode: 6, display: "Z")
 
         static func fromEventKeyCode(_ keyCode: UInt16) -> Key? {
             switch keyCode {
@@ -35,6 +36,7 @@ public enum KeyboardShortcuts {
             case 2: .d
             case 8: .c
             case 13: .w
+            case 6: .z
             default: nil
             }
         }

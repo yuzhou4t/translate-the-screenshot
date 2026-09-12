@@ -6,15 +6,18 @@ final class HotkeyManager {
     private let translationController: SelectionTranslationController
     private let inputTranslateWindowController: InputTranslateWindowController
     private let screenshotCaptureController: ScreenshotCaptureController
+    private let screenRecordingController: ScreenRecordingController
 
     init(
         translationController: SelectionTranslationController,
         inputTranslateWindowController: InputTranslateWindowController,
-        screenshotCaptureController: ScreenshotCaptureController
+        screenshotCaptureController: ScreenshotCaptureController,
+        screenRecordingController: ScreenRecordingController
     ) {
         self.translationController = translationController
         self.inputTranslateWindowController = inputTranslateWindowController
         self.screenshotCaptureController = screenshotCaptureController
+        self.screenRecordingController = screenRecordingController
     }
 
     func start() {
@@ -55,6 +58,12 @@ final class HotkeyManager {
         KeyboardShortcuts.onKeyUp(for: .silentScreenshotOCR) { [weak self] in
             Task { @MainActor in
                 self?.screenshotCaptureController.startCapture(mode: .silentOCR)
+            }
+        }
+
+        KeyboardShortcuts.onKeyUp(for: .screenRecording) { [weak self] in
+            Task { @MainActor in
+                self?.screenRecordingController.handleShortcut()
             }
         }
     }
@@ -98,4 +107,5 @@ extension KeyboardShortcuts.Name {
     static let inputTranslate = Self("inputTranslate", initial: .init(.a, modifiers: [.option]))
     static let screenshotOCR = Self("screenshotOCR", initial: .init(.s, modifiers: [.shift, .option]))
     static let silentScreenshotOCR = Self("silentScreenshotOCR", initial: .init(.c, modifiers: [.option]))
+    static let screenRecording = Self("screenRecording", initial: .init(.z, modifiers: [.control, .shift]))
 }

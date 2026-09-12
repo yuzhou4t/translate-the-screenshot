@@ -8,6 +8,9 @@ final class SettingsWindowController {
     private let providerRegistry: ProviderRegistry
     private let policyStore: VolcengineImageTranslationPolicyStore
     private let permissionManager: PermissionManager
+    private let aiUsageSettingsStore: AIUsageSettingsStore
+    private let aiUsageProviderRegistry: AIUsageProviderRegistry
+    private let aiUsageStore: AIUsageStore
     private var window: NSWindow?
     private var viewModel: SettingsViewModel?
 
@@ -16,13 +19,19 @@ final class SettingsWindowController {
         keychainService: KeychainService,
         providerRegistry: ProviderRegistry,
         policyStore: VolcengineImageTranslationPolicyStore,
-        permissionManager: PermissionManager
+        permissionManager: PermissionManager,
+        aiUsageSettingsStore: AIUsageSettingsStore,
+        aiUsageProviderRegistry: AIUsageProviderRegistry,
+        aiUsageStore: AIUsageStore
     ) {
         self.configurationStore = configurationStore
         self.keychainService = keychainService
         self.providerRegistry = providerRegistry
         self.policyStore = policyStore
         self.permissionManager = permissionManager
+        self.aiUsageSettingsStore = aiUsageSettingsStore
+        self.aiUsageProviderRegistry = aiUsageProviderRegistry
+        self.aiUsageStore = aiUsageStore
     }
 
     func show(
@@ -38,7 +47,15 @@ final class SettingsWindowController {
                 permissionManager: permissionManager
             )
             let hostingController = NSHostingController(
-                rootView: SettingsView(viewModel: viewModel)
+                rootView: SettingsView(
+                    viewModel: viewModel,
+                    aiUsageViewModel: AIUsageSettingsViewModel(
+                        settingsStore: self.aiUsageSettingsStore,
+                        providerRegistry: self.aiUsageProviderRegistry,
+                        keychainService: self.keychainService,
+                        usageStore: self.aiUsageStore
+                    )
+                )
             )
             let newWindow = NSWindow(contentViewController: hostingController)
             newWindow.title = "TTS 设置"

@@ -15,7 +15,33 @@ final class AppServices {
         level: NSWindow.Level(rawValue: NSWindow.Level.screenSaver.rawValue + 1)
     )
     let volcengineImageTranslationPolicyStore = VolcengineImageTranslationPolicyStore()
+    let aiUsageSettingsStore = AIUsageSettingsStore()
+    let aiUsageTokenStore = AIUsageTokenStore()
     let screenshotOverlayRenderer = ScreenshotTranslationOverlayRenderer()
+    lazy var screenRecordingController: ScreenRecordingController = {
+        let controller = ScreenRecordingController(
+            permissionManager: permissionManager,
+            toastPanel: toastPanel
+        )
+        controller.canBeginSelection = { [weak self] in
+            !(self?.screenshotCaptureController.isCaptureInteractionActive ?? true)
+        }
+        return controller
+    }()
+    lazy var aiUsageProviderRegistry = AIUsageProviderRegistry(
+        settingsStore: aiUsageSettingsStore,
+        keychainService: keychainService,
+        configurationStore: configurationStore
+    )
+    lazy var aiUsageStore = AIUsageStore(
+        settingsStore: aiUsageSettingsStore,
+        providerRegistry: aiUsageProviderRegistry
+    )
+    lazy var codexAccountSwitcherStore = CodexAccountSwitcherStore { [weak self] in
+        guard let self else { return }
+        await self.providerRegistry.resetCodexSubscriptionSession()
+        self.aiUsageStore.refreshNow()
+    }
     lazy var imageOverlayTranslationWindowController = ImageOverlayTranslationWindowController(
         renderer: screenshotOverlayRenderer,
         translationService: translationService,
@@ -46,7 +72,10 @@ final class AppServices {
         keychainService: keychainService,
         providerRegistry: providerRegistry,
         policyStore: volcengineImageTranslationPolicyStore,
-        permissionManager: permissionManager
+        permissionManager: permissionManager,
+        aiUsageSettingsStore: aiUsageSettingsStore,
+        aiUsageProviderRegistry: aiUsageProviderRegistry,
+        aiUsageStore: aiUsageStore
     )
 
     lazy var selectionReader = SelectionReader(
@@ -83,7 +112,10 @@ final class AppServices {
         imageOverlayTranslationWindowController: imageOverlayTranslationWindowController,
         providerRegistry: providerRegistry,
         policyStore: volcengineImageTranslationPolicyStore,
-        settingsWindowController: settingsWindowController
+        settingsWindowController: settingsWindowController,
+        canBeginCapture: { [weak self] in
+            !(self?.screenRecordingController.isBlockingOtherCapture ?? true)
+        }
     )
 
     lazy var translationController = SelectionTranslationController(
@@ -95,7 +127,8 @@ final class AppServices {
     lazy var hotkeyManager = HotkeyManager(
         translationController: translationController,
         inputTranslateWindowController: inputTranslateWindowController,
-        screenshotCaptureController: screenshotCaptureController
+        screenshotCaptureController: screenshotCaptureController,
+        screenRecordingController: screenRecordingController
     )
 
     private init() {}
