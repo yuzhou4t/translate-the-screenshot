@@ -139,7 +139,7 @@ ScreenshotCaptureController
 -> OCRLayoutBand / OCRLayoutSection
 -> ImageOverlayTranslationWindowController 立即显示冻结截图
 -> Apple TranslationSession 本地批量翻译（macOS 15+）
--> macOS 13–14 使用 TranslationService 云端兼容路径
+-> 使用 Apple Translation 设备端路径
 -> OverlayCanvasView 实时绘制
 -> ScreenshotTranslationOverlayRenderer 导出图片
 ```
@@ -151,11 +151,10 @@ ScreenshotCaptureController
 - 翻译单位是 `OverlaySegment`，不是单个 OCR block。
 - 覆盖擦除单位是 `eraseBoxes`，优先贴近原文字区域。
 - 截图后立即展示冻结原图并自动开始 OCR 和翻译。
-- macOS 15 及以上优先使用 Apple 设备端翻译；macOS 26.4 及以上选择 `lowLatency` 策略。
+- 使用 Apple 设备端翻译；macOS 26.4 及以上选择 `lowLatency` 策略。
 - 首次使用某个语言组合时由 macOS 请求一次离线语言包下载许可；之后不需要确认，也不产生 API 费用。
 - 本地翻译连续 12 秒没有结果就停止加载，每返回一段译文会重新计时；语言包仍未就绪时提示用户先在系统设置完成下载，避免覆盖窗口无限转圈。
-- macOS 15 及以上不会在本地失败或用户取消下载后静默上传文字；错误保留在当前覆盖窗口。
-- macOS 13–14 的云端兼容路径最多同时处理两批，任一批完成后立即回填。
+- 本地失败或用户取消下载后不会静默上传文字；错误保留在当前覆盖窗口。
 - `nativeReplace` 尝试先擦除原文，再按原位回填译文。
 - 火山图片翻译和坐标翻译产生的应用临时截图与 overlay debug 目录保留 3 天后自动清理；用户手动保存的 PNG 不受影响。
 
@@ -382,7 +381,7 @@ TTS_DEBUG_OVERLAY_PIPELINE=1 swift run
 
 当前产品决策是：
 
-- `Option + W` 默认使用 Apple 本地坐标翻译；macOS 15 及以上不把 OCR 文字交给已配置的第三方翻译服务，macOS 13–14 使用默认服务兼容翻译。
+- `Option + W` 默认使用 Apple 本地坐标翻译，不把 OCR 文字交给已配置的第三方翻译服务。
 - API 高质量坐标翻译与火山图片翻译各有独立快捷键槽，可在设置中录制或清除。
 - API 与 Apple 两条坐标翻译路径都不让远端 Vision 模型生成坐标。
 - 坐标翻译的 OCR 与定位只由 Apple Vision 和本地算法负责。
