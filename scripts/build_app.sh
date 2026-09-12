@@ -18,6 +18,13 @@ cp "${EXECUTABLE}" "${APP_DIR}/Contents/MacOS/TTS"
 chmod +x "${APP_DIR}/Contents/MacOS/TTS"
 cp "${ROOT_DIR}/App/AppIcon.icns" "${APP_DIR}/Contents/Resources/AppIcon.icns"
 cp "${ROOT_DIR}/App/Resources/MenuBarIconTemplate.png" "${APP_DIR}/Contents/Resources/MenuBarIconTemplate.png"
+cp "${ROOT_DIR}/App/Resources/ProviderIcon-codex.svg" "${APP_DIR}/Contents/Resources/ProviderIcon-codex.svg"
+cp "${ROOT_DIR}/App/Resources/ProviderIcon-grok.svg" "${APP_DIR}/Contents/Resources/ProviderIcon-grok.svg"
+cp "${ROOT_DIR}/App/Resources/ProviderIcon-deepseek.svg" "${APP_DIR}/Contents/Resources/ProviderIcon-deepseek.svg"
+cp "${ROOT_DIR}/App/Resources/ProviderIcon-minimax.svg" "${APP_DIR}/Contents/Resources/ProviderIcon-minimax.svg"
+cp "${ROOT_DIR}/App/Resources/ProviderIcon-antigravity.svg" "${APP_DIR}/Contents/Resources/ProviderIcon-antigravity.svg"
+cp "${ROOT_DIR}/App/Resources/ProviderIcons-NOTICE.txt" "${APP_DIR}/Contents/Resources/ProviderIcons-NOTICE.txt"
+cp "${ROOT_DIR}/App/Resources/CodexAccountSwitcher-NOTICE.txt" "${APP_DIR}/Contents/Resources/CodexAccountSwitcher-NOTICE.txt"
 
 sed \
   -e 's/$(DEVELOPMENT_LANGUAGE)/en/g' \

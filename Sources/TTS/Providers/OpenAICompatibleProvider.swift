@@ -34,11 +34,38 @@ struct OpenAICompatibleProvider: PromptCompletionProvider {
             sourceText: request.text,
             targetLanguage: request.targetLanguage
         )
-        let translatedText = try await complete(
+        var translatedText = try await complete(
             systemPrompt: prompt.system,
             userPrompt: prompt.user,
             temperature: 0.2
         )
+
+        if let issue = TranslationOutputValidator.issue(
+            sourceText: request.text,
+            translatedText: translatedText,
+            targetLanguage: request.targetLanguage,
+            translationMode: request.translationMode
+        ) {
+            print("translation output rejected: provider=\(displayName), reason=\(issue)")
+            let retryPrompt = PromptBuilder.buildQualityRetry(
+                from: prompt,
+                targetLanguage: request.targetLanguage
+            )
+            translatedText = try await complete(
+                systemPrompt: retryPrompt.system,
+                userPrompt: retryPrompt.user,
+                temperature: 0.1
+            )
+
+            if let retryIssue = TranslationOutputValidator.issue(
+                sourceText: request.text,
+                translatedText: translatedText,
+                targetLanguage: request.targetLanguage,
+                translationMode: request.translationMode
+            ) {
+                throw TranslationProviderError.invalidTranslation(retryIssue.errorMessage)
+            }
+        }
 
         return TranslationResponse(
             translatedText: translatedText,
@@ -70,7 +97,11 @@ struct OpenAICompatibleProvider: PromptCompletionProvider {
                     content: userPrompt
                 )
             ],
-            temperature: temperature
+            temperature: temperature,
+            reasoning: usesOpenRouterGPTOSS
+                ? ChatCompletionRequest.Reasoning(effort: "minimal", exclude: true)
+                : nil,
+            reasoningEffort: usesLowReasoningGPTOSS ? "low" : nil
         )
         urlRequest.httpBody = try JSONEncoder().encode(body)
 
@@ -115,6 +146,18 @@ struct OpenAICompatibleProvider: PromptCompletionProvider {
         }
     }
 
+    private var usesOpenRouterGPTOSS: Bool {
+        endpoint.host?.lowercased() == "openrouter.ai"
+            && model.lowercased().contains("/gpt-oss-")
+    }
+
+    private var usesLowReasoningGPTOSS: Bool {
+        let normalizedHost = endpoint.host?.lowercased()
+        let normalizedModel = model.lowercased()
+        return (normalizedHost == "api.cerebras.ai" && normalizedModel == "gpt-oss-120b")
+            || (normalizedHost == "api.groq.com" && normalizedModel == "openai/gpt-oss-120b")
+    }
+
     private func mapURLError(_ error: URLError) -> TranslationProviderError {
         switch error.code {
         case .timedOut:
@@ -129,9 +172,24 @@ struct OpenAICompatibleProvider: PromptCompletionProvider {
 }
 
 private struct ChatCompletionRequest: Encodable {
+    struct Reasoning: Encodable {
+        var effort: String
+        var exclude: Bool
+    }
+
     var model: String
     var messages: [ChatMessage]
     var temperature: Double
+    var reasoning: Reasoning?
+    var reasoningEffort: String?
+
+    private enum CodingKeys: String, CodingKey {
+        case model
+        case messages
+        case temperature
+        case reasoning
+        case reasoningEffort = "reasoning_effort"
+    }
 }
 
 private struct ChatMessage: Codable {

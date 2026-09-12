@@ -1,3 +1,4 @@
+import AVFoundation
 import KeyboardShortcuts
 import SwiftUI
 
@@ -5,6 +6,7 @@ enum SettingsTab: Hashable {
     case general
     case shortcuts
     case translationService
+    case aiUsage
     case privacy
 
     var title: String {
@@ -15,6 +17,8 @@ enum SettingsTab: Hashable {
             "快捷键"
         case .translationService:
             "翻译服务"
+        case .aiUsage:
+            "订阅监控"
         case .privacy:
             "权限与隐私"
         }
@@ -28,6 +32,8 @@ enum SettingsTab: Hashable {
             "keyboard"
         case .translationService:
             "network"
+        case .aiUsage:
+            "gauge"
         case .privacy:
             "lock.shield"
         }
@@ -36,6 +42,7 @@ enum SettingsTab: Hashable {
 
 struct SettingsView: View {
     @StateObject var viewModel: SettingsViewModel
+    @StateObject var aiUsageViewModel: AIUsageSettingsViewModel
 
     var body: some View {
         ZStack {
@@ -54,6 +61,8 @@ struct SettingsView: View {
                         shortcutSettings
                     case .translationService:
                         translationServiceSettings
+                    case .aiUsage:
+                        AIUsageSettingsView(viewModel: aiUsageViewModel)
                     case .privacy:
                         permissionPrivacySettings
                     }
@@ -104,7 +113,7 @@ struct SettingsView: View {
                 .padding(.horizontal, 14)
 
             ForEach(
-                [SettingsTab.general, .shortcuts, .translationService, .privacy],
+                [SettingsTab.general, .shortcuts, .translationService, .aiUsage, .privacy],
                 id: \.self
             ) { tab in
                 Button {
@@ -205,7 +214,7 @@ struct SettingsView: View {
                 )
                 SettingsInfoRow(
                     title: "Apple 本地坐标翻译",
-                    message: "Option + W 在本机完成 OCR 和坐标分析；macOS 15 及以上使用 Apple 系统翻译，macOS 13–14 使用默认服务兼容翻译。",
+                    message: "Option + W 在本机完成 OCR 和坐标分析，并使用 Apple 系统翻译。",
                     systemImage: "apple.logo"
                 )
                 SettingsInfoRow(
@@ -371,16 +380,23 @@ struct SettingsView: View {
                 }
 
                 if let fallbackProviderID = viewModel.fallbackProviderID {
-                    SettingsField(
-                        title: "备用模型",
-                        placeholder: "例如 deepseek-ai/DeepSeek-V3.2",
-                        text: $viewModel.fallbackModel
-                    )
-                    ModelSuggestionPicker(
-                        title: "备用模型建议",
-                        providerID: fallbackProviderID,
-                        modelName: $viewModel.fallbackModel
-                    )
+                    if fallbackProviderID == .codexSubscription {
+                        SettingsValueRow(
+                            title: "备用模型",
+                            value: CodexSubscriptionProvider.modelID
+                        )
+                    } else {
+                        SettingsField(
+                            title: "备用模型",
+                            placeholder: "例如 deepseek-ai/DeepSeek-V3.2",
+                            text: $viewModel.fallbackModel
+                        )
+                        ModelSuggestionPicker(
+                            title: "备用模型建议",
+                            providerID: fallbackProviderID,
+                            modelName: $viewModel.fallbackModel
+                        )
+                    }
                 }
             }
 
@@ -429,34 +445,49 @@ struct SettingsView: View {
 
             settingsDivider
 
-            SettingsField(title: "Endpoint", placeholder: "https://...", text: $viewModel.endpoint)
-            SettingsField(
-                title: config.id == .volcengine ? "Region" : "模型 / 区域",
-                placeholder: config.id == .volcengine ? "cn-north-1" : "模型名称",
-                text: $viewModel.model
-            )
+            if config.id == .codexSubscription {
+                SettingsInfoRow(
+                    title: "ChatGPT 订阅登录",
+                    message: "复用本机 Codex CLI 的现有登录。TTS 不读取、不复制，也不保存 OAuth 凭据或 API Key。",
+                    systemImage: "person.badge.key"
+                )
+                SettingsValueRow(title: "Codex CLI", value: viewModel.codexCLIStatus)
+                SettingsValueRow(title: "固定模型", value: CodexSubscriptionProvider.modelID)
+                SettingsValueRow(title: "推理强度", value: "low（低延迟）")
+                Text("应用启动后会在后台预热；后续翻译复用轻量会话以降低等待时间，达到安全上限后自动重启。内容不写入 Codex 历史。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                SettingsField(title: "Endpoint", placeholder: "https://...", text: $viewModel.endpoint)
+                SettingsField(
+                    title: config.id == .volcengine ? "Region" : "模型 / 区域",
+                    placeholder: config.id == .volcengine ? "cn-north-1" : "模型名称",
+                    text: $viewModel.model
+                )
 
-            ModelSuggestionPicker(
-                title: "常用模型",
-                providerID: config.id,
-                modelName: $viewModel.model
-            )
+                ModelSuggestionPicker(
+                    title: "常用模型",
+                    providerID: config.id,
+                    modelName: $viewModel.model
+                )
 
-            SettingsField(
-                title: config.id == .volcengine ? "AccessKey ID" : "App ID / SecretId / AccessKeyId",
-                placeholder: "可选",
-                text: $viewModel.appID
-            )
+                SettingsField(
+                    title: config.id == .volcengine ? "AccessKey ID" : "App ID / SecretId / AccessKeyId",
+                    placeholder: "可选",
+                    text: $viewModel.appID
+                )
 
-            if config.id != .volcengine {
-                SettingsSecureField(title: "API Key", placeholder: "保存在 macOS Keychain", text: $viewModel.apiKey)
+                if config.id != .volcengine {
+                    SettingsSecureField(title: "API Key", placeholder: "保存在 macOS Keychain", text: $viewModel.apiKey)
+                }
+
+                SettingsSecureField(
+                    title: config.id == .volcengine ? "Secret Access Key" : "Secret Key",
+                    placeholder: "保存在 macOS Keychain",
+                    text: $viewModel.secretKey
+                )
             }
-
-            SettingsSecureField(
-                title: config.id == .volcengine ? "Secret Access Key" : "Secret Key",
-                placeholder: "保存在 macOS Keychain",
-                text: $viewModel.secretKey
-            )
 
             SettingsControlRow(title: "请求超时") {
                 HStack(spacing: 6) {
@@ -521,6 +552,8 @@ struct SettingsView: View {
             systemImage: "keyboard"
         ) {
             SettingsSectionCard(title: "全局快捷键", systemImage: "command") {
+                KeyboardShortcuts.Recorder("录屏", name: .screenRecording)
+                settingsDivider
                 KeyboardShortcuts.Recorder("截图到剪贴板", name: .screenshotClipboard)
                 settingsDivider
                 KeyboardShortcuts.Recorder("划词翻译", name: .translateSelection)
@@ -543,8 +576,13 @@ struct SettingsView: View {
             SettingsSectionCard(title: "使用说明", systemImage: "info.circle") {
                 SettingsInfoRow(
                     title: "全局快捷键",
-                    message: "这些快捷键由系统监听，TTS 在菜单栏常驻时即可触发对应操作。",
+                    message: "这些快捷键由系统监听，TTS 在菜单栏常驻时即可触发对应操作；录屏默认使用 Control + Shift + Z。",
                     systemImage: "keyboard"
+                )
+                SettingsInfoRow(
+                    title: "原生录屏",
+                    message: "支持整块屏幕、单个窗口和显示器内自定义区域；默认录制系统声音并显示光标，麦克风默认关闭。",
+                    systemImage: "record.circle"
                 )
                 SettingsInfoRow(
                     title: "截图相关快捷键",
@@ -579,6 +617,12 @@ struct SettingsView: View {
                     isGranted: viewModel.isScreenRecordingTrusted
                 )
                 settingsDivider
+                SettingsPermissionRow(
+                    title: "麦克风",
+                    status: viewModel.microphoneStatus,
+                    isGranted: viewModel.isMicrophoneTrusted
+                )
+                settingsDivider
 
                 HStack(spacing: 8) {
                     Button("请求辅助功能权限") {
@@ -591,6 +635,11 @@ struct SettingsView: View {
                     }
                     .buttonStyle(TTSSecondaryButtonStyle())
 
+                    Button("请求麦克风权限") {
+                        viewModel.requestMicrophone()
+                    }
+                    .buttonStyle(TTSSecondaryButtonStyle())
+
                     Button("刷新状态") {
                         viewModel.refreshPermissions()
                     }
@@ -600,13 +649,18 @@ struct SettingsView: View {
 
             SettingsSectionCard(title: "隐私说明", systemImage: "hand.raised") {
                 SettingsInfoRow(
+                    title: "原生录屏",
+                    message: "画面、系统声音和可选麦克风音频只由 ScreenCaptureKit 在本机写入“下载”文件夹；TTS 不上传录屏文件。麦克风只有在你打开开关后才会请求和使用。",
+                    systemImage: "record.circle"
+                )
+                SettingsInfoRow(
                     title: "截图 OCR",
                     message: "截图 OCR 与 Option + S 先在本机使用 Apple Vision；Option + S 再把识别文字交给启用的翻译服务。",
                     systemImage: "viewfinder"
                 )
                 SettingsInfoRow(
                     title: "Apple 本地坐标翻译",
-                    message: "Option + W 在 macOS 15 及以上使用 Apple 系统翻译，不把 OCR 文字发送给已配置的第三方服务；系统可能按需下载语言包。macOS 13–14 使用默认服务兼容翻译。",
+                    message: "Option + W 使用 Apple 系统翻译，不把 OCR 文字发送给已配置的第三方服务；系统可能按需下载语言包。",
                     systemImage: "apple.logo"
                 )
                 SettingsInfoRow(
@@ -645,7 +699,7 @@ struct SettingsView: View {
     }
 }
 
-private struct SettingsPage<Content: View>: View {
+struct SettingsPage<Content: View>: View {
     var title: String
     var subtitle: String
     var systemImage: String
@@ -690,7 +744,7 @@ private struct SettingsPage<Content: View>: View {
     }
 }
 
-private struct SettingsSectionCard<Content: View>: View {
+struct SettingsSectionCard<Content: View>: View {
     var title: String
     var systemImage: String
     @ViewBuilder var content: Content
@@ -723,7 +777,7 @@ private struct SettingsSectionCard<Content: View>: View {
     }
 }
 
-private struct SettingsValueRow: View {
+struct SettingsValueRow: View {
     var title: String
     var value: String
 
@@ -739,7 +793,7 @@ private struct SettingsValueRow: View {
     }
 }
 
-private struct SettingsControlRow<Control: View>: View {
+struct SettingsControlRow<Control: View>: View {
     var title: String
     @ViewBuilder var control: Control
 
@@ -777,7 +831,7 @@ private struct SettingsField: View {
     }
 }
 
-private struct SettingsSecureField: View {
+struct SettingsSecureField: View {
     var title: String
     var placeholder: String
     @Binding var text: String
@@ -813,7 +867,7 @@ private struct SettingsPermissionRow: View {
     }
 }
 
-private struct SettingsInfoRow: View {
+struct SettingsInfoRow: View {
     var title: String
     var message: String
     var systemImage: String
@@ -958,7 +1012,7 @@ private struct ProviderConfigRow: View {
 
     private var providerSystemImage: String {
         switch config.type {
-        case .openAICompatible, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
+        case .openAICompatible, .codexSubscription, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
             "sparkles"
         default:
             "globe.asia.australia"
@@ -1003,6 +1057,8 @@ final class SettingsViewModel: ObservableObject {
     @Published var statusIsError = false
     @Published var isAccessibilityTrusted = false
     @Published var isScreenRecordingTrusted = false
+    @Published var isMicrophoneTrusted = false
+    @Published var microphoneAuthorizationStatus: AVAuthorizationStatus = .notDetermined
     @Published var volcengineImageUsageText = ""
     @Published var hasVolcengineUploadConsent = false
 
@@ -1013,6 +1069,7 @@ final class SettingsViewModel: ObservableObject {
     private let permissionManager: PermissionManager
     private let aiProviderIDs: Set<TranslationProviderID> = [
         .openAICompatible,
+        .codexSubscription,
         .glm4Flash,
         .siliconFlow,
         .deepSeek,
@@ -1072,6 +1129,25 @@ final class SettingsViewModel: ObservableObject {
 
     var screenRecordingStatus: String {
         isScreenRecordingTrusted ? "已授权" : "未授权"
+    }
+
+    var microphoneStatus: String {
+        switch microphoneAuthorizationStatus {
+        case .authorized:
+            "已授权"
+        case .notDetermined:
+            "尚未请求"
+        case .denied:
+            "已拒绝"
+        case .restricted:
+            "受系统限制"
+        @unknown default:
+            "状态未知"
+        }
+    }
+
+    var codexCLIStatus: String {
+        AIUsageBinaryLocator.codexBinary() == nil ? "未检测到" : "已检测到"
     }
 
     func reload() {
@@ -1143,7 +1219,9 @@ final class SettingsViewModel: ObservableObject {
         configurationStore.setFallbackConfiguration(
             enabled: fallbackEnabled,
             providerID: providerID,
-            model: fallbackEnabled ? fallbackModel : nil
+            model: providerID == .codexSubscription
+                ? CodexSubscriptionProvider.modelID
+                : (fallbackEnabled ? fallbackModel : nil)
         )
         reload()
         status("fallback 设置已保存。", isError: false)
@@ -1151,6 +1229,19 @@ final class SettingsViewModel: ObservableObject {
 
     func saveSelectedProvider() {
         guard var config = selectedProviderConfig else {
+            return
+        }
+
+        if config.id == .codexSubscription {
+            config.endpoint = nil
+            config.apiKeyRef = nil
+            config.appID = nil
+            config.secretKey = nil
+            config.model = CodexSubscriptionProvider.modelID
+            config.timeout = timeout
+            configurationStore.updateProviderConfig(config)
+            reload()
+            status("ChatGPT 订阅翻译配置已保存。", isError: false)
             return
         }
 
@@ -1202,6 +1293,8 @@ final class SettingsViewModel: ObservableObject {
     func refreshPermissions() {
         isAccessibilityTrusted = permissionManager.isAccessibilityTrusted
         isScreenRecordingTrusted = permissionManager.isScreenRecordingTrusted
+        microphoneAuthorizationStatus = permissionManager.microphoneAuthorizationStatus
+        isMicrophoneTrusted = permissionManager.isMicrophoneTrusted
     }
 
     func requestAccessibility() {
@@ -1220,6 +1313,16 @@ final class SettingsViewModel: ObservableObject {
         Task { @MainActor in
             try? await Task.sleep(for: .seconds(1))
             refreshPermissions()
+        }
+    }
+
+    func requestMicrophone() {
+        Task { @MainActor in
+            let granted = await permissionManager.requestMicrophoneAccess()
+            refreshPermissions()
+            if !granted {
+                permissionManager.openMicrophoneSettings()
+            }
         }
     }
 

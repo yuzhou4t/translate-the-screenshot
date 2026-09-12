@@ -37,6 +37,7 @@ enum TranslationProviderError: LocalizedError {
     case missingAPIKey
     case invalidEndpoint
     case invalidResponse
+    case invalidTranslation(String)
     case authenticationFailed(String)
     case rateLimited(String)
     case timeout(String)
@@ -51,6 +52,8 @@ enum TranslationProviderError: LocalizedError {
             "OpenAI 兼容接口地址无效。"
         case .invalidResponse:
             "翻译服务返回了无法解析的响应。"
+        case .invalidTranslation(let message):
+            message
         case .authenticationFailed(let message):
             message
         case .rateLimited(let message):

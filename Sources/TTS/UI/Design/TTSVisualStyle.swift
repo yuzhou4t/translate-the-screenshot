@@ -9,10 +9,28 @@ enum TTSVisualStyle {
     static let controlSurface = Color(nsColor: .ttsControlSurface)
     static let border = Color(nsColor: .ttsGlassBorder)
     static let subtleBorder = Color(nsColor: .ttsSubtleBorder)
+    static let glassOverlay = Color(nsColor: .ttsGlassOverlay)
+    static let glassHighlight = Color(nsColor: .ttsGlassHighlight)
 
     static let windowRadius: CGFloat = 20
     static let panelRadius: CGFloat = 16
     static let controlRadius: CGFloat = 10
+}
+
+struct TTSVisualEffectBackground: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSVisualEffectView {
+        let view = NSVisualEffectView()
+        view.material = .popover
+        view.blendingMode = .behindWindow
+        view.state = .active
+        return view
+    }
+
+    func updateNSView(_ nsView: NSVisualEffectView, context: Context) {
+        nsView.material = .popover
+        nsView.blendingMode = .behindWindow
+        nsView.state = .active
+    }
 }
 
 struct TTSWindowBackground: View {
@@ -158,6 +176,16 @@ extension NSColor {
     static let ttsSubtleBorder = ttsDynamic(
         light: NSColor(calibratedRed: 0.76, green: 0.84, blue: 0.94, alpha: 0.44),
         dark: NSColor(calibratedRed: 0.48, green: 0.65, blue: 0.84, alpha: 0.30)
+    )
+
+    static let ttsGlassOverlay = ttsDynamic(
+        light: NSColor(calibratedWhite: 1, alpha: 0.20),
+        dark: NSColor(calibratedRed: 0.055, green: 0.13, blue: 0.23, alpha: 0.30)
+    )
+
+    static let ttsGlassHighlight = ttsDynamic(
+        light: NSColor(calibratedWhite: 1, alpha: 0.58),
+        dark: NSColor(calibratedRed: 0.46, green: 0.70, blue: 1, alpha: 0.22)
     )
 
     static let ttsToolbarSurface = ttsDynamic(

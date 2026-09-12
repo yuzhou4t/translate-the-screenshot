@@ -23,13 +23,15 @@
 	<key>CFBundleVersion</key>
 	<string>1</string>
 	<key>LSMinimumSystemVersion</key>
-	<string>13.0</string>
+	<string>15.0</string>
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSAppleEventsUsageDescription</key>
 	<string>TTS 在读取选中文字失败时会模拟复制操作，以便完成划词翻译。</string>
 	<key>NSScreenCaptureUsageDescription</key>
-	<string>TTS 需要屏幕录制权限来框选截图并复制到剪贴板，以及进行截图 OCR 和截图翻译；不会录制音频。</string>
+	<string>TTS 需要屏幕与系统音频录制权限，用于截图、OCR、截图翻译，以及你主动启动的本机录屏。</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>TTS 仅在你打开录屏的麦克风开关后录制默认麦克风音频，并只保存到本机视频文件。</string>
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSHumanReadableCopyright</key>

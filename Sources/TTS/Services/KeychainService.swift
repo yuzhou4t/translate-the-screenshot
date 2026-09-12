@@ -94,6 +94,15 @@ final class KeychainService {
         return apiKey
     }
 
+    func containsAPIKey(account: String) -> Bool {
+        if cachedAPIKey(account: account)?.isEmpty == false {
+            return true
+        }
+        var query = baseQuery(account: account)
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        return SecItemCopyMatching(query as CFDictionary, nil) == errSecSuccess
+    }
+
     func deleteAPIKey(for providerID: TranslationProviderID) throws {
         try deleteAPIKey(account: providerID.rawValue)
     }

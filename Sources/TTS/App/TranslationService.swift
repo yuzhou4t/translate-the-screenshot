@@ -461,7 +461,9 @@ final class TranslationService {
         case .imageOverlay:
             break
         case .screenshot:
-            next.timeout = min(next.timeout, 15)
+            if next.id != .codexSubscription {
+                next.timeout = min(next.timeout, 15)
+            }
         case .selection, .input, .ocrCleanup:
             break
         }
@@ -483,6 +485,12 @@ final class TranslationService {
             return fallbackAttempted
                 ? "主翻译服务请求失败，全局备用服务也未成功。请检查 API Key、模型名称、网络连接或服务商额度。"
                 : "当前服务商请求失败，请检查 API Key、网络连接或服务商额度。"
+        }
+
+        if failureKinds.contains(.invalidOutput) {
+            return fallbackAttempted
+                ? "主翻译服务和全局备用服务都未返回有效译文，请更换模型后重试。"
+                : "翻译服务自动重试后仍未返回有效译文，请更换模型后重试。"
         }
 
         return fallbackAttempted
@@ -520,6 +528,8 @@ final class TranslationService {
             return .networkError
         case TranslationProviderError.invalidResponse:
             return .emptyResult
+        case TranslationProviderError.invalidTranslation:
+            return .invalidOutput
         case TranslationProviderError.invalidEndpoint,
             TranslationProviderError.providerMessage:
             return .providerError
@@ -554,6 +564,11 @@ final class TranslationService {
         }
         if normalized.contains("为空") || normalized.contains("json") {
             return .emptyResult
+        }
+        if normalized.contains("有效译文")
+            || normalized.contains("简体中文译文")
+            || normalized.contains("原文相同") {
+            return .invalidOutput
         }
         return .providerError
     }
@@ -633,6 +648,7 @@ private enum TranslationFailureKind: String {
     case networkError
     case providerError
     case emptyResult
+    case invalidOutput
 }
 
 enum TranslationServiceError: LocalizedError {

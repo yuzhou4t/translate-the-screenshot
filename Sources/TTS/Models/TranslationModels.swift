@@ -23,6 +23,7 @@ enum TranslationScenario: String, Codable, Equatable {
 enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
     case appleTranslation = "apple-translation"
     case openAICompatible = "openai-compatible"
+    case codexSubscription = "codex-subscription"
     case myMemory = "mymemory"
     case deepL = "deepl"
     case google = "google"
@@ -44,6 +45,8 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
             "Apple 本地翻译"
         case .openAICompatible:
             "OpenAI 兼容接口"
+        case .codexSubscription:
+            "GPT-5.6 Luna"
         case .myMemory:
             "MyMemory 免费测试"
         case .deepL:
@@ -73,7 +76,7 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
 
     var isTranslationProvider: Bool {
         switch self {
-        case .appleTranslation, .openAICompatible, .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
+        case .appleTranslation, .openAICompatible, .codexSubscription, .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
             true
         case .localOCR:
             false
@@ -82,7 +85,7 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
 
     var supportsTranslationModePrompts: Bool {
         switch self {
-        case .openAICompatible, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
+        case .openAICompatible, .codexSubscription, .glm4Flash, .siliconFlow, .deepSeek, .gemini:
             true
         case .appleTranslation, .myMemory, .deepL, .google, .bing, .baidu, .tencent, .volcengine, .localOCR:
             false
@@ -91,6 +94,8 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
 
     var suggestedModels: [ModelSuggestion] {
         switch self {
+        case .codexSubscription:
+            [.init(CodexSubscriptionProvider.modelID)]
         case .openAICompatible:
             [
                 .init("gpt-5.2"),
@@ -156,6 +161,7 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
 
 enum TranslationProviderType: String, Codable, CaseIterable, Identifiable {
     case openAICompatible
+    case codexSubscription
     case myMemory
     case deepL
     case google
@@ -174,6 +180,8 @@ enum TranslationProviderType: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .openAICompatible:
             "OpenAI 兼容接口"
+        case .codexSubscription:
+            "ChatGPT 订阅"
         case .myMemory:
             "MyMemory 免费测试"
         case .deepL:
@@ -244,6 +252,21 @@ struct ProviderConfig: Identifiable, Codable, Equatable {
         shouldFallbackOnAuthFailure: true
     )
 
+    static let codexSubscriptionDefault = ProviderConfig(
+        id: .codexSubscription,
+        displayName: TranslationProviderID.codexSubscription.displayName,
+        type: .codexSubscription,
+        isEnabled: false,
+        priority: 15,
+        endpoint: nil,
+        apiKeyRef: nil,
+        appID: nil,
+        secretKey: nil,
+        timeout: 45,
+        model: CodexSubscriptionProvider.modelID,
+        shouldFallbackOnAuthFailure: true
+    )
+
     static func placeholder(id: TranslationProviderID, type: TranslationProviderType, priority: Int) -> ProviderConfig {
         let endpoint: URL?
         let model: String?
@@ -279,6 +302,9 @@ struct ProviderConfig: Identifiable, Codable, Equatable {
         case .gemini:
             endpoint = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent")
             model = "gemini-2.5-flash"
+        case .codexSubscription:
+            endpoint = nil
+            model = CodexSubscriptionProvider.modelID
         case .openAICompatible, .myMemory:
             endpoint = nil
             model = nil
@@ -291,7 +317,7 @@ struct ProviderConfig: Identifiable, Codable, Equatable {
             isEnabled: false,
             priority: priority,
             endpoint: endpoint,
-            apiKeyRef: id.rawValue,
+            apiKeyRef: type == .codexSubscription ? nil : id.rawValue,
             appID: nil,
             secretKey: nil,
             timeout: 30,
@@ -415,7 +441,7 @@ struct AppConfiguration: Codable, Equatable {
         openAICompatibleModel: "gpt-4o-mini",
         targetLanguage: "zh-CN",
         translationDirection: .autoToChinese,
-        providerConfigs: [.openAICompatibleDefault, .myMemoryDefault],
+        providerConfigs: [.openAICompatibleDefault, .codexSubscriptionDefault, .myMemoryDefault],
         defaultProviderID: .myMemory,
         fallbackEnabled: false,
         fallbackProviderID: nil,
@@ -514,6 +540,10 @@ struct AppConfiguration: Codable, Equatable {
             next.append(myMemory)
         }
 
+        if !next.contains(where: { $0.id == .codexSubscription }) {
+            next.append(.codexSubscriptionDefault)
+        }
+
         let placeholders: [ProviderConfig] = [
             .placeholder(id: .deepL, type: .deepL, priority: 30),
             .placeholder(id: .google, type: .google, priority: 40),
@@ -533,6 +563,12 @@ struct AppConfiguration: Codable, Equatable {
 
         for index in next.indices {
             next[index].displayName = next[index].id.displayName
+            if next[index].id == .codexSubscription {
+                next[index].type = .codexSubscription
+                next[index].endpoint = nil
+                next[index].apiKeyRef = nil
+                next[index].model = CodexSubscriptionProvider.modelID
+            }
         }
 
         return next.sorted { $0.priority < $1.priority }

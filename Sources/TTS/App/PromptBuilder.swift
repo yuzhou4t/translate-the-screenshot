@@ -22,9 +22,10 @@ struct PromptBuilder {
     static func build(
         mode: TranslationMode,
         sourceText: String,
-        targetLanguage: String
+        targetLanguage rawTargetLanguage: String
     ) -> Prompt {
-        switch mode {
+        let targetLanguage = targetLanguageDisplayName(rawTargetLanguage)
+        return switch mode {
         case .fast:
             Prompt(
                 system: """
@@ -200,6 +201,41 @@ struct PromptBuilder {
                 </source_text>
                 """
             )
+        }
+    }
+
+    static func buildQualityRetry(
+        from prompt: Prompt,
+        targetLanguage rawTargetLanguage: String
+    ) -> Prompt {
+        let targetLanguage = targetLanguageDisplayName(rawTargetLanguage)
+        return Prompt(
+            system: prompt.system + """
+
+
+            The previous response was invalid because it copied the source or did not use the target language.
+            You must translate every natural-language sentence into \(targetLanguage).
+            Do not return the source text unchanged. Return only the corrected translation.
+            """,
+            user: prompt.user + """
+
+
+            Retry requirement: the answer must be a \(targetLanguage) translation, not the original text.
+            """
+        )
+    }
+
+    private static func targetLanguageDisplayName(_ targetLanguage: String) -> String {
+        let normalized = targetLanguage
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return switch normalized {
+        case "zh", "zh-cn", "zh-hans":
+            "Simplified Chinese (zh-CN)"
+        case "zh-tw", "zh-hant":
+            "Traditional Chinese (zh-TW)"
+        default:
+            targetLanguage
         }
     }
 

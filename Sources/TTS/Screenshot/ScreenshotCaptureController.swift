@@ -2,6 +2,7 @@ import AppKit
 import CoreGraphics
 import Foundation
 import ImageIO
+import ScreenCaptureKit
 import UniformTypeIdentifiers
 
 enum ScreenshotCaptureMode {
@@ -42,6 +43,7 @@ final class ScreenshotCaptureController {
     private let providerRegistry: ProviderRegistry
     private let policyStore: VolcengineImageTranslationPolicyStore
     private let settingsWindowController: SettingsWindowController
+    private let canBeginCapture: () -> Bool
     private var overlayWindows: [ScreenshotOverlayWindow] = []
     private var annotationWindow: ScreenshotAnnotationWindow?
     private var isCapturing = false
@@ -63,7 +65,8 @@ final class ScreenshotCaptureController {
         imageOverlayTranslationWindowController: ImageOverlayTranslationWindowController,
         providerRegistry: ProviderRegistry,
         policyStore: VolcengineImageTranslationPolicyStore,
-        settingsWindowController: SettingsWindowController
+        settingsWindowController: SettingsWindowController,
+        canBeginCapture: @escaping () -> Bool = { true }
     ) {
         self.permissionManager = permissionManager
         self.ocrService = ocrService
@@ -76,9 +79,19 @@ final class ScreenshotCaptureController {
         self.providerRegistry = providerRegistry
         self.policyStore = policyStore
         self.settingsWindowController = settingsWindowController
+        self.canBeginCapture = canBeginCapture
+    }
+
+    var isCaptureInteractionActive: Bool {
+        isCapturing || annotationWindow != nil
     }
 
     func startCapture(mode: ScreenshotCaptureMode) {
+        guard canBeginCapture() else {
+            let feedbackPanel = mode == .clipboard ? clipboardToastPanel : toastPanel
+            feedbackPanel.show("请先结束或取消当前录屏")
+            return
+        }
         guard !isCapturing else {
             return
         }
@@ -110,47 +123,22 @@ final class ScreenshotCaptureController {
             return
         }
 
-        let frozenScreens: [(screen: NSScreen, image: CGImage)]
-        do {
-            frozenScreens = try screens.map { screen in
-                (
-                    screen: screen,
-                    image: try captureScreenSnapshot(for: screen)
-                )
-            }
-        } catch {
-            let feedbackPanel = mode == .clipboard ? clipboardToastPanel : toastPanel
-            feedbackPanel.show("无法冻结屏幕画面，请重试")
-            print("screenshot freeze failed: \(error.localizedDescription)")
-            return
-        }
-
         isCapturing = true
         activeMode = mode
-        hideSystemCursor()
-        overlayWindows = frozenScreens.map { frozenScreen in
-            let screen = frozenScreen.screen
-            let image = frozenScreen.image
-            let window = ScreenshotOverlayWindow(
-                screen: screen,
-                frozenImage: image
-            )
-            window.onFinished = { [weak self] selectionRect in
-                self?.finishCapture(
-                    selectionRect: selectionRect,
-                    frozenImage: image,
-                    screenFrame: screen.frame
-                )
+        Task { [weak self] in
+            guard let self else { return }
+            do {
+                let frozenScreens = try await self.captureScreenSnapshots(for: screens)
+                guard self.isCapturing, self.activeMode == mode else { return }
+                self.presentCaptureOverlays(frozenScreens)
+            } catch {
+                guard self.isCapturing else { return }
+                self.isCapturing = false
+                let feedbackPanel = mode == .clipboard ? self.clipboardToastPanel : self.toastPanel
+                feedbackPanel.show("无法冻结屏幕画面，请重试")
+                print("screenshot freeze failed: \(error.localizedDescription)")
             }
-            window.onCancelled = { [weak self] in
-                self?.cancelCapture()
-            }
-            return window
         }
-
-        overlayWindows.forEach { $0.orderFrontRegardless() }
-        overlayWindows.forEach { $0.updateCrosshair(globalPoint: NSEvent.mouseLocation) }
-        overlayWindows.first?.makeKey()
     }
 
     private func prepareVolcengineImageTranslation() -> Bool {
@@ -697,17 +685,65 @@ final class ScreenshotCaptureController {
         activeProcessingAnchorPoint = nil
     }
 
-    private func captureScreenSnapshot(for screen: NSScreen) throws -> CGImage {
-        let displayRect = convertToDisplayRect(screen.frame)
-        guard let image = CGWindowListCreateImage(
-            displayRect,
-            .optionOnScreenOnly,
-            kCGNullWindowID,
-            [.bestResolution]
-        ) else {
-            throw ScreenshotCaptureError.captureFailed
+    private func captureScreenSnapshots(
+        for screens: [NSScreen]
+    ) async throws -> [(screen: NSScreen, image: CGImage)] {
+        let content = try await SCShareableContent.excludingDesktopWindows(
+            false,
+            onScreenWindowsOnly: true
+        )
+        var snapshots: [(screen: NSScreen, image: CGImage)] = []
+        snapshots.reserveCapacity(screens.count)
+        for screen in screens {
+            guard let displayID = ScreenRecordingGeometry.displayID(for: screen),
+                  let display = content.displays.first(where: { $0.displayID == displayID }) else {
+                throw ScreenshotCaptureError.captureFailed
+            }
+            let filter = SCContentFilter(
+                display: display,
+                excludingApplications: [],
+                exceptingWindows: []
+            )
+            let configuration = SCStreamConfiguration()
+            let scale = CGFloat(filter.pointPixelScale)
+            configuration.width = Int(ceil(screen.frame.width * max(scale, 1)))
+            configuration.height = Int(ceil(screen.frame.height * max(scale, 1)))
+            configuration.showsCursor = false
+            configuration.captureResolution = .best
+            let image = try await SCScreenshotManager.captureImage(
+                contentFilter: filter,
+                configuration: configuration
+            )
+            snapshots.append((screen, image))
         }
-        return image
+        return snapshots
+    }
+
+    private func presentCaptureOverlays(_ frozenScreens: [(screen: NSScreen, image: CGImage)]) {
+        hideSystemCursor()
+        overlayWindows = frozenScreens.map { frozenScreen in
+            let screen = frozenScreen.screen
+            let image = frozenScreen.image
+            let window = ScreenshotOverlayWindow(
+                screen: screen,
+                frozenImage: image
+            )
+            window.onFinished = { [weak self] selectionRect in
+                self?.finishCapture(
+                    selectionRect: selectionRect,
+                    frozenImage: image,
+                    screenFrame: screen.frame
+                )
+            }
+            window.onCancelled = { [weak self] in
+                self?.cancelCapture()
+            }
+            return window
+        }
+
+        overlayWindows.forEach { $0.orderFrontRegardless() }
+        overlayWindows.forEach { $0.updateCrosshair(globalPoint: NSEvent.mouseLocation) }
+        overlayWindows.first?.makeKey()
     }
 
     private func cropFrozenScreenshot(

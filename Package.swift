@@ -5,7 +5,7 @@ import PackageDescription
 let package = Package(
     name: "tts",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v15)
     ],
     products: [
         .executable(name: "tts", targets: ["TTS"])
@@ -28,6 +28,8 @@ let package = Package(
             linkerSettings: [
                 .linkedFramework("ApplicationServices"),
                 .linkedFramework("AppKit"),
+                .linkedFramework("AVFoundation"),
+                .linkedFramework("ScreenCaptureKit"),
                 .linkedFramework("Security"),
                 .linkedFramework("SwiftUI"),
                 .linkedFramework("Vision")
@@ -36,7 +38,10 @@ let package = Package(
         .testTarget(
             name: "TTSTests",
             dependencies: ["TTS", "KeyboardShortcuts"],
-            path: "Tests/TTSTests"
+            path: "Tests/TTSTests",
+            resources: [
+                .copy("Fixtures")
+            ]
         )
     ]
 )

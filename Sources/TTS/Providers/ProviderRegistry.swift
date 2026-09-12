@@ -12,6 +12,7 @@ final class ProviderRegistry {
     private var descriptors: [TranslationProviderID: ProviderDescriptor] = [:]
     private let configStore: ProviderConfigStore
     private let keychainService: KeychainService
+    private var codexSubscriptionClient: CodexSubscriptionClient?
 
     init(configStore: ProviderConfigStore, keychainService: KeychainService) {
         self.configStore = configStore
@@ -33,6 +34,35 @@ final class ProviderRegistry {
 
     func descriptor(for id: TranslationProviderID) -> ProviderDescriptor? {
         descriptors[id]
+    }
+
+    func warmUpDefaultProvider() async {
+        guard let config = defaultProviderConfig,
+              config.isEnabled,
+              config.type == .codexSubscription else {
+            return
+        }
+
+        do {
+            guard let provider = try makeProvider(config: config) as? CodexSubscriptionProvider else {
+                return
+            }
+            let startedAt = Date()
+            try await provider.warmUp()
+            print(String(
+                format: "translation provider warm-up succeeded: provider=%@, elapsed=%.2fs",
+                config.displayName,
+                Date().timeIntervalSince(startedAt)
+            ))
+        } catch {
+            print("translation provider warm-up skipped: provider=\(config.displayName), reason=\(error.localizedDescription)")
+        }
+    }
+
+    func resetCodexSubscriptionSession() async {
+        guard let client = codexSubscriptionClient else { return }
+        codexSubscriptionClient = nil
+        await client.stop()
     }
 
     func makeProvider(config: ProviderConfig, modelOverride: String? = nil) throws -> any TranslationProvider {
@@ -57,6 +87,25 @@ final class ProviderRegistry {
                 model: modelOverride ?? config.model ?? "gpt-4o-mini",
                 apiKey: apiKey,
                 timeout: config.timeout
+            )
+        case .codexSubscription:
+            guard let executable = AIUsageBinaryLocator.codexBinary() else {
+                throw TranslationProviderError.providerMessage(
+                    "未检测到 Codex CLI，请先安装 Codex 并使用 ChatGPT 登录。"
+                )
+            }
+            let client: CodexSubscriptionClient
+            if let codexSubscriptionClient {
+                client = codexSubscriptionClient
+            } else {
+                let nextClient = CodexSubscriptionClient(executable: executable)
+                codexSubscriptionClient = nextClient
+                client = nextClient
+            }
+            return CodexSubscriptionProvider(
+                model: CodexSubscriptionProvider.modelID,
+                timeout: config.timeout,
+                client: client
             )
         case .myMemory:
             return MyMemoryProvider()
@@ -272,6 +321,12 @@ final class ProviderRegistry {
             id: .openAICompatible,
             displayName: TranslationProviderID.openAICompatible.displayName,
             type: .openAICompatible,
+            isImplemented: true
+        ))
+        register(.init(
+            id: .codexSubscription,
+            displayName: TranslationProviderID.codexSubscription.displayName,
+            type: .codexSubscription,
             isImplemented: true
         ))
         register(.init(

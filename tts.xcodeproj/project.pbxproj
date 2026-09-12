@@ -68,6 +68,35 @@
 		200000000000000000000043 /* ScreenshotTranslationOverlayRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000043 /* ScreenshotTranslationOverlayRenderer.swift */; };
 		200000000000000000000044 /* TextAtom.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000044 /* TextAtom.swift */; };
 		200000000000000000000045 /* VolcengineImageTranslationPolicyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000045 /* VolcengineImageTranslationPolicyStore.swift */; };
+		200000000000000000000046 /* AIUsageModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000046 /* AIUsageModels.swift */; };
+		200000000000000000000047 /* AIUsageSettingsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000047 /* AIUsageSettingsStore.swift */; };
+		200000000000000000000048 /* AIUsageRPCProcess.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000048 /* AIUsageRPCProcess.swift */; };
+		200000000000000000000049 /* AIUsageProviders.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000049 /* AIUsageProviders.swift */; };
+		20000000000000000000004A /* AIUsageProviderRegistry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000004A /* AIUsageProviderRegistry.swift */; };
+		20000000000000000000004B /* AIUsageStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000004B /* AIUsageStore.swift */; };
+		20000000000000000000004C /* AIUsagePopoverController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000004C /* AIUsagePopoverController.swift */; };
+		20000000000000000000004D /* AIUsagePopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000004D /* AIUsagePopoverView.swift */; };
+		20000000000000000000004E /* AIUsageSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000004E /* AIUsageSettingsView.swift */; };
+		20000000000000000000004F /* AntiGravityUsageProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000004F /* AntiGravityUsageProvider.swift */; };
+		200000000000000000000050 /* AIUsageProviderBrandIcon.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000050 /* AIUsageProviderBrandIcon.swift */; };
+		200000000000000000000051 /* ProviderIcon-codex.svg in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000051 /* ProviderIcon-codex.svg */; };
+		200000000000000000000052 /* ProviderIcon-grok.svg in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000052 /* ProviderIcon-grok.svg */; };
+		200000000000000000000053 /* ProviderIcon-deepseek.svg in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000053 /* ProviderIcon-deepseek.svg */; };
+		200000000000000000000054 /* ProviderIcon-minimax.svg in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000054 /* ProviderIcon-minimax.svg */; };
+		200000000000000000000055 /* ProviderIcon-antigravity.svg in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000055 /* ProviderIcon-antigravity.svg */; };
+		200000000000000000000056 /* ProviderIcons-NOTICE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000056 /* ProviderIcons-NOTICE.txt */; };
+		200000000000000000000057 /* AIUsageTokenStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000057 /* AIUsageTokenStore.swift */; };
+		200000000000000000000058 /* TranslationOutputValidator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000058 /* TranslationOutputValidator.swift */; };
+		200000000000000000000059 /* CodexSubscriptionProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000059 /* CodexSubscriptionProvider.swift */; };
+		20000000000000000000005A /* ScreenRecordingController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000005A /* ScreenRecordingController.swift */; };
+		20000000000000000000005B /* ScreenRecordingGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000005B /* ScreenRecordingGeometry.swift */; };
+		20000000000000000000005C /* ScreenRecordingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000005C /* ScreenRecordingModels.swift */; };
+		20000000000000000000005D /* ScreenRecordingPanels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000005D /* ScreenRecordingPanels.swift */; };
+		20000000000000000000005E /* ScreenRecordingSelection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 10000000000000000000005E /* ScreenRecordingSelection.swift */; };
+		20000000000000000000005F /* ScreenCaptureKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 10000000000000000000005F /* ScreenCaptureKit.framework */; };
+		200000000000000000000060 /* AVFoundation.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 100000000000000000000060 /* AVFoundation.framework */; };
+		200000000000000000000061 /* CodexAccountSwitching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000061 /* CodexAccountSwitching.swift */; };
+		200000000000000000000062 /* CodexAccountSwitcher-NOTICE.txt in Resources */ = {isa = PBXBuildFile; fileRef = 100000000000000000000062 /* CodexAccountSwitcher-NOTICE.txt */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -157,6 +186,35 @@
 		100000000000000000000043 /* ScreenshotTranslationOverlayRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/ScreenshotTranslationOverlayRenderer.swift; sourceTree = "<group>"; };
 		100000000000000000000044 /* TextAtom.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Screenshot/TextAtom.swift; sourceTree = "<group>"; };
 		100000000000000000000045 /* VolcengineImageTranslationPolicyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Stores/VolcengineImageTranslationPolicyStore.swift; sourceTree = "<group>"; };
+		100000000000000000000046 /* AIUsageModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsage/AIUsageModels.swift; sourceTree = "<group>"; };
+		100000000000000000000047 /* AIUsageSettingsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsage/AIUsageSettingsStore.swift; sourceTree = "<group>"; };
+		100000000000000000000048 /* AIUsageRPCProcess.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsage/AIUsageRPCProcess.swift; sourceTree = "<group>"; };
+		100000000000000000000049 /* AIUsageProviders.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsage/AIUsageProviders.swift; sourceTree = "<group>"; };
+		10000000000000000000004A /* AIUsageProviderRegistry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsage/AIUsageProviderRegistry.swift; sourceTree = "<group>"; };
+		10000000000000000000004B /* AIUsageStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsage/AIUsageStore.swift; sourceTree = "<group>"; };
+		10000000000000000000004C /* AIUsagePopoverController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/AIUsage/AIUsagePopoverController.swift; sourceTree = "<group>"; };
+		10000000000000000000004D /* AIUsagePopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/AIUsage/AIUsagePopoverView.swift; sourceTree = "<group>"; };
+		10000000000000000000004E /* AIUsageSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/Settings/AIUsageSettingsView.swift; sourceTree = "<group>"; };
+		10000000000000000000004F /* AntiGravityUsageProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsage/AntiGravityUsageProvider.swift; sourceTree = "<group>"; };
+		100000000000000000000050 /* AIUsageProviderBrandIcon.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UI/AIUsage/AIUsageProviderBrandIcon.swift; sourceTree = "<group>"; };
+		100000000000000000000051 /* ProviderIcon-codex.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = App/Resources/ProviderIcon-codex.svg; sourceTree = SOURCE_ROOT; };
+		100000000000000000000052 /* ProviderIcon-grok.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = App/Resources/ProviderIcon-grok.svg; sourceTree = SOURCE_ROOT; };
+		100000000000000000000053 /* ProviderIcon-deepseek.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = App/Resources/ProviderIcon-deepseek.svg; sourceTree = SOURCE_ROOT; };
+		100000000000000000000054 /* ProviderIcon-minimax.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = App/Resources/ProviderIcon-minimax.svg; sourceTree = SOURCE_ROOT; };
+		100000000000000000000055 /* ProviderIcon-antigravity.svg */ = {isa = PBXFileReference; lastKnownFileType = image.svg; path = App/Resources/ProviderIcon-antigravity.svg; sourceTree = SOURCE_ROOT; };
+		100000000000000000000056 /* ProviderIcons-NOTICE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = App/Resources/ProviderIcons-NOTICE.txt; sourceTree = SOURCE_ROOT; };
+		100000000000000000000057 /* AIUsageTokenStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsage/AIUsageTokenStore.swift; sourceTree = "<group>"; };
+		100000000000000000000058 /* TranslationOutputValidator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = App/TranslationOutputValidator.swift; sourceTree = "<group>"; };
+		100000000000000000000059 /* CodexSubscriptionProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Providers/CodexSubscriptionProvider.swift; sourceTree = "<group>"; };
+		10000000000000000000005A /* ScreenRecordingController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecording/ScreenRecordingController.swift; sourceTree = "<group>"; };
+		10000000000000000000005B /* ScreenRecordingGeometry.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecording/ScreenRecordingGeometry.swift; sourceTree = "<group>"; };
+		10000000000000000000005C /* ScreenRecordingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecording/ScreenRecordingModels.swift; sourceTree = "<group>"; };
+		10000000000000000000005D /* ScreenRecordingPanels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecording/ScreenRecordingPanels.swift; sourceTree = "<group>"; };
+		10000000000000000000005E /* ScreenRecordingSelection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScreenRecording/ScreenRecordingSelection.swift; sourceTree = "<group>"; };
+		10000000000000000000005F /* ScreenCaptureKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = ScreenCaptureKit.framework; path = System/Library/Frameworks/ScreenCaptureKit.framework; sourceTree = SDKROOT; };
+		100000000000000000000060 /* AVFoundation.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = AVFoundation.framework; path = System/Library/Frameworks/AVFoundation.framework; sourceTree = SDKROOT; };
+		100000000000000000000061 /* CodexAccountSwitching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AIUsage/CodexAccountSwitching.swift; sourceTree = "<group>"; };
+		100000000000000000000062 /* CodexAccountSwitcher-NOTICE.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = App/Resources/CodexAccountSwitcher-NOTICE.txt; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -164,6 +222,8 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				200000000000000000000060 /* AVFoundation.framework in Frameworks */,
+				20000000000000000000005F /* ScreenCaptureKit.framework in Frameworks */,
 				200000000000000000000029 /* KeyboardShortcuts.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -195,6 +255,13 @@
 				10000000000000000000002C /* Info.plist */,
 				10000000000000000000002D /* AppIcon.icns */,
 				10000000000000000000002E /* MenuBarIconTemplate.png */,
+				100000000000000000000051 /* ProviderIcon-codex.svg */,
+				100000000000000000000052 /* ProviderIcon-grok.svg */,
+				100000000000000000000053 /* ProviderIcon-deepseek.svg */,
+				100000000000000000000054 /* ProviderIcon-minimax.svg */,
+				100000000000000000000055 /* ProviderIcon-antigravity.svg */,
+				100000000000000000000056 /* ProviderIcons-NOTICE.txt */,
+				100000000000000000000062 /* CodexAccountSwitcher-NOTICE.txt */,
 			);
 			name = App;
 			sourceTree = "<group>";
@@ -211,6 +278,8 @@
 		800000000000000000000004 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
+				100000000000000000000060 /* AVFoundation.framework */,
+				10000000000000000000005F /* ScreenCaptureKit.framework */,
 				10000000000000000000002B /* Carbon.framework */,
 			);
 			name = Frameworks;
@@ -228,12 +297,27 @@
 		800000000000000000000006 /* TTS */ = {
 			isa = PBXGroup;
 			children = (
+				10000000000000000000005A /* ScreenRecordingController.swift */,
+				10000000000000000000005B /* ScreenRecordingGeometry.swift */,
+				10000000000000000000005C /* ScreenRecordingModels.swift */,
+				10000000000000000000005D /* ScreenRecordingPanels.swift */,
+				10000000000000000000005E /* ScreenRecordingSelection.swift */,
+				100000000000000000000046 /* AIUsageModels.swift */,
+				100000000000000000000047 /* AIUsageSettingsStore.swift */,
+				100000000000000000000048 /* AIUsageRPCProcess.swift */,
+				100000000000000000000049 /* AIUsageProviders.swift */,
+				10000000000000000000004A /* AIUsageProviderRegistry.swift */,
+				10000000000000000000004B /* AIUsageStore.swift */,
+				100000000000000000000057 /* AIUsageTokenStore.swift */,
+				100000000000000000000061 /* CodexAccountSwitching.swift */,
+				10000000000000000000004F /* AntiGravityUsageProvider.swift */,
 				100000000000000000000001 /* AppDelegate.swift */,
 				100000000000000000000002 /* AppServices.swift */,
 				100000000000000000000003 /* HotkeyManager.swift */,
 				100000000000000000000004 /* SelectionTranslationController.swift */,
 				100000000000000000000005 /* TTSApp.swift */,
 				100000000000000000000006 /* TranslationService.swift */,
+				100000000000000000000058 /* TranslationOutputValidator.swift */,
 				100000000000000000000030 /* PromptBuilder.swift */,
 				100000000000000000000007 /* TranslationModels.swift */,
 				100000000000000000000031 /* TranslationDirection.swift */,
@@ -250,6 +334,7 @@
 				10000000000000000000000C /* GoogleTranslateProvider.swift */,
 				10000000000000000000000D /* MyMemoryProvider.swift */,
 				10000000000000000000000E /* OpenAICompatibleProvider.swift */,
+				100000000000000000000059 /* CodexSubscriptionProvider.swift */,
 				10000000000000000000000F /* ProviderRegistry.swift */,
 				100000000000000000000010 /* SigningUtilities.swift */,
 				100000000000000000000011 /* TencentTranslateProvider.swift */,
@@ -280,6 +365,10 @@
 				100000000000000000000022 /* InputTranslateView.swift */,
 				100000000000000000000023 /* InputTranslateWindowController.swift */,
 				100000000000000000000024 /* OCRResultPanel.swift */,
+				10000000000000000000004C /* AIUsagePopoverController.swift */,
+				10000000000000000000004D /* AIUsagePopoverView.swift */,
+				100000000000000000000050 /* AIUsageProviderBrandIcon.swift */,
+				10000000000000000000004E /* AIUsageSettingsView.swift */,
 				100000000000000000000025 /* SettingsView.swift */,
 				100000000000000000000026 /* SettingsWindowController.swift */,
 				100000000000000000000027 /* ToastPanel.swift */,
@@ -377,6 +466,13 @@
 			files = (
 				20000000000000000000002C /* AppIcon.icns in Resources */,
 				20000000000000000000002D /* MenuBarIconTemplate.png in Resources */,
+				200000000000000000000051 /* ProviderIcon-codex.svg in Resources */,
+				200000000000000000000052 /* ProviderIcon-grok.svg in Resources */,
+				200000000000000000000053 /* ProviderIcon-deepseek.svg in Resources */,
+				200000000000000000000054 /* ProviderIcon-minimax.svg in Resources */,
+				200000000000000000000055 /* ProviderIcon-antigravity.svg in Resources */,
+				200000000000000000000056 /* ProviderIcons-NOTICE.txt in Resources */,
+				200000000000000000000062 /* CodexAccountSwitcher-NOTICE.txt in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -387,12 +483,27 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				20000000000000000000005A /* ScreenRecordingController.swift in Sources */,
+				20000000000000000000005B /* ScreenRecordingGeometry.swift in Sources */,
+				20000000000000000000005C /* ScreenRecordingModels.swift in Sources */,
+				20000000000000000000005D /* ScreenRecordingPanels.swift in Sources */,
+				20000000000000000000005E /* ScreenRecordingSelection.swift in Sources */,
+				200000000000000000000046 /* AIUsageModels.swift in Sources */,
+				200000000000000000000047 /* AIUsageSettingsStore.swift in Sources */,
+				200000000000000000000048 /* AIUsageRPCProcess.swift in Sources */,
+				200000000000000000000049 /* AIUsageProviders.swift in Sources */,
+				20000000000000000000004A /* AIUsageProviderRegistry.swift in Sources */,
+				20000000000000000000004B /* AIUsageStore.swift in Sources */,
+				200000000000000000000057 /* AIUsageTokenStore.swift in Sources */,
+				200000000000000000000061 /* CodexAccountSwitching.swift in Sources */,
+				20000000000000000000004F /* AntiGravityUsageProvider.swift in Sources */,
 				200000000000000000000001 /* AppDelegate.swift in Sources */,
 				200000000000000000000002 /* AppServices.swift in Sources */,
 				200000000000000000000003 /* HotkeyManager.swift in Sources */,
 				200000000000000000000004 /* SelectionTranslationController.swift in Sources */,
 				200000000000000000000005 /* TTSApp.swift in Sources */,
 				200000000000000000000006 /* TranslationService.swift in Sources */,
+				200000000000000000000058 /* TranslationOutputValidator.swift in Sources */,
 				200000000000000000000030 /* PromptBuilder.swift in Sources */,
 				200000000000000000000007 /* TranslationModels.swift in Sources */,
 				200000000000000000000031 /* TranslationDirection.swift in Sources */,
@@ -409,6 +520,7 @@
 				20000000000000000000000C /* GoogleTranslateProvider.swift in Sources */,
 				20000000000000000000000D /* MyMemoryProvider.swift in Sources */,
 				20000000000000000000000E /* OpenAICompatibleProvider.swift in Sources */,
+				200000000000000000000059 /* CodexSubscriptionProvider.swift in Sources */,
 				20000000000000000000000F /* ProviderRegistry.swift in Sources */,
 				200000000000000000000010 /* SigningUtilities.swift in Sources */,
 				200000000000000000000011 /* TencentTranslateProvider.swift in Sources */,
@@ -439,6 +551,10 @@
 				200000000000000000000022 /* InputTranslateView.swift in Sources */,
 				200000000000000000000023 /* InputTranslateWindowController.swift in Sources */,
 				200000000000000000000024 /* OCRResultPanel.swift in Sources */,
+				20000000000000000000004C /* AIUsagePopoverController.swift in Sources */,
+				20000000000000000000004D /* AIUsagePopoverView.swift in Sources */,
+				200000000000000000000050 /* AIUsageProviderBrandIcon.swift in Sources */,
+				20000000000000000000004E /* AIUsageSettingsView.swift in Sources */,
 				200000000000000000000025 /* SettingsView.swift in Sources */,
 				200000000000000000000026 /* SettingsWindowController.swift in Sources */,
 				200000000000000000000027 /* ToastPanel.swift in Sources */,
@@ -514,7 +630,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
 				ONLY_ACTIVE_ARCH = YES;
@@ -569,7 +685,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
 				SDKROOT = macosx;
@@ -592,7 +708,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yuzhou4tc.tts;
 				PRODUCT_MODULE_NAME = TTS;
 				PRODUCT_NAME = TTS;
@@ -613,7 +729,7 @@
 					"$(inherited)",
 					"@executable_path/../Frameworks",
 				);
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yuzhou4tc.tts;
 				PRODUCT_MODULE_NAME = TTS;
 				PRODUCT_NAME = TTS;
@@ -631,7 +747,7 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_KEY_CFBundleDisplayName = KeyboardShortcuts;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yuzhou4tc.tts.KeyboardShortcuts;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -649,7 +765,7 @@
 				DYLIB_INSTALL_NAME_BASE = "@rpath";
 				INFOPLIST_KEY_CFBundleDisplayName = KeyboardShortcuts;
 				INSTALL_PATH = "$(LOCAL_LIBRARY_DIR)/Frameworks";
-				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				MACOSX_DEPLOYMENT_TARGET = 15.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.yuzhou4tc.tts.KeyboardShortcuts;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
