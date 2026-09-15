@@ -783,6 +783,79 @@ struct AIUsageTests {
         #expect(desktop.reopenCount == 1)
     }
 
+    @Test("Expired Codex target is reauthorized before switching")
+    @MainActor
+    func codexAccountSwitchReauthorizesExpiredTarget() async throws {
+        let first = CodexAccountProfile(
+            id: UUID(), displayName: "Current", email: nil, accountID: "current",
+            createdAt: Date(timeIntervalSince1970: 1), lastUsedAt: nil
+        )
+        let second = CodexAccountProfile(
+            id: UUID(), displayName: "Target", email: nil, accountID: "target",
+            createdAt: Date(timeIntervalSince1970: 2), lastUsedAt: nil
+        )
+        let backend = FakeCodexAccountBackend(
+            accounts: [first, second],
+            activeID: first.id,
+            expiredSessionIDs: [second.id],
+            authorizationID: second.id
+        )
+        let desktop = FakeCodexDesktop()
+        let service = CodexAccountSwitchService(
+            store: backend,
+            identityReader: backend,
+            desktop: desktop
+        )
+
+        try await service.switchAccount(to: second.id)
+
+        #expect(await backend.authorizationRequestCount() == 1)
+        #expect(await backend.credentialInstallIDs() == [second.id])
+        #expect(await backend.installedAccountID() == second.id)
+        #expect(await backend.loadRegistry().activeAccountID == second.id)
+        #expect(desktop.closeCount == 1)
+        #expect(desktop.reopenCount == 1)
+    }
+
+    @Test("Wrong browser login never overwrites the selected Codex profile")
+    @MainActor
+    func codexAccountSwitchRejectsWrongAuthorization() async throws {
+        let first = CodexAccountProfile(
+            id: UUID(), displayName: "Current", email: nil, accountID: "current",
+            createdAt: Date(timeIntervalSince1970: 1), lastUsedAt: nil
+        )
+        let second = CodexAccountProfile(
+            id: UUID(), displayName: "Target", email: nil, accountID: "target",
+            createdAt: Date(timeIntervalSince1970: 2), lastUsedAt: nil
+        )
+        let backend = FakeCodexAccountBackend(
+            accounts: [first, second],
+            activeID: first.id,
+            expiredSessionIDs: [second.id],
+            authorizationID: first.id
+        )
+        let desktop = FakeCodexDesktop()
+        let service = CodexAccountSwitchService(
+            store: backend,
+            identityReader: backend,
+            desktop: desktop
+        )
+
+        do {
+            try await service.switchAccount(to: second.id)
+            Issue.record("Expected the mismatched browser login to be rejected")
+        } catch let error as CodexAccountSwitchError {
+            #expect(error == .authorizationAccountMismatch("Target"))
+        }
+
+        #expect(await backend.authorizationRequestCount() == 1)
+        #expect(await backend.credentialInstallIDs().isEmpty)
+        #expect(await backend.installedAccountID() == first.id)
+        #expect(await backend.loadRegistry().activeAccountID == first.id)
+        #expect(desktop.closeCount == 0)
+        #expect(desktop.reopenCount == 0)
+    }
+
     @Test("Codex account list derives current marker from installed identity")
     @MainActor
     func codexAccountListUsesInstalledIdentity() async throws {
@@ -890,18 +963,26 @@ private actor FakeCodexAccountBackend: CodexAccountCredentialStoring, CodexAccou
     private var registry: CodexAccountRegistry
     private var installedID: UUID
     private let identityFailureID: UUID?
+    private var expiredSessionIDs: Set<UUID>
+    private let authorizationID: UUID?
     private var saveCount = 0
     private var savedIDs: [UUID] = []
+    private var installedCredentialIDs: [UUID] = []
+    private var authorizationCount = 0
 
     init(
         accounts: [CodexAccountProfile],
         activeID: UUID,
         installedID: UUID? = nil,
-        identityFailureID: UUID? = nil
+        identityFailureID: UUID? = nil,
+        expiredSessionIDs: Set<UUID> = [],
+        authorizationID: UUID? = nil
     ) {
         registry = CodexAccountRegistry(activeAccountID: activeID, accounts: accounts)
         self.installedID = installedID ?? activeID
         self.identityFailureID = identityFailureID
+        self.expiredSessionIDs = expiredSessionIDs
+        self.authorizationID = authorizationID
     }
 
     func loadRegistry() -> CodexAccountRegistry { registry }
@@ -914,11 +995,19 @@ private actor FakeCodexAccountBackend: CodexAccountCredentialStoring, CodexAccou
     }
 
     func activeHome() -> URL { URL(fileURLWithPath: "/private/tmp/fake-codex-home") }
+    func profileHome(id: UUID) -> URL {
+        URL(fileURLWithPath: "/private/tmp/fake-codex-profile-\(id.uuidString)")
+    }
     func saveCurrentCredential() {
         saveCount += 1
         if let activeID = registry.activeAccountID {
             savedIDs.append(activeID)
         }
+    }
+    func installCredential(_ data: Data, id: UUID) {
+        _ = data
+        installedCredentialIDs.append(id)
+        expiredSessionIDs.remove(id)
     }
     func activateCredential(id: UUID) { installedID = id }
     func restoreCredential(id: UUID) { installedID = id }
@@ -931,18 +1020,37 @@ private actor FakeCodexAccountBackend: CodexAccountCredentialStoring, CodexAccou
         profileHome: URL,
         validateSession: Bool
     ) throws -> CodexAccountIdentity {
-        _ = profileHome
-        _ = validateSession
-        guard installedID != identityFailureID,
-              let profile = registry.accounts.first(where: { $0.id == installedID }) else {
+        let isActiveHome = profileHome.path == "/private/tmp/fake-codex-home"
+        let profileID = registry.accounts.first(where: {
+            profileHome.lastPathComponent == "fake-codex-profile-\($0.id.uuidString)"
+        })?.id ?? installedID
+        guard !(isActiveHome && profileID == identityFailureID),
+              let profile = registry.accounts.first(where: { $0.id == profileID }) else {
             throw CodexAccountSwitchError.identityUnavailable
         }
+        if validateSession, expiredSessionIDs.contains(profileID) {
+            throw CodexAccountSwitchError.credentialExpired
+        }
         return CodexAccountIdentity(accountID: profile.accountID, email: profile.email)
+    }
+
+    func authorize() throws -> CodexAccountAuthorization {
+        authorizationCount += 1
+        guard let authorizationID,
+              let profile = registry.accounts.first(where: { $0.id == authorizationID }) else {
+            throw CodexAccountSwitchError.operationFailed("Authorization was not configured.")
+        }
+        return CodexAccountAuthorization(
+            identity: CodexAccountIdentity(accountID: profile.accountID, email: profile.email),
+            credential: Data("refreshed-credential".utf8)
+        )
     }
 
     func installedAccountID() -> UUID { installedID }
     func savedCurrentCredentialCount() -> Int { saveCount }
     func savedAccountIDs() -> [UUID] { savedIDs }
+    func credentialInstallIDs() -> [UUID] { installedCredentialIDs }
+    func authorizationRequestCount() -> Int { authorizationCount }
 }
 
 @MainActor

@@ -76,6 +76,7 @@ final class AIUsageRPCProcessSession {
     private let inputPipe = Pipe()
     private let outputPipe = Pipe()
     private var outputBuffer = Data()
+    private var pendingMessages: [[String: Any]] = []
     private var nextID = 1
     private var hasStopped = false
 
@@ -116,20 +117,16 @@ final class AIUsageRPCProcessSession {
             "params": params,
         ])
 
-        let deadline = Date().addingTimeInterval(timeout)
-        while true {
-            let message = try readMessage(deadline: deadline)
-            guard let messageID = Self.integerID(message["id"]), messageID == id else {
-                continue
-            }
-            if let error = message["error"] as? [String: Any] {
-                throw AIUsageRPCError.requestFailed((error["message"] as? String) ?? "request failed")
-            }
-            guard let result = message["result"] as? [String: Any] else {
-                throw AIUsageRPCError.malformed
-            }
-            return result
+        let message = try receive(timeout: timeout) {
+            Self.integerID($0["id"]) == id
         }
+        if let error = message["error"] as? [String: Any] {
+            throw AIUsageRPCError.requestFailed((error["message"] as? String) ?? "request failed")
+        }
+        guard let result = message["result"] as? [String: Any] else {
+            throw AIUsageRPCError.malformed
+        }
+        return result
     }
 
     func notify(method: String, params: [String: Any] = [:]) throws {
@@ -138,6 +135,16 @@ final class AIUsageRPCProcessSession {
             "method": method,
             "params": params,
         ])
+    }
+
+    func waitForNotification(
+        method: String,
+        timeout: TimeInterval
+    ) throws -> [String: Any] {
+        let message = try receive(timeout: timeout) {
+            $0["id"] == nil && ($0["method"] as? String) == method
+        }
+        return (message["params"] as? [String: Any]) ?? [:]
     }
 
     func stop() {
@@ -170,6 +177,27 @@ final class AIUsageRPCProcessSession {
             try inputPipe.fileHandleForWriting.write(contentsOf: data)
         } catch {
             throw AIUsageRPCError.closed
+        }
+    }
+
+    private func receive(
+        timeout: TimeInterval,
+        matching predicate: ([String: Any]) -> Bool
+    ) throws -> [String: Any] {
+        if let index = pendingMessages.firstIndex(where: predicate) {
+            return pendingMessages.remove(at: index)
+        }
+
+        let deadline = Date().addingTimeInterval(timeout)
+        while true {
+            let message = try readMessage(deadline: deadline)
+            if predicate(message) {
+                return message
+            }
+            pendingMessages.append(message)
+            if pendingMessages.count > 32 {
+                pendingMessages.removeFirst()
+            }
         }
     }
 

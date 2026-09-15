@@ -46,6 +46,11 @@ struct CodexAccountIdentity: Equatable, Sendable {
     }
 }
 
+struct CodexAccountAuthorization: Sendable {
+    let identity: CodexAccountIdentity
+    let credential: Data
+}
+
 enum CodexAccountSwitchError: LocalizedError, Equatable, Sendable {
     case registryUnavailable
     case profileNotFound
@@ -58,6 +63,8 @@ enum CodexAccountSwitchError: LocalizedError, Equatable, Sendable {
     case codexCLIUnavailable
     case identityUnavailable
     case credentialExpired
+    case authorizationAccountMismatch(String)
+    case authorizationUnavailable
     case desktopDidNotExit
     case desktopUnavailable
     case operationFailed(String)
@@ -86,6 +93,10 @@ enum CodexAccountSwitchError: LocalizedError, Equatable, Sendable {
             "Codex 未返回可校验的账号身份。"
         case .credentialExpired:
             "该 Codex 账号的登录已失效，请重新登录并登记该账号后再切换。"
+        case .authorizationAccountMismatch(let displayName):
+            "浏览器登录的不是 \(displayName)，未覆盖该账号的保存凭据。请重试并选择正确账号。"
+        case .authorizationUnavailable:
+            "无法打开 Codex 登录页面，请检查默认浏览器后重试。"
         case .desktopDidNotExit:
             "Codex 未在 30 秒内退出。请先处理正在运行的任务，再重试切换。"
         case .desktopUnavailable:
@@ -100,7 +111,9 @@ protocol CodexAccountCredentialStoring: Sendable {
     func loadRegistry() async throws -> CodexAccountRegistry
     func profile(id: UUID) async throws -> CodexAccountProfile
     func activeHome() async -> URL
+    func profileHome(id: UUID) async -> URL
     func saveCurrentCredential() async throws
+    func installCredential(_ data: Data, id: UUID) async throws
     func activateCredential(id: UUID) async throws
     func restoreCredential(id: UUID) async throws
     func commitActiveAccountID(_ id: UUID) async throws
@@ -154,6 +167,10 @@ actor CodexAccountCredentialStore: CodexAccountCredentialStoring {
 
     func activeHome() -> URL { activeHomeURL }
 
+    func profileHome(id: UUID) -> URL {
+        accountsURL.appendingPathComponent(id.uuidString, isDirectory: true)
+    }
+
     func saveCurrentCredential() throws {
         let registry = try loadRegistry()
         guard let activeID = registry.activeAccountID,
@@ -172,6 +189,14 @@ actor CodexAccountCredentialStore: CodexAccountCredentialStoring {
         let destination = activeHomeURL.appendingPathComponent("auth.json")
         let data = try checkedCredentialData(source, missingError: .targetCredentialMissing)
         try secureAtomicWrite(data, to: destination)
+    }
+
+    func installCredential(_ data: Data, id: UUID) throws {
+        _ = try profile(id: id)
+        guard data.count <= maximumCredentialBytes else {
+            throw CodexAccountSwitchError.credentialTooLarge
+        }
+        try secureAtomicWrite(data, to: credentialURL(id: id))
     }
 
     func restoreCredential(id: UUID) throws {
@@ -286,6 +311,7 @@ protocol CodexAccountIdentityReading: Sendable {
         profileHome: URL,
         validateSession: Bool
     ) async throws -> CodexAccountIdentity
+    func authorize() async throws -> CodexAccountAuthorization
 }
 
 struct CodexAccountIdentityReader: CodexAccountIdentityReading {
@@ -315,49 +341,155 @@ struct CodexAccountIdentityReader: CodexAccountIdentityReading {
                 params: ["refreshToken": false],
                 timeout: 12
             )
-            guard let account = result["account"] as? [String: Any] else {
-                throw CodexAccountSwitchError.identityUnavailable
-            }
-            let accountID = account["accountId"] as? String
-                ?? account["accountID"] as? String
-                ?? account["chatgptAccountId"] as? String
-                ?? account["id"] as? String
-            let email = account["email"] as? String
-            guard accountID != nil || email != nil else {
-                throw CodexAccountSwitchError.identityUnavailable
-            }
+            let identity = try Self.parseIdentity(result)
             if validateSession {
-                do {
-                    // account/read can decode an expired local token without proving that
-                    // the saved session is still accepted by the service. A lightweight
-                    // authenticated request prevents a revoked profile from being reported
-                    // as a successful account switch.
-                    _ = try session.request(
-                        method: "account/rateLimits/read",
-                        timeout: 12
-                    )
-                } catch AIUsageRPCError.requestFailed(let message) {
-                    let normalized = message.lowercased()
-                    if normalized.contains("401")
-                        || normalized.contains("auth")
-                        || normalized.contains("login")
-                        || normalized.contains("log in")
-                        || normalized.contains("sign in")
-                        || normalized.contains("token")
-                        || normalized.contains("revoked") {
-                        throw CodexAccountSwitchError.credentialExpired
-                    }
+                try Self.validateSession(session)
+            }
+            return identity
+        }.value
+    }
+
+    func authorize() async throws -> CodexAccountAuthorization {
+        do {
+            return try await Task.detached(priority: .userInitiated) {
+                let fileManager = FileManager.default
+                let profileHome = fileManager.temporaryDirectory.appendingPathComponent(
+                    "tts-codex-login-\(UUID().uuidString)",
+                    isDirectory: true
+                )
+                try fileManager.createDirectory(
+                    at: profileHome,
+                    withIntermediateDirectories: false,
+                    attributes: [.posixPermissions: 0o700]
+                )
+                defer { try? fileManager.removeItem(at: profileHome) }
+
+                var environment = ProcessInfo.processInfo.environment
+                environment["CODEX_HOME"] = profileHome.path
+                let session = try AIUsageRPCProcessSession(
+                    executable: binaryPath,
+                    arguments: CodexUsageProvider.appServerArguments,
+                    environment: environment
+                )
+                defer { session.stop() }
+                _ = try session.request(
+                    method: "initialize",
+                    params: ["clientInfo": ["name": "tts", "version": "1.0"]],
+                    timeout: 8
+                )
+                try session.notify(method: "initialized")
+                let start = try session.request(
+                    method: "account/login/start",
+                    params: [
+                        "type": "chatgpt",
+                        "useHostedLoginSuccessPage": true,
+                        "appBrand": "codex",
+                    ],
+                    timeout: 12
+                )
+                guard let authURLString = start["authUrl"] as? String,
+                      let authURL = URL(string: authURLString)
+                else {
+                    throw CodexAccountSwitchError.authorizationUnavailable
+                }
+                let didOpen = await MainActor.run { NSWorkspace.shared.open(authURL) }
+                guard didOpen else {
+                    throw CodexAccountSwitchError.authorizationUnavailable
+                }
+
+                let completion = try session.waitForNotification(
+                    method: "account/login/completed",
+                    timeout: 600
+                )
+                guard completion["success"] as? Bool == true else {
                     throw CodexAccountSwitchError.operationFailed(
-                        "暂时无法在线验证 Codex 账号，请稍后重试。"
-                    )
-                } catch {
-                    throw CodexAccountSwitchError.operationFailed(
-                        "暂时无法在线验证 Codex 账号，请稍后重试。"
+                        "Codex 账号登录未完成，请重试。"
                     )
                 }
+                let result = try session.request(
+                    method: "account/read",
+                    params: ["refreshToken": false],
+                    timeout: 12
+                )
+                let identity = try Self.parseIdentity(result)
+                try Self.validateSession(session)
+
+                let credentialURL = profileHome.appendingPathComponent("auth.json")
+                let values = try credentialURL.resourceValues(
+                    forKeys: [.isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]
+                )
+                guard values.isRegularFile == true, values.isSymbolicLink != true else {
+                    throw CodexAccountSwitchError.unsafeStoragePath
+                }
+                guard let fileSize = values.fileSize, fileSize <= 4 * 1_024 * 1_024 else {
+                    throw CodexAccountSwitchError.credentialTooLarge
+                }
+                let credential = try Data(contentsOf: credentialURL, options: .mappedIfSafe)
+                return CodexAccountAuthorization(identity: identity, credential: credential)
+            }.value
+        } catch AIUsageRPCError.timeout {
+            throw CodexAccountSwitchError.operationFailed(
+                "等待浏览器登录超时，未修改任何已保存账号。请重试。"
+            )
+        } catch AIUsageRPCError.requestFailed {
+            throw CodexAccountSwitchError.operationFailed(
+                "Codex 账号登录失败，未修改任何已保存账号。请重试。"
+            )
+        } catch let error as CodexAccountSwitchError {
+            throw error
+        } catch {
+            throw CodexAccountSwitchError.operationFailed(
+                "无法完成 Codex 账号登录，未修改任何已保存账号。请重试。"
+            )
+        }
+    }
+
+    private static func parseIdentity(_ result: [String: Any]) throws -> CodexAccountIdentity {
+        guard let account = result["account"] as? [String: Any] else {
+            throw CodexAccountSwitchError.identityUnavailable
+        }
+        let accountID = account["accountId"] as? String
+            ?? account["accountID"] as? String
+            ?? account["chatgptAccountId"] as? String
+            ?? account["id"] as? String
+        let email = account["email"] as? String
+        guard accountID != nil || email != nil else {
+            throw CodexAccountSwitchError.identityUnavailable
+        }
+        return CodexAccountIdentity(accountID: accountID, email: email)
+    }
+
+    private static func validateSession(_ session: AIUsageRPCProcessSession) throws {
+        do {
+            // account/read can decode an expired local token without proving that
+            // the saved session is still accepted by the service. A lightweight
+            // authenticated request prevents a revoked profile from being reported
+            // as a successful account switch.
+            _ = try session.request(
+                method: "account/rateLimits/read",
+                timeout: 12
+            )
+        } catch AIUsageRPCError.requestFailed(let message) {
+            let normalized = message.lowercased()
+            if normalized.contains("401")
+                || normalized.contains("auth")
+                || normalized.contains("login")
+                || normalized.contains("log in")
+                || normalized.contains("sign in")
+                || normalized.contains("token")
+                || normalized.contains("revoked") {
+                throw CodexAccountSwitchError.credentialExpired
             }
-            return CodexAccountIdentity(accountID: accountID, email: email)
-        }.value
+            throw CodexAccountSwitchError.operationFailed(
+                "暂时无法在线验证 Codex 账号，请稍后重试。"
+            )
+        } catch let error as CodexAccountSwitchError {
+            throw error
+        } catch {
+            throw CodexAccountSwitchError.operationFailed(
+                "暂时无法在线验证 Codex 账号，请稍后重试。"
+            )
+        }
     }
 }
 
@@ -469,6 +601,30 @@ struct CodexAccountSwitchService: CodexAccountSwitchServicing {
             return
         }
 
+        let targetHome = await store.profileHome(id: targetID)
+        do {
+            let targetIdentity = try await identityReader.readIdentity(
+                profileHome: targetHome,
+                validateSession: true
+            )
+            guard targetIdentity.matches(target) else {
+                throw CodexAccountSwitchError.identityUnavailable
+            }
+        } catch CodexAccountSwitchError.credentialExpired {
+            let authorization = try await identityReader.authorize()
+            guard authorization.identity.matches(target) else {
+                throw CodexAccountSwitchError.authorizationAccountMismatch(target.displayName)
+            }
+            try await store.installCredential(authorization.credential, id: targetID)
+            let refreshedIdentity = try await identityReader.readIdentity(
+                profileHome: targetHome,
+                validateSession: true
+            )
+            guard refreshedIdentity.matches(target) else {
+                throw CodexAccountSwitchError.identityUnavailable
+            }
+        }
+
         try await desktop.closeDesktop()
         var didActivateTarget = false
         do {
@@ -569,7 +725,7 @@ final class CodexAccountSwitcherStore: ObservableObject {
     func switchAccount(to id: UUID) {
         guard id != activeAccountID, switchingAccountID == nil else { return }
         switchingAccountID = id
-        statusMessage = "正在安全切换 Codex 账号…"
+        statusMessage = "正在校验账号；如登录已失效，会打开浏览器重新登录…"
         statusIsError = false
         Task {
             defer { switchingAccountID = nil }
