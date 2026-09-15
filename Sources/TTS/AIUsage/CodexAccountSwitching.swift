@@ -57,6 +57,7 @@ enum CodexAccountSwitchError: LocalizedError, Equatable, Sendable {
     case credentialTooLarge
     case codexCLIUnavailable
     case identityUnavailable
+    case credentialExpired
     case desktopDidNotExit
     case desktopUnavailable
     case operationFailed(String)
@@ -83,6 +84,8 @@ enum CodexAccountSwitchError: LocalizedError, Equatable, Sendable {
             "未检测到 Codex CLI，无法校验账号身份。"
         case .identityUnavailable:
             "Codex 未返回可校验的账号身份。"
+        case .credentialExpired:
+            "该 Codex 账号的登录已失效，请重新登录并登记该账号后再切换。"
         case .desktopDidNotExit:
             "Codex 未在 30 秒内退出。请先处理正在运行的任务，再重试切换。"
         case .desktopUnavailable:
@@ -317,6 +320,33 @@ struct CodexAccountIdentityReader: CodexAccountIdentityReading {
             guard accountID != nil || email != nil else {
                 throw CodexAccountSwitchError.identityUnavailable
             }
+            do {
+                // account/read can decode an expired local token without proving that
+                // the saved session is still accepted by the service. A lightweight
+                // authenticated request prevents a revoked profile from being reported
+                // as a successful account switch.
+                _ = try session.request(
+                    method: "account/rateLimits/read",
+                    timeout: 12
+                )
+            } catch AIUsageRPCError.requestFailed(let message) {
+                let normalized = message.lowercased()
+                if normalized.contains("401")
+                    || normalized.contains("auth")
+                    || normalized.contains("login")
+                    || normalized.contains("sign in")
+                    || normalized.contains("token")
+                    || normalized.contains("revoked") {
+                    throw CodexAccountSwitchError.credentialExpired
+                }
+                throw CodexAccountSwitchError.operationFailed(
+                    "暂时无法在线验证 Codex 账号，请稍后重试。"
+                )
+            } catch {
+                throw CodexAccountSwitchError.operationFailed(
+                    "暂时无法在线验证 Codex 账号，请稍后重试。"
+                )
+            }
             return CodexAccountIdentity(accountID: accountID, email: email)
         }.value
     }
@@ -329,7 +359,9 @@ protocol CodexDesktopControlling: Sendable {
 }
 
 struct CodexDesktopController: CodexDesktopControlling {
-    static let codexEntryURL = URL(string: "codex://launch")!
+    // Explicitly request a local Codex task. A bare launch/new-task URL inherits
+    // the desktop app's last selected product and can reopen ChatGPT Work instead.
+    static let codexEntryURL = URL(string: "codex://threads/new?mode=local")!
 
     private let bundleIdentifier = "com.openai.codex"
 
@@ -363,7 +395,15 @@ struct CodexDesktopController: CodexDesktopControlling {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         do {
-            _ = try await workspace.openApplication(at: applicationURL, configuration: configuration)
+            let application = try await workspace.openApplication(
+                at: applicationURL,
+                configuration: configuration
+            )
+            let readyDeadline = Date().addingTimeInterval(5)
+            while !application.isFinishedLaunching, Date() < readyDeadline {
+                try await Task.sleep(for: .milliseconds(100))
+            }
+            try await Task.sleep(for: .milliseconds(300))
             guard workspace.open(Self.codexEntryURL) else {
                 throw CodexAccountSwitchError.desktopUnavailable
             }
@@ -496,7 +536,7 @@ final class CodexAccountSwitcherStore: ObservableObject {
                 let registry = try await service.loadRegistry()
                 accounts = registry.accounts
                 activeAccountID = registry.activeAccountID
-                statusMessage = "Codex 账号已切换并重新打开。"
+                statusMessage = "Codex 登录已切换，并已打开本地 Codex。ChatGPT / 工作账号不会随之切换。"
                 statusIsError = false
                 await onDidSwitch()
             } catch {

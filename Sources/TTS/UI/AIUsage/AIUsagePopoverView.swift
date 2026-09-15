@@ -631,7 +631,7 @@ struct AIUsageProviderDetailView: View {
                 }
             }
         } message: {
-            Text("TTS 会先校验并保存当前账号，再正常关闭 Codex、切换登录并重新打开。TTS 会继续运行。")
+            Text("TTS 会校验并切换 Codex 登录，然后打开本地 Codex。ChatGPT / 工作的桌面账号是独立登录，不会随之切换；TTS 会继续运行。")
         }
     }
 

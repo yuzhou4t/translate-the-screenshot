@@ -786,7 +786,10 @@ struct AIUsageTests {
     @Test("Codex Desktop reopens at the Codex entry point")
     @MainActor
     func codexDesktopReopenRoute() {
-        #expect(CodexDesktopController.codexEntryURL.absoluteString == "codex://launch")
+        #expect(
+            CodexDesktopController.codexEntryURL.absoluteString
+                == "codex://threads/new?mode=local"
+        )
     }
 
     @Test("Codex account switch restores previous auth when target verification fails")
