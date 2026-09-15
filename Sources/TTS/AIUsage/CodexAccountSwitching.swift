@@ -282,13 +282,19 @@ actor CodexAccountCredentialStore: CodexAccountCredentialStoring {
 }
 
 protocol CodexAccountIdentityReading: Sendable {
-    func readIdentity(profileHome: URL) async throws -> CodexAccountIdentity
+    func readIdentity(
+        profileHome: URL,
+        validateSession: Bool
+    ) async throws -> CodexAccountIdentity
 }
 
 struct CodexAccountIdentityReader: CodexAccountIdentityReading {
     let binaryPath: String
 
-    func readIdentity(profileHome: URL) async throws -> CodexAccountIdentity {
+    func readIdentity(
+        profileHome: URL,
+        validateSession: Bool
+    ) async throws -> CodexAccountIdentity {
         try await Task.detached(priority: .userInitiated) {
             var environment = ProcessInfo.processInfo.environment
             environment["CODEX_HOME"] = profileHome.path
@@ -320,32 +326,35 @@ struct CodexAccountIdentityReader: CodexAccountIdentityReading {
             guard accountID != nil || email != nil else {
                 throw CodexAccountSwitchError.identityUnavailable
             }
-            do {
-                // account/read can decode an expired local token without proving that
-                // the saved session is still accepted by the service. A lightweight
-                // authenticated request prevents a revoked profile from being reported
-                // as a successful account switch.
-                _ = try session.request(
-                    method: "account/rateLimits/read",
-                    timeout: 12
-                )
-            } catch AIUsageRPCError.requestFailed(let message) {
-                let normalized = message.lowercased()
-                if normalized.contains("401")
-                    || normalized.contains("auth")
-                    || normalized.contains("login")
-                    || normalized.contains("sign in")
-                    || normalized.contains("token")
-                    || normalized.contains("revoked") {
-                    throw CodexAccountSwitchError.credentialExpired
+            if validateSession {
+                do {
+                    // account/read can decode an expired local token without proving that
+                    // the saved session is still accepted by the service. A lightweight
+                    // authenticated request prevents a revoked profile from being reported
+                    // as a successful account switch.
+                    _ = try session.request(
+                        method: "account/rateLimits/read",
+                        timeout: 12
+                    )
+                } catch AIUsageRPCError.requestFailed(let message) {
+                    let normalized = message.lowercased()
+                    if normalized.contains("401")
+                        || normalized.contains("auth")
+                        || normalized.contains("login")
+                        || normalized.contains("log in")
+                        || normalized.contains("sign in")
+                        || normalized.contains("token")
+                        || normalized.contains("revoked") {
+                        throw CodexAccountSwitchError.credentialExpired
+                    }
+                    throw CodexAccountSwitchError.operationFailed(
+                        "暂时无法在线验证 Codex 账号，请稍后重试。"
+                    )
+                } catch {
+                    throw CodexAccountSwitchError.operationFailed(
+                        "暂时无法在线验证 Codex 账号，请稍后重试。"
+                    )
                 }
-                throw CodexAccountSwitchError.operationFailed(
-                    "暂时无法在线验证 Codex 账号，请稍后重试。"
-                )
-            } catch {
-                throw CodexAccountSwitchError.operationFailed(
-                    "暂时无法在线验证 Codex 账号，请稍后重试。"
-                )
             }
             return CodexAccountIdentity(accountID: accountID, email: email)
         }.value
@@ -428,40 +437,68 @@ struct CodexAccountSwitchService: CodexAccountSwitchServicing {
     let desktop: any CodexDesktopControlling
 
     func loadRegistry() async throws -> CodexAccountRegistry {
-        try await store.loadRegistry()
+        var registry = try await store.loadRegistry()
+        let activeHome = await store.activeHome()
+        guard let identity = try? await identityReader.readIdentity(
+            profileHome: activeHome,
+            validateSession: false
+        ) else {
+            registry.activeAccountID = nil
+            return registry
+        }
+        registry.activeAccountID = registry.accounts.first(where: identity.matches)?.id
+        return registry
     }
 
     func switchAccount(to targetID: UUID) async throws {
         let registry = try await store.loadRegistry()
-        guard let activeID = registry.activeAccountID,
-              let activeProfile = registry.accounts.first(where: { $0.id == activeID }) else {
-            throw CodexAccountSwitchError.activeProfileMissing
-        }
         let target = try await store.profile(id: targetID)
-        guard target.id != activeID else { return }
 
         let activeHome = await store.activeHome()
-        let currentIdentity = try await identityReader.readIdentity(profileHome: activeHome)
-        guard currentIdentity.matches(activeProfile) else {
+        let currentIdentity = try await identityReader.readIdentity(
+            profileHome: activeHome,
+            validateSession: true
+        )
+        guard let activeProfile = registry.accounts.first(where: currentIdentity.matches) else {
             throw CodexAccountSwitchError.activeCredentialMismatch
+        }
+        guard target.id != activeProfile.id else {
+            if registry.activeAccountID != activeProfile.id {
+                try await store.commitActiveAccountID(activeProfile.id)
+            }
+            return
         }
 
         try await desktop.closeDesktop()
+        var didActivateTarget = false
         do {
-            let settledIdentity = try await identityReader.readIdentity(profileHome: activeHome)
+            let settledIdentity = try await identityReader.readIdentity(
+                profileHome: activeHome,
+                validateSession: true
+            )
             guard settledIdentity.matches(activeProfile) else {
                 throw CodexAccountSwitchError.activeCredentialMismatch
             }
+            if registry.activeAccountID != activeProfile.id {
+                try await store.commitActiveAccountID(activeProfile.id)
+            }
             try await store.saveCurrentCredential()
             try await store.activateCredential(id: targetID)
+            didActivateTarget = true
 
-            let targetIdentity = try await identityReader.readIdentity(profileHome: activeHome)
+            let targetIdentity = try await identityReader.readIdentity(
+                profileHome: activeHome,
+                validateSession: true
+            )
             guard targetIdentity.matches(target) else {
                 throw CodexAccountSwitchError.identityUnavailable
             }
             try await store.commitActiveAccountID(targetID)
         } catch {
-            try? await store.restoreCredential(id: activeID)
+            if didActivateTarget {
+                try? await store.restoreCredential(id: activeProfile.id)
+            }
+            try? await store.commitActiveAccountID(activeProfile.id)
             try? await desktop.reopenDesktop()
             throw error
         }
@@ -513,8 +550,13 @@ final class CodexAccountSwitcherStore: ObservableObject {
                 let registry = try await service.loadRegistry()
                 accounts = registry.accounts
                 activeAccountID = registry.activeAccountID
-                statusMessage = nil
-                statusIsError = false
+                if activeAccountID == nil {
+                    statusMessage = "当前 Codex 登录未匹配到已登记账号。"
+                    statusIsError = true
+                } else {
+                    statusMessage = nil
+                    statusIsError = false
+                }
             } catch {
                 accounts = []
                 activeAccountID = nil

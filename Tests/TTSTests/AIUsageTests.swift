@@ -783,6 +783,63 @@ struct AIUsageTests {
         #expect(desktop.reopenCount == 1)
     }
 
+    @Test("Codex account list derives current marker from installed identity")
+    @MainActor
+    func codexAccountListUsesInstalledIdentity() async throws {
+        let first = CodexAccountProfile(
+            id: UUID(), displayName: "Stored", email: nil, accountID: "stored",
+            createdAt: Date(timeIntervalSince1970: 1), lastUsedAt: nil
+        )
+        let second = CodexAccountProfile(
+            id: UUID(), displayName: "Installed", email: nil, accountID: "installed",
+            createdAt: Date(timeIntervalSince1970: 2), lastUsedAt: nil
+        )
+        let backend = FakeCodexAccountBackend(
+            accounts: [first, second],
+            activeID: first.id,
+            installedID: second.id
+        )
+        let service = CodexAccountSwitchService(
+            store: backend,
+            identityReader: backend,
+            desktop: FakeCodexDesktop()
+        )
+
+        let presentedRegistry = try await service.loadRegistry()
+
+        #expect(presentedRegistry.activeAccountID == second.id)
+        #expect(await backend.loadRegistry().activeAccountID == first.id)
+    }
+
+    @Test("Codex account switch repairs a stale current marker before saving")
+    @MainActor
+    func codexAccountSwitchRepairsStaleMarker() async throws {
+        let first = CodexAccountProfile(
+            id: UUID(), displayName: "Target", email: nil, accountID: "target",
+            createdAt: Date(timeIntervalSince1970: 1), lastUsedAt: nil
+        )
+        let second = CodexAccountProfile(
+            id: UUID(), displayName: "Installed", email: nil, accountID: "installed",
+            createdAt: Date(timeIntervalSince1970: 2), lastUsedAt: nil
+        )
+        let backend = FakeCodexAccountBackend(
+            accounts: [first, second],
+            activeID: first.id,
+            installedID: second.id
+        )
+        let service = CodexAccountSwitchService(
+            store: backend,
+            identityReader: backend,
+            desktop: FakeCodexDesktop()
+        )
+
+        try await service.switchAccount(to: first.id)
+
+        #expect(await backend.savedAccountIDs() == [second.id])
+        #expect(await backend.installedAccountID() == first.id)
+        #expect(await backend.loadRegistry().activeAccountID == first.id)
+    }
+
     @Test("Codex Desktop reopens at the Codex entry point")
     @MainActor
     func codexDesktopReopenRoute() {
@@ -834,10 +891,16 @@ private actor FakeCodexAccountBackend: CodexAccountCredentialStoring, CodexAccou
     private var installedID: UUID
     private let identityFailureID: UUID?
     private var saveCount = 0
+    private var savedIDs: [UUID] = []
 
-    init(accounts: [CodexAccountProfile], activeID: UUID, identityFailureID: UUID? = nil) {
+    init(
+        accounts: [CodexAccountProfile],
+        activeID: UUID,
+        installedID: UUID? = nil,
+        identityFailureID: UUID? = nil
+    ) {
         registry = CodexAccountRegistry(activeAccountID: activeID, accounts: accounts)
-        installedID = activeID
+        self.installedID = installedID ?? activeID
         self.identityFailureID = identityFailureID
     }
 
@@ -851,7 +914,12 @@ private actor FakeCodexAccountBackend: CodexAccountCredentialStoring, CodexAccou
     }
 
     func activeHome() -> URL { URL(fileURLWithPath: "/private/tmp/fake-codex-home") }
-    func saveCurrentCredential() { saveCount += 1 }
+    func saveCurrentCredential() {
+        saveCount += 1
+        if let activeID = registry.activeAccountID {
+            savedIDs.append(activeID)
+        }
+    }
     func activateCredential(id: UUID) { installedID = id }
     func restoreCredential(id: UUID) { installedID = id }
 
@@ -859,8 +927,12 @@ private actor FakeCodexAccountBackend: CodexAccountCredentialStoring, CodexAccou
         registry.activeAccountID = id
     }
 
-    func readIdentity(profileHome: URL) throws -> CodexAccountIdentity {
+    func readIdentity(
+        profileHome: URL,
+        validateSession: Bool
+    ) throws -> CodexAccountIdentity {
         _ = profileHome
+        _ = validateSession
         guard installedID != identityFailureID,
               let profile = registry.accounts.first(where: { $0.id == installedID }) else {
             throw CodexAccountSwitchError.identityUnavailable
@@ -870,6 +942,7 @@ private actor FakeCodexAccountBackend: CodexAccountCredentialStoring, CodexAccou
 
     func installedAccountID() -> UUID { installedID }
     func savedCurrentCredentialCount() -> Int { saveCount }
+    func savedAccountIDs() -> [UUID] { savedIDs }
 }
 
 @MainActor
