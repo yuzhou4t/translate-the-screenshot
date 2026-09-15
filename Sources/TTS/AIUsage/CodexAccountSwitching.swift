@@ -329,7 +329,7 @@ protocol CodexDesktopControlling: Sendable {
 }
 
 struct CodexDesktopController: CodexDesktopControlling {
-    static let codexEntryURL = URL(string: "codex://threads/new")!
+    static let codexEntryURL = URL(string: "codex://launch")!
 
     private let bundleIdentifier = "com.openai.codex"
 
@@ -363,11 +363,10 @@ struct CodexDesktopController: CodexDesktopControlling {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = true
         do {
-            _ = try await workspace.open(
-                [Self.codexEntryURL],
-                withApplicationAt: applicationURL,
-                configuration: configuration
-            )
+            _ = try await workspace.openApplication(at: applicationURL, configuration: configuration)
+            guard workspace.open(Self.codexEntryURL) else {
+                throw CodexAccountSwitchError.desktopUnavailable
+            }
         } catch {
             throw CodexAccountSwitchError.operationFailed("账号已切换，但 Codex 未能自动打开；请手动打开 Codex。")
         }
