@@ -30,6 +30,21 @@ struct AIUsageTests {
         #expect(Date().timeIntervalSince(startedAt) < 1.5)
     }
 
+    @Test("Codex reauthorization forces a fresh account login")
+    func codexReauthorizationRequiresLogin() throws {
+        let original = try #require(URL(string:
+            "https://auth.openai.com/oauth/authorize?client_id=codex&state=opaque&prompt=none"
+        ))
+
+        let result = CodexAccountIdentityReader.loginURLRequiringAccountChoice(original)
+        let components = try #require(URLComponents(url: result, resolvingAgainstBaseURL: false))
+        let promptItems = (components.queryItems ?? []).filter { $0.name == "prompt" }
+
+        #expect(promptItems.map(\.value) == ["login"])
+        #expect(components.queryItems?.first(where: { $0.name == "state" })?.value == "opaque")
+        #expect(components.queryItems?.first(where: { $0.name == "client_id" })?.value == "codex")
+    }
+
     @Test("Codex prefers the current bundled CLI over a stale PATH copy")
     func codexBundledBinaryPreference() {
         let binary = AIUsageBinaryLocator.codexBinary(

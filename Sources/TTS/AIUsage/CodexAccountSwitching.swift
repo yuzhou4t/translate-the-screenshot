@@ -388,10 +388,11 @@ struct CodexAccountIdentityReader: CodexAccountIdentityReading {
                     timeout: 12
                 )
                 guard let authURLString = start["authUrl"] as? String,
-                      let authURL = URL(string: authURLString)
+                      let rawAuthURL = URL(string: authURLString)
                 else {
                     throw CodexAccountSwitchError.authorizationUnavailable
                 }
+                let authURL = Self.loginURLRequiringAccountChoice(rawAuthURL)
                 let didOpen = await MainActor.run { NSWorkspace.shared.open(authURL) }
                 guard didOpen else {
                     throw CodexAccountSwitchError.authorizationUnavailable
@@ -457,6 +458,20 @@ struct CodexAccountIdentityReader: CodexAccountIdentityReading {
             throw CodexAccountSwitchError.identityUnavailable
         }
         return CodexAccountIdentity(accountID: accountID, email: email)
+    }
+
+    static func loginURLRequiringAccountChoice(_ url: URL) -> URL {
+        guard var components = URLComponents(url: url, resolvingAgainstBaseURL: false) else {
+            return url
+        }
+        var queryItems = components.queryItems ?? []
+        queryItems.removeAll { $0.name.caseInsensitiveCompare("prompt") == .orderedSame }
+        // Codex's generated URL has no prompt parameter, so Safari can silently
+        // reuse the current ChatGPT cookie. Requiring a fresh login lets the user
+        // deliberately choose the saved target account.
+        queryItems.append(URLQueryItem(name: "prompt", value: "login"))
+        components.queryItems = queryItems
+        return components.url ?? url
     }
 
     private static func validateSession(_ session: AIUsageRPCProcessSession) throws {
