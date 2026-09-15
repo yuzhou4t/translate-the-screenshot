@@ -783,6 +783,12 @@ struct AIUsageTests {
         #expect(desktop.reopenCount == 1)
     }
 
+    @Test("Codex Desktop reopens at the Codex entry point")
+    @MainActor
+    func codexDesktopReopenRoute() {
+        #expect(CodexDesktopController.codexEntryURL.absoluteString == "codex://threads/new")
+    }
+
     @Test("Codex account switch restores previous auth when target verification fails")
     @MainActor
     func codexAccountSwitchRollback() async throws {
