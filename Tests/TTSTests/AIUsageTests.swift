@@ -16,6 +16,20 @@ struct AIUsageTests {
         ])
     }
 
+    @Test("RPC process teardown stays bounded when graceful termination is ignored")
+    func rpcProcessStopIsBounded() throws {
+        let session = try AIUsageRPCProcessSession(
+            executable: "/bin/sh",
+            arguments: ["-c", "trap '' TERM; exec sleep 60"]
+        )
+        Thread.sleep(forTimeInterval: 0.05)
+
+        let startedAt = Date()
+        session.stop()
+
+        #expect(Date().timeIntervalSince(startedAt) < 1.5)
+    }
+
     @Test("Codex prefers the current bundled CLI over a stale PATH copy")
     func codexBundledBinaryPreference() {
         let binary = AIUsageBinaryLocator.codexBinary(

@@ -159,9 +159,12 @@ final class AIUsageRPCProcessSession {
             usleep(20_000)
         }
         if process.isRunning {
-            Darwin.kill(process.processIdentifier, SIGKILL)
+            _ = Darwin.kill(process.processIdentifier, SIGKILL)
         }
-        process.waitUntilExit()
+        // Foundation can leave waitUntilExit() blocked even after a short-lived
+        // app-server child has disappeared. Teardown must stay bounded so an
+        // account-switch task can always clear its progress state.
+        try? outputPipe.fileHandleForReading.close()
     }
 
     private func send(_ payload: [String: Any]) throws {
