@@ -1,6 +1,47 @@
 import AppKit
 import SwiftUI
 
+final class FloatingTranslateWindow: NSPanel {
+    var dragMouseLocationOverride: NSPoint?
+    private var dragStartMouseLocation: NSPoint?
+    private var dragStartWindowOrigin: NSPoint?
+
+    private var dragMouseLocation: NSPoint {
+        dragMouseLocationOverride ?? NSEvent.mouseLocation
+    }
+
+    override func sendEvent(_ event: NSEvent) {
+        switch event.type {
+        case .leftMouseDown:
+            // Handle the title area here so SwiftUI hit testing cannot swallow the drag.
+            let titleArea = NSRect(x: 48, y: frame.height - 68, width: 190, height: 58)
+            if titleArea.contains(event.locationInWindow) {
+                dragStartMouseLocation = dragMouseLocation
+                dragStartWindowOrigin = frame.origin
+                return
+            }
+        case .leftMouseDragged:
+            if let dragStartMouseLocation, let dragStartWindowOrigin {
+                let mouseLocation = dragMouseLocation
+                setFrameOrigin(NSPoint(
+                    x: dragStartWindowOrigin.x + mouseLocation.x - dragStartMouseLocation.x,
+                    y: dragStartWindowOrigin.y + mouseLocation.y - dragStartMouseLocation.y
+                ))
+                return
+            }
+        case .leftMouseUp:
+            if dragStartMouseLocation != nil {
+                dragStartMouseLocation = nil
+                dragStartWindowOrigin = nil
+                return
+            }
+        default:
+            break
+        }
+        super.sendEvent(event)
+    }
+}
+
 @MainActor
 final class FloatingTranslatePanel {
     private var panel: NSPanel?
@@ -82,7 +123,7 @@ final class FloatingTranslatePanel {
         )
 
         if panel == nil {
-            let newPanel = NSPanel(
+            let newPanel = FloatingTranslateWindow(
                 contentRect: NSRect(origin: .zero, size: normalPanelSize),
                 styleMask: [.borderless, .nonactivatingPanel],
                 backing: .buffered,
@@ -281,7 +322,6 @@ struct FloatingTranslateView: View {
                 .stroke(TTSVisualStyle.border, lineWidth: 1)
         )
         .shadow(color: Color.black.opacity(0.17), radius: 22, x: 0, y: 12)
-        .background(WindowDragView())
         .tint(TTSVisualStyle.accent)
         .task(id: resultTaskID) {
             syncResultState()
@@ -342,7 +382,6 @@ struct FloatingTranslateView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
-
             Spacer()
             if case .result(let item) = state {
                 Text(item.mode.displayName)
@@ -1021,18 +1060,5 @@ private extension FloatingTranslatePanel {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
         pasteboard.setString(text, forType: .string)
-    }
-}
-
-private struct WindowDragView: NSViewRepresentable {
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        view.translatesAutoresizingMaskIntoConstraints = false
-        view.postsFrameChangedNotifications = false
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {
-        nsView.window?.isMovableByWindowBackground = true
     }
 }
