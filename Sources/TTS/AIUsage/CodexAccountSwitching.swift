@@ -688,10 +688,12 @@ final class CodexAccountSwitcherStore: ObservableObject {
     @Published private(set) var statusIsError = false
 
     private let service: any CodexAccountSwitchServicing
+    private let onWillSwitch: @MainActor @Sendable () async -> Void
     private let onDidSwitch: @MainActor @Sendable () async -> Void
 
     init(
         service: (any CodexAccountSwitchServicing)? = nil,
+        onWillSwitch: @escaping @MainActor @Sendable () async -> Void = {},
         onDidSwitch: @escaping @MainActor @Sendable () async -> Void = {}
     ) {
         if let service {
@@ -706,6 +708,7 @@ final class CodexAccountSwitcherStore: ObservableObject {
         } else {
             self.service = UnavailableCodexAccountSwitchService()
         }
+        self.onWillSwitch = onWillSwitch
         self.onDidSwitch = onDidSwitch
     }
 
@@ -745,6 +748,11 @@ final class CodexAccountSwitcherStore: ObservableObject {
         Task {
             defer { switchingAccountID = nil }
             do {
+                // A persistent Codex translation session keeps the account that
+                // was loaded when its app-server process started. Stop it before
+                // replacing auth.json so it cannot refresh the old credential
+                // back over the newly selected account.
+                await onWillSwitch()
                 try await service.switchAccount(to: id)
                 let registry = try await service.loadRegistry()
                 accounts = registry.accounts

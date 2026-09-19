@@ -812,6 +812,42 @@ struct AIUsageTests {
         #expect(desktop.reopenCount == 1)
     }
 
+    @Test("Codex account switch stops persistent sessions before replacing credentials")
+    @MainActor
+    func codexAccountSwitchStopsPersistentSessionFirst() async throws {
+        let first = CodexAccountProfile(
+            id: UUID(), displayName: "Current", email: nil, accountID: "current",
+            createdAt: Date(timeIntervalSince1970: 1), lastUsedAt: nil
+        )
+        let second = CodexAccountProfile(
+            id: UUID(), displayName: "Target", email: nil, accountID: "target",
+            createdAt: Date(timeIntervalSince1970: 2), lastUsedAt: nil
+        )
+        let recorder = CodexAccountSwitchOrderRecorder()
+        let service = OrderedCodexAccountSwitchService(
+            registry: CodexAccountRegistry(activeAccountID: first.id, accounts: [first, second]),
+            recorder: recorder
+        )
+        let store = CodexAccountSwitcherStore(
+            service: service,
+            onWillSwitch: { await recorder.append("stop-session") },
+            onDidSwitch: { await recorder.append("did-switch") }
+        )
+
+        store.reload()
+        for _ in 0..<100 where store.isLoading {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+        #expect(store.activeAccountID == first.id)
+
+        store.switchAccount(to: second.id)
+        for _ in 0..<100 where store.isSwitching {
+            try await Task.sleep(for: .milliseconds(10))
+        }
+
+        #expect(await recorder.values() == ["stop-session", "switch", "did-switch"])
+    }
+
     @Test("Expired Codex target is reauthorized before switching")
     @MainActor
     func codexAccountSwitchReauthorizesExpiredTarget() async throws {
@@ -1080,6 +1116,37 @@ private actor FakeCodexAccountBackend: CodexAccountCredentialStoring, CodexAccou
     func savedAccountIDs() -> [UUID] { savedIDs }
     func credentialInstallIDs() -> [UUID] { installedCredentialIDs }
     func authorizationRequestCount() -> Int { authorizationCount }
+}
+
+private actor CodexAccountSwitchOrderRecorder {
+    private var events: [String] = []
+
+    func append(_ event: String) {
+        events.append(event)
+    }
+
+    func values() -> [String] {
+        events
+    }
+}
+
+private actor OrderedCodexAccountSwitchService: CodexAccountSwitchServicing {
+    private var registry: CodexAccountRegistry
+    private let recorder: CodexAccountSwitchOrderRecorder
+
+    init(registry: CodexAccountRegistry, recorder: CodexAccountSwitchOrderRecorder) {
+        self.registry = registry
+        self.recorder = recorder
+    }
+
+    func loadRegistry() -> CodexAccountRegistry {
+        registry
+    }
+
+    func switchAccount(to targetID: UUID) async {
+        await recorder.append("switch")
+        registry.activeAccountID = targetID
+    }
 }
 
 @MainActor

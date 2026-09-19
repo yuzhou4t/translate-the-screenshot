@@ -37,11 +37,15 @@ final class AppServices {
         settingsStore: aiUsageSettingsStore,
         providerRegistry: aiUsageProviderRegistry
     )
-    lazy var codexAccountSwitcherStore = CodexAccountSwitcherStore { [weak self] in
-        guard let self else { return }
-        await self.providerRegistry.resetCodexSubscriptionSession()
-        self.aiUsageStore.refreshNow()
-    }
+    lazy var codexAccountSwitcherStore = CodexAccountSwitcherStore(
+        onWillSwitch: { [weak self] in
+            guard let self else { return }
+            await self.providerRegistry.resetCodexSubscriptionSession()
+        },
+        onDidSwitch: { [weak self] in
+            self?.aiUsageStore.refreshNow()
+        }
+    )
     lazy var imageOverlayTranslationWindowController = ImageOverlayTranslationWindowController(
         renderer: screenshotOverlayRenderer,
         translationService: translationService,
