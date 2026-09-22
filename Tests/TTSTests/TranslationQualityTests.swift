@@ -158,6 +158,7 @@ private func checkGPTOSSProvidersUseLowReasoningEffort() async {
 }
 
 private func checkCodexSubscriptionConfigurationBoundary() {
+    precondition(CodexSubscriptionProvider.modelID == "gpt-6-luna")
     let configs = AppConfiguration.normalizedConfigs(
         [],
         providerID: .myMemory,
@@ -170,6 +171,16 @@ private func checkCodexSubscriptionConfigurationBoundary() {
     precondition(config?.model == CodexSubscriptionProvider.modelID)
     precondition(config?.apiKeyRef == nil, "subscription route must not request an API key")
     precondition(config?.endpoint == nil, "subscription route must not masquerade as an API endpoint")
+
+    var previousConfig = ProviderConfig.codexSubscriptionDefault
+    previousConfig.model = "gpt-5.6-luna"
+    let migratedConfigs = AppConfiguration.normalizedConfigs(
+        [previousConfig],
+        providerID: .codexSubscription,
+        endpoint: URL(string: "https://api.openai.com/v1/chat/completions")!,
+        model: "gpt-4o-mini"
+    )
+    precondition(migratedConfigs.first { $0.id == .codexSubscription }?.model == "gpt-6-luna")
 
     let arguments = CodexSubscriptionClient.appServerArguments
     precondition(arguments.last == "app-server")

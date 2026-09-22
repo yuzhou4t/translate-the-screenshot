@@ -11,12 +11,12 @@ protocol CodexSubscriptionCompleting: Sendable {
 }
 
 struct CodexSubscriptionProvider: PromptCompletionProvider {
-    static let modelID = "gpt-5.6-luna"
+    static let modelID = "gpt-6-luna"
     static let warmUpSystemPrompt = "Translate the source text to Simplified Chinese. Return only the translation."
     static let warmUpUserPrompt = "Ready."
 
     let id: TranslationProviderID = .codexSubscription
-    let displayName = "GPT-5.6 Luna"
+    let displayName = "GPT-6 Luna"
 
     private let model: String
     private let timeout: TimeInterval
@@ -190,13 +190,13 @@ actor CodexSubscriptionClient: CodexSubscriptionCompleting {
             } catch {
                 resetSession()
                 throw TranslationProviderError.providerMessage(
-                    "GPT-5.6 Luna 请求失败：\(error.localizedDescription)"
+                    "GPT-6 Luna 请求失败：\(error.localizedDescription)"
                 )
             }
         } catch {
             resetSession()
             throw TranslationProviderError.providerMessage(
-                "GPT-5.6 Luna 请求失败：\(error.localizedDescription)"
+                "GPT-6 Luna 请求失败：\(error.localizedDescription)"
             )
         }
     }
@@ -383,7 +383,7 @@ actor CodexSubscriptionClient: CodexSubscriptionCompleting {
     private func map(_ error: CodexAppServerError) -> TranslationProviderError {
         switch error {
         case .timeout:
-            return .timeout("GPT-5.6 Luna 请求超时，请稍后再试。")
+            return .timeout("GPT-6 Luna 请求超时，请稍后再试。")
         case .startFailed:
             return .providerMessage("未能启动本机 Codex CLI，请确认已安装并可正常运行 Codex。")
         case .requestFailed(let message):
@@ -397,12 +397,12 @@ actor CodexSubscriptionClient: CodexSubscriptionCompleting {
             if normalized.contains("limit")
                 || normalized.contains("quota")
                 || normalized.contains("usage") {
-                return .rateLimited("GPT-5.6 Luna 当前额度不足或请求受限，请稍后再试。")
+                return .rateLimited("GPT-6 Luna 当前额度不足或请求受限，请稍后再试。")
             }
             if normalized.contains("connection") || normalized.contains("network") {
                 return .network("Codex 无法连接服务，请检查网络后重试。")
             }
-            return .providerMessage("GPT-5.6 Luna 请求失败：\(message)")
+            return .providerMessage("GPT-6 Luna 请求失败：\(message)")
         case .closed, .malformed:
             return .providerMessage("Codex App Server 返回异常，请重试。")
         }

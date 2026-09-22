@@ -46,7 +46,7 @@ enum TranslationProviderID: String, Codable, CaseIterable, Identifiable {
         case .openAICompatible:
             "OpenAI 兼容接口"
         case .codexSubscription:
-            "GPT-5.6 Luna"
+            "GPT-6 Luna"
         case .myMemory:
             "MyMemory 免费测试"
         case .deepL:
