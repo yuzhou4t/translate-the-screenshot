@@ -188,6 +188,10 @@ private func checkCodexSubscriptionConfigurationBoundary() {
     precondition(arguments.contains("shell_tool"))
     precondition(arguments.contains("plugins"))
     precondition(arguments.contains("features.context_management=false"))
+    precondition(arguments.contains("model_provider=\"tts_https\""))
+    precondition(arguments.contains("model_providers.tts_https.base_url=\"https://chatgpt.com/backend-api/codex\""))
+    precondition(arguments.contains("model_providers.tts_https.requires_openai_auth=true"))
+    precondition(arguments.contains("model_providers.tts_https.supports_websockets=false"))
     precondition(CodexSubscriptionClient.maxRetainedTurnCount == 32)
     precondition(CodexSubscriptionClient.maxRetainedContextCharacters == 80_000)
 

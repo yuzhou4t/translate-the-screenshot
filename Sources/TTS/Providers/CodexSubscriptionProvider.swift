@@ -122,6 +122,14 @@ actor CodexSubscriptionClient: CodexSubscriptionCompleting {
         "-c", "web_search=\"disabled\"",
         "-c", "skills.include_instructions=false",
         "-c", "features.context_management=false",
+        // Use the same ChatGPT Codex endpoint over HTTPS. Some networks stall on
+        // the CLI's initial WebSocket retries beyond the translation timeout.
+        "-c", "model_provider=\"tts_https\"",
+        "-c", "model_providers.tts_https.name=\"OpenAI HTTPS\"",
+        "-c", "model_providers.tts_https.base_url=\"https://chatgpt.com/backend-api/codex\"",
+        "-c", "model_providers.tts_https.wire_api=\"responses\"",
+        "-c", "model_providers.tts_https.requires_openai_auth=true",
+        "-c", "model_providers.tts_https.supports_websockets=false",
         "app-server",
     ]
 
