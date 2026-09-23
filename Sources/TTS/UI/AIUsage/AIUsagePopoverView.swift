@@ -34,7 +34,7 @@ struct AIUsagePopoverView: View {
                     .transition(detailTransition)
             }
         }
-        .frame(width: 420, height: 540)
+        .frame(width: 420, height: 560)
         .clipped()
         .tint(TTSVisualStyle.accent)
     }
@@ -67,26 +67,29 @@ struct AIUsagePopoverView: View {
                     .padding(.bottom, 8)
             }
 
-            VStack(alignment: .leading, spacing: 7) {
-                sectionTitle("订阅额度", systemImage: "chart.bar.xaxis")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 7) {
+                    sectionTitle("订阅额度", systemImage: "chart.bar.xaxis")
 
-                if settingsStore.visibleProviderIDs.isEmpty {
-                    emptyProviderState
-                } else {
-                    VStack(spacing: 6) {
-                        ForEach(settingsStore.visibleProviderIDs) { providerID in
-                            AIUsageProviderRow(
-                                providerID: providerID,
-                                state: usageStore.states[providerID] ?? .empty,
-                                action: { navigate(to: providerID) }
-                            )
+                    if settingsStore.visibleProviderIDs.isEmpty {
+                        emptyProviderState
+                    } else {
+                        VStack(spacing: 6) {
+                            ForEach(settingsStore.visibleProviderIDs) { providerID in
+                                AIUsageProviderRow(
+                                    providerID: providerID,
+                                    state: usageStore.states[providerID] ?? .empty,
+                                    action: { navigate(to: providerID) }
+                                )
+                            }
                         }
                     }
                 }
+                .padding(.horizontal, 12)
+                .padding(.bottom, 8)
             }
-            .padding(.horizontal, 12)
-
-            Spacer(minLength: 7)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .accessibilityLabel("订阅额度列表")
 
             quickActions
             footer
@@ -869,7 +872,6 @@ struct AIUsageProviderDetailView: View {
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .onChange(of: selectedPeriod) { _ in }
 
             if let summary = tokenState.summary {
                 AIUsageTokenSummaryView(summary: summary)

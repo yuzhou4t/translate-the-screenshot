@@ -79,6 +79,7 @@ final class SettingsWindowController {
         if let providerID {
             viewModel?.selectProvider(providerID)
         }
+        NSApp.activate(ignoringOtherApps: true)
         window?.makeKeyAndOrderFront(nil)
     }
 }

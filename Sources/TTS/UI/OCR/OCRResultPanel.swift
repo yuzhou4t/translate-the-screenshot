@@ -201,7 +201,9 @@ private struct OCRResultView: View {
     @State private var displayedTextMode: OCRDisplayTextMode = .processed
     @State private var aiCleanedText: String?
     @State private var isAICleaning = false
+    @State private var activeAICleanupID: UUID?
     @State private var isTranslating = false
+    @State private var activeTranslationID: UUID?
     @State private var actionMessage: String?
     @State private var actionIsError = false
 
@@ -229,11 +231,13 @@ private struct OCRResultView: View {
         )
         .shadow(color: Color.black.opacity(0.16), radius: 20, y: 10)
         .tint(TTSVisualStyle.accent)
-        .onChange(of: resultIdentity) { _ in
+        .onChange(of: state) {
             displayedTextMode = .processed
             aiCleanedText = nil
             isAICleaning = false
+            activeAICleanupID = nil
             isTranslating = false
+            activeTranslationID = nil
             actionMessage = nil
             actionIsError = false
         }
@@ -383,17 +387,6 @@ private struct OCRResultView: View {
             .textSelection(.enabled)
     }
 
-    private var resultIdentity: String {
-        switch state {
-        case .loading:
-            "loading"
-        case .error(let message):
-            "error-\(message)"
-        case .result(let result, _):
-            result.rawText + result.processedText
-        }
-    }
-
     private func displayedText(for result: OCRResult) -> String {
         switch displayedTextMode {
         case .processed:
@@ -441,16 +434,26 @@ private struct OCRResultView: View {
             return
         }
 
+        let requestID = UUID()
+        let presentationState = state
+        activeAICleanupID = requestID
         isAICleaning = true
-        defer { isAICleaning = false }
+        defer {
+            if activeAICleanupID == requestID {
+                activeAICleanupID = nil
+                isAICleaning = false
+            }
+        }
 
         do {
             let cleaned = try await onAICleanup(preferredCleanupInput(for: result))
+            guard activeAICleanupID == requestID, state == presentationState else { return }
             aiCleanedText = cleaned
             displayedTextMode = .aiCleaned
             actionIsError = false
             actionMessage = "AI 修复完成。"
         } catch {
+            guard activeAICleanupID == requestID, state == presentationState else { return }
             actionIsError = true
             actionMessage = error.localizedDescription
         }
@@ -458,13 +461,23 @@ private struct OCRResultView: View {
 
     private func triggerTranslate(using result: OCRResult) async {
         actionMessage = nil
+        let requestID = UUID()
+        let presentationState = state
+        activeTranslationID = requestID
         isTranslating = true
-        defer { isTranslating = false }
+        defer {
+            if activeTranslationID == requestID {
+                activeTranslationID = nil
+                isTranslating = false
+            }
+        }
 
         do {
             try await onTranslate(preferredTranslationInput(for: result))
+            guard activeTranslationID == requestID, state == presentationState else { return }
             actionIsError = false
         } catch {
+            guard activeTranslationID == requestID, state == presentationState else { return }
             actionIsError = true
             actionMessage = error.localizedDescription
         }

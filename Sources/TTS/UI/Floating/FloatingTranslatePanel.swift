@@ -302,6 +302,7 @@ struct FloatingTranslateView: View {
     @State private var previousItem: TranslationHistoryItem?
     @State private var selectedTranslationMode: TranslationMode = .accurate
     @State private var isRetranslating = false
+    @State private var activeRetranslationID: UUID?
     @State private var retranslateErrorMessage: String?
     @State private var isPinHovered = false
     @State private var isModeMenuPresented = false
@@ -974,13 +975,8 @@ struct FloatingTranslateView: View {
     }
 
     private var resultItem: TranslationHistoryItem? {
-        if let currentItem {
-            return currentItem
-        }
-        if case .result(let item) = state {
-            return item
-        }
-        return nil
+        guard case .result(let item) = state else { return nil }
+        return currentItem ?? item
     }
 
     private var comparisonPair: (previous: TranslationHistoryItem, current: TranslationHistoryItem)? {
@@ -1000,6 +996,7 @@ struct FloatingTranslateView: View {
             previousItem = nil
             retranslateErrorMessage = nil
             isRetranslating = false
+            activeRetranslationID = nil
             isComparisonVisible = false
             isPinned = false
             isModeMenuPresented = false
@@ -1015,6 +1012,7 @@ struct FloatingTranslateView: View {
         previousItem = nil
         retranslateErrorMessage = nil
         isRetranslating = false
+        activeRetranslationID = nil
         isComparisonVisible = false
         isModeMenuPresented = false
         hoveredTranslationMode = nil
@@ -1023,24 +1021,35 @@ struct FloatingTranslateView: View {
     }
 
     private func retranslate(_ item: TranslationHistoryItem, using mode: TranslationMode) async {
-        guard !isRetranslating else {
+        guard !isRetranslating, let presentationID = resultTaskID else {
             return
         }
 
+        let requestID = UUID()
+        activeRetranslationID = requestID
         isRetranslating = true
         retranslateErrorMessage = nil
         defer {
-            isRetranslating = false
+            if activeRetranslationID == requestID {
+                activeRetranslationID = nil
+                isRetranslating = false
+            }
         }
 
         do {
             let updatedItem = try await onRetranslate(item, mode)
+            guard activeRetranslationID == requestID,
+                  resultTaskID == presentationID,
+                  resultItem?.id == item.id else { return }
             previousItem = item
             currentItem = updatedItem
             selectedTranslationMode = updatedItem.translationMode.userSelectableFallback
             hoveredTranslationMode = nil
             setComparisonVisible(true)
         } catch {
+            guard activeRetranslationID == requestID,
+                  resultTaskID == presentationID,
+                  resultItem?.id == item.id else { return }
             retranslateErrorMessage = error.localizedDescription
             selectedTranslationMode = item.translationMode.userSelectableFallback
             hoveredTranslationMode = nil

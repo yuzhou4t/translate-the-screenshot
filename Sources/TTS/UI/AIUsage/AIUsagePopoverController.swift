@@ -26,7 +26,7 @@ final class AIUsagePopoverController: NSObject, NSPopoverDelegate {
         popover.behavior = .transient
         popover.delegate = self
         popover.animates = true
-        popover.contentSize = NSSize(width: 420, height: 540)
+        popover.contentSize = NSSize(width: 420, height: 560)
         popover.contentViewController = NSHostingController(
             rootView: AIUsagePopoverView(
                 usageStore: usageStore,

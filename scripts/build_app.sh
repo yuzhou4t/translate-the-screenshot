@@ -9,7 +9,7 @@ CODESIGN_IDENTITY="${TTS_CODESIGN_IDENTITY:-}"
 
 cd "${ROOT_DIR}"
 
-swift build -c release
+swift build -c release --disable-sandbox -debug-info-format none
 
 rm -rf "${APP_DIR}" "${ROOT_DIR}/build/Release/tts.app"
 mkdir -p "${APP_DIR}/Contents/MacOS" "${APP_DIR}/Contents/Resources"

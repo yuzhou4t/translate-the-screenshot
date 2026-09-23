@@ -120,8 +120,8 @@ extension KeyboardShortcuts {
         public init(_ title: String, name: Name) {
             self.title = title
             self.name = name
-            _shortcut = State(initialValue: KeyboardShortcuts.shortcut(for: name))
-            _registrationError = State(initialValue: KeyboardShortcuts.registrationError(for: name))
+            self.shortcut = KeyboardShortcuts.shortcut(for: name)
+            self.registrationError = KeyboardShortcuts.registrationError(for: name)
         }
 
         public var body: some View {

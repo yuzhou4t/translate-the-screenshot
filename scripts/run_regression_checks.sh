@@ -9,9 +9,15 @@ MODULE_CACHE="$PROJECT_DIR/.build/$(uname -m)-apple-macosx/debug/ModuleCache"
 export SWIFTPM_MODULECACHE_OVERRIDE="$MODULE_CACHE"
 export CLANG_MODULE_CACHE_PATH="$MODULE_CACHE"
 
-TTS_DEVELOPER_ROOT="$(xcode-select -p)"
-TTS_TESTING_FRAMEWORKS="$TTS_DEVELOPER_ROOT/Library/Developer/Frameworks"
-TTS_TESTING_LIBRARIES="$TTS_DEVELOPER_ROOT/Library/Developer/usr/lib"
+TTS_DEVELOPER_ROOT="${DEVELOPER_DIR:-$(xcode-select -p)}"
+TTS_MACOS_PLATFORM_ROOT="$TTS_DEVELOPER_ROOT/Platforms/MacOSX.platform/Developer"
+if [[ -d "$TTS_MACOS_PLATFORM_ROOT/Library/Frameworks" ]]; then
+    TTS_TESTING_FRAMEWORKS="$TTS_MACOS_PLATFORM_ROOT/Library/Frameworks"
+    TTS_TESTING_LIBRARIES="$TTS_MACOS_PLATFORM_ROOT/usr/lib"
+else
+    TTS_TESTING_FRAMEWORKS="$TTS_DEVELOPER_ROOT/Library/Developer/Frameworks"
+    TTS_TESTING_LIBRARIES="$TTS_DEVELOPER_ROOT/Library/Developer/usr/lib"
+fi
 
 swift test \
     --disable-sandbox \
