@@ -882,6 +882,39 @@ struct AIUsageTests {
         #expect(desktop.reopenCount == 1)
     }
 
+    @Test("Expired current Codex login does not block switching to a valid account")
+    @MainActor
+    func codexAccountSwitchLeavesExpiredCurrentAccount() async throws {
+        let first = CodexAccountProfile(
+            id: UUID(), displayName: "Plus", email: nil, accountID: "first",
+            createdAt: Date(timeIntervalSince1970: 1), lastUsedAt: nil
+        )
+        let second = CodexAccountProfile(
+            id: UUID(), displayName: "Pro", email: nil, accountID: "second",
+            createdAt: Date(timeIntervalSince1970: 2), lastUsedAt: nil
+        )
+        let backend = FakeCodexAccountBackend(
+            accounts: [first, second],
+            activeID: first.id,
+            expiredSessionIDs: [first.id]
+        )
+        let desktop = FakeCodexDesktop()
+        let service = CodexAccountSwitchService(
+            store: backend,
+            identityReader: backend,
+            desktop: desktop
+        )
+
+        try await service.switchAccount(to: second.id)
+
+        #expect(await backend.installedAccountID() == second.id)
+        #expect(await backend.loadRegistry().activeAccountID == second.id)
+        #expect(await backend.savedCurrentCredentialCount() == 0)
+        #expect(await backend.authorizationRequestCount() == 0)
+        #expect(desktop.closeCount == 1)
+        #expect(desktop.reopenCount == 1)
+    }
+
     @Test("Wrong browser login never overwrites the selected Codex profile")
     @MainActor
     func codexAccountSwitchRejectsWrongAuthorization() async throws {

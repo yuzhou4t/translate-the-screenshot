@@ -604,7 +604,7 @@ struct CodexAccountSwitchService: CodexAccountSwitchServicing {
         let activeHome = await store.activeHome()
         let currentIdentity = try await identityReader.readIdentity(
             profileHome: activeHome,
-            validateSession: true
+            validateSession: false
         )
         guard let activeProfile = registry.accounts.first(where: currentIdentity.matches) else {
             throw CodexAccountSwitchError.activeCredentialMismatch
@@ -645,7 +645,7 @@ struct CodexAccountSwitchService: CodexAccountSwitchServicing {
         do {
             let settledIdentity = try await identityReader.readIdentity(
                 profileHome: activeHome,
-                validateSession: true
+                validateSession: false
             )
             guard settledIdentity.matches(activeProfile) else {
                 throw CodexAccountSwitchError.activeCredentialMismatch
@@ -653,7 +653,22 @@ struct CodexAccountSwitchService: CodexAccountSwitchServicing {
             if registry.activeAccountID != activeProfile.id {
                 try await store.commitActiveAccountID(activeProfile.id)
             }
-            try await store.saveCurrentCredential()
+            // An expired current account must not prevent switching away from it.
+            // Only persist its credential if an online check confirms that the
+            // active copy is still usable; otherwise keep the saved copy intact.
+            do {
+                let validatedIdentity = try await identityReader.readIdentity(
+                    profileHome: activeHome,
+                    validateSession: true
+                )
+                guard validatedIdentity.matches(activeProfile) else {
+                    throw CodexAccountSwitchError.activeCredentialMismatch
+                }
+                try await store.saveCurrentCredential()
+            } catch CodexAccountSwitchError.credentialExpired {
+                // Keep the existing saved credential so a revoked active copy
+                // cannot replace one that might still be recoverable.
+            }
             try await store.activateCredential(id: targetID)
             didActivateTarget = true
 
