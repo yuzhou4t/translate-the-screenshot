@@ -3,8 +3,11 @@ import Foundation
 
 enum AIUsageBinaryLocator {
     static let bundledCodexCandidates = [
+        "/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
+        NSString(string: "~/Applications/ChatGPT.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex").expandingTildeInPath,
         "/Applications/ChatGPT.app/Contents/Resources/codex",
         NSString(string: "~/Applications/ChatGPT.app/Contents/Resources/codex").expandingTildeInPath,
+        "/Applications/Codex.app/Contents/Resources/codex-cli/CodexCLI.app/Contents/MacOS/codex",
         "/Applications/Codex.app/Contents/Resources/codex",
     ]
 
