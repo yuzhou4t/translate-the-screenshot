@@ -6,7 +6,11 @@
 ![language](https://img.shields.io/badge/language-Swift-orange)
 ![status](https://img.shields.io/badge/status-active-brightgreen)
 
-TTS 是一个常驻菜单栏的 macOS 工具，支持原生录屏、截图到剪贴板、划词翻译、输入翻译、截图翻译、截图 OCR、图片 OCR 和截图译文覆盖。
+TTS 是一个常驻菜单栏的 macOS 工具，支持原生录屏、截图到剪贴板、划词翻译、输入翻译、截图翻译、截图 OCR、图片 OCR、截图译文覆盖、AI 用量查看和 Codex 账号切换。
+
+**[下载最新版安装包](https://github.com/yuzhou4t/translate-the-screenshot/releases/latest)** · [安装与首次使用说明](docs/INSTALL.md)
+
+安装包适用于 macOS 15 及以上的 Apple 芯片和 Intel Mac，无需安装开发工具。当前发布包未经过 Apple 公证，首次打开可能需要在“系统设置 → 隐私与安全性”中选择“仍要打开”。第三方翻译和 AI 服务需要使用者自己的账号、订阅或 Key。
 
 主要链路是：
 
@@ -149,7 +153,15 @@ API Key 保存到 macOS Keychain 中，不会明文写入项目文件。你可�
 
 ## 安装与运行
 
-环境要求：
+### 直接下载安装
+
+从 [Releases](https://github.com/yuzhou4t/translate-the-screenshot/releases/latest) 下载 `.dmg`，打开后将 `TTS.app` 拖入 `Applications`，再从“应用程序”启动。也可下载 `.zip`，解压并将 `TTS.app` 放入“应用程序”。
+
+启动后在屏幕右上角菜单栏找到 TTS。首次打开、权限授权、翻译服务和 AI 工具的配置方法见 [安装说明](docs/INSTALL.md)。GitHub 自动提供的 `Source code` 是源码，普通使用请选择 TTS 安装包。
+
+### 从源码运行
+
+开发环境要求：
 
 - macOS 15 或更新版本
 - Swift 6 工具链
@@ -205,6 +217,14 @@ scripts/create_local_codesign_identity.sh
 ```sh
 xcodebuild -project tts.xcodeproj -scheme tts -configuration Release build
 ```
+
+制作用于 GitHub Releases 的通用安装包：
+
+```sh
+scripts/package_release.sh
+```
+
+该命令分别构建 arm64 和 x86_64，合并为通用 App，检查签名与架构，并生成 `build/releases/v版本号/` 下的 `.dmg`、`.zip` 和安装说明。发布包显式使用 ad hoc 签名，未进行 Developer ID 签名或 Apple 公证；本地日常开发构建仍沿用稳定签名要求。
 
 ## 权限说明
 

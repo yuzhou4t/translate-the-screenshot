@@ -3,13 +3,31 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 APP_DIR="${ROOT_DIR}/build/Release/TTS.app"
-EXECUTABLE="${ROOT_DIR}/.build/release/tts"
 DEFAULT_LOCAL_IDENTITY="TTS Local Code Signing"
 CODESIGN_IDENTITY="${TTS_CODESIGN_IDENTITY:-}"
 
 cd "${ROOT_DIR}"
 
-swift build -c release --disable-sandbox -debug-info-format none
+# Keep compiler caches inside the project, including in restricted environments.
+export CLANG_MODULE_CACHE_PATH="${CLANG_MODULE_CACHE_PATH:-${ROOT_DIR}/.build/ModuleCache}"
+export SWIFTPM_MODULECACHE_OVERRIDE="${SWIFTPM_MODULECACHE_OVERRIDE:-${CLANG_MODULE_CACHE_PATH}}"
+
+if [[ -z "${CODESIGN_IDENTITY}" ]]; then
+  if /usr/bin/security find-identity -v -p codesigning | /usr/bin/grep -F "\"${DEFAULT_LOCAL_IDENTITY}\"" >/dev/null 2>&1; then
+    CODESIGN_IDENTITY="${DEFAULT_LOCAL_IDENTITY}"
+  else
+    echo "error: no stable code signing identity found." >&2
+    echo "run scripts/create_local_codesign_identity.sh, or explicitly set TTS_CODESIGN_IDENTITY=- for a disposable build." >&2
+    exit 1
+  fi
+fi
+
+BUILD_ARGS=(-c release --disable-sandbox -debug-info-format none)
+if [[ "${TTS_UNIVERSAL:-0}" == "1" ]]; then
+  BUILD_ARGS+=(--arch arm64 --arch x86_64 --scratch-path "${ROOT_DIR}/build/universal")
+fi
+swift build "${BUILD_ARGS[@]}"
+EXECUTABLE="$(swift build "${BUILD_ARGS[@]}" --show-bin-path)/tts"
 
 rm -rf "${APP_DIR}" "${ROOT_DIR}/build/Release/tts.app"
 mkdir -p "${APP_DIR}/Contents/MacOS" "${APP_DIR}/Contents/Resources"
@@ -32,20 +50,10 @@ sed \
   -e 's/$(PRODUCT_BUNDLE_IDENTIFIER)/com.yuzhou4tc.tts/g' \
   "${ROOT_DIR}/App/Info.plist" > "${APP_DIR}/Contents/Info.plist"
 
-if [[ -z "${CODESIGN_IDENTITY}" ]]; then
-  if /usr/bin/security find-identity -v -p codesigning | /usr/bin/grep -F "\"${DEFAULT_LOCAL_IDENTITY}\"" >/dev/null 2>&1; then
-    CODESIGN_IDENTITY="${DEFAULT_LOCAL_IDENTITY}"
-  else
-    echo "error: no stable code signing identity found." >&2
-    echo "run scripts/create_local_codesign_identity.sh, or explicitly set TTS_CODESIGN_IDENTITY=- for a disposable build." >&2
-    exit 1
-  fi
-fi
-
 /usr/bin/codesign --force --sign "${CODESIGN_IDENTITY}" "${APP_DIR}" >/dev/null
 
 if [[ "${CODESIGN_IDENTITY}" == "-" ]]; then
-  echo "warning: explicitly signed with an adhoc identity; macOS permissions will not persist across rebuilds." >&2
+  echo "warning: ad hoc signature; not Developer ID signed or notarized. Permissions may need to be granted again after updates." >&2
 else
   echo "signed with ${CODESIGN_IDENTITY}" >&2
 fi
