@@ -2,43 +2,39 @@ import AppKit
 import SwiftUI
 
 final class FloatingTranslateWindow: NSPanel {
-    var dragMouseLocationOverride: NSPoint?
-    private var dragStartMouseLocation: NSPoint?
-    private var dragStartWindowOrigin: NSPoint?
+    #if DEBUG
+    var nativeDragHandlerForTesting: ((NSEvent) -> Void)?
+    #endif
 
-    private var dragMouseLocation: NSPoint {
-        dragMouseLocationOverride ?? NSEvent.mouseLocation
+    private var titleDragArea: NSRect {
+        NSRect(
+            x: 14,
+            y: frame.height - 72,
+            width: max(frame.width - 92, 0),
+            height: 58
+        )
     }
 
     override func sendEvent(_ event: NSEvent) {
-        switch event.type {
-        case .leftMouseDown:
-            // Handle the title area here so SwiftUI hit testing cannot swallow the drag.
-            let titleArea = NSRect(x: 48, y: frame.height - 68, width: 190, height: 58)
-            if titleArea.contains(event.locationInWindow) {
-                dragStartMouseLocation = dragMouseLocation
-                dragStartWindowOrigin = frame.origin
-                return
-            }
-        case .leftMouseDragged:
-            if let dragStartMouseLocation, let dragStartWindowOrigin {
-                let mouseLocation = dragMouseLocation
-                setFrameOrigin(NSPoint(
-                    x: dragStartWindowOrigin.x + mouseLocation.x - dragStartMouseLocation.x,
-                    y: dragStartWindowOrigin.y + mouseLocation.y - dragStartMouseLocation.y
-                ))
-                return
-            }
-        case .leftMouseUp:
-            if dragStartMouseLocation != nil {
-                dragStartMouseLocation = nil
-                dragStartWindowOrigin = nil
-                return
-            }
-        default:
-            break
+        if shouldBeginWindowDrag(for: event) {
+            beginWindowDrag(with: event)
+            return
         }
         super.sendEvent(event)
+    }
+
+    func shouldBeginWindowDrag(for event: NSEvent) -> Bool {
+        event.type == .leftMouseDown && titleDragArea.contains(event.locationInWindow)
+    }
+
+    func beginWindowDrag(with event: NSEvent) {
+        #if DEBUG
+        if let nativeDragHandlerForTesting {
+            nativeDragHandlerForTesting(event)
+            return
+        }
+        #endif
+        performDrag(with: event)
     }
 }
 
